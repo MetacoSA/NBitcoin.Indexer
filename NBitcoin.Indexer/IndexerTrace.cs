@@ -15,7 +15,7 @@ namespace NBitcoin.Indexer
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing " + id + " in azure blob : " + Utils.ExceptionToString(ex));
 		}
 
-		
+
 		internal static void BlockAlreadyUploaded()
 		{
 			_Trace.TraceInformation("Block already uploaded");
@@ -30,6 +30,16 @@ namespace NBitcoin.Indexer
 		internal static TraceCorrelation NewCorrelation(string activityName)
 		{
 			return new TraceCorrelation(_Trace, activityName);
+		}
+
+		internal static void StartingImportAt(DiskBlockPos lastPosition)
+		{
+			_Trace.TraceInformation("Starting import at position " + lastPosition);
+		}
+
+		internal static void PositionSaved(DiskBlockPos diskBlockPos)
+		{
+			_Trace.TraceInformation("New starting import position : " + diskBlockPos.ToString());
 		}
 	}
 }
