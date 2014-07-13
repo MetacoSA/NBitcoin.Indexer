@@ -1,6 +1,8 @@
 ﻿using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using NBitcoin.Crypto;
+using NBitcoin.DataEncoders;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -75,7 +77,7 @@ namespace NBitcoin.Indexer
 				throw new ArgumentNullException("store");
 			if(blobClient == null)
 				throw new ArgumentNullException("blobClient");
-			TaskCount = 10;
+			TaskCount = 15;
 			_Store = store;
 			_BlobClient = blobClient;
 			_ProgressFile = progressFile;
@@ -159,12 +161,12 @@ namespace NBitcoin.Indexer
 									var blob = container.GetPageBlobReference(hash);
 									MemoryStream ms = new MemoryStream();
 									block.ReadWrite(ms, true);
-									if(ms.Length % 512 != 0)
-									{
-										int length = 512 - (int)(ms.Length % 512);
-										ms.Write(new byte[length], 0, length);
-									}
 									var blockBytes = ms.GetBuffer();
+									if(blockBytes.Length % 512 != 0)
+									{
+										int length = 512 - (int)(blockBytes.Length % 512);
+										Array.Resize(ref blockBytes, blockBytes.Length + length);
+									}
 									try
 									{
 										blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
