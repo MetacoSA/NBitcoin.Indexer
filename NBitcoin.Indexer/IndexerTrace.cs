@@ -23,7 +23,9 @@ namespace NBitcoin.Indexer
 
 		internal static void BlockUploaded(TimeSpan time, int bytes)
 		{
-			double speed = (int)((double)bytes / 1024.0) / time.Seconds;
+			if(time.TotalSeconds == 0.0)
+				time = TimeSpan.FromMilliseconds(10);
+			double speed = (int)((double)bytes / 1024.0) / time.TotalSeconds;
 			_Trace.TraceInformation("Block uploaded successfully (" + speed.ToString() + " KB/S)");
 		}
 
