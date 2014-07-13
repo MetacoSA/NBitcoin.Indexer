@@ -171,6 +171,10 @@ namespace NBitcoin.Indexer
 										{
 											//Will throw if already exist, save 1 call
 											IfNotModifiedSinceTime = DateTimeOffset.MinValue
+										}, new BlobRequestOptions()
+										{
+											MaximumExecutionTime = TimeSpan.FromSeconds(10.0),
+											ServerTimeout = TimeSpan.FromSeconds(10.0)
 										});
 										watch.Stop();
 										IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
