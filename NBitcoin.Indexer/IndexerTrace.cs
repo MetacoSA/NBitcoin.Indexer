@@ -25,8 +25,8 @@ namespace NBitcoin.Indexer
 		{
 			if(time.TotalSeconds == 0.0)
 				time = TimeSpan.FromMilliseconds(10);
-			double speed = (int)((double)bytes / 1024.0) / time.TotalSeconds;
-			_Trace.TraceInformation("Block uploaded successfully (" + speed.ToString() + " KB/S)");
+			double speed = ((double)bytes / 1024.0) / time.TotalSeconds;
+			_Trace.TraceInformation("Block uploaded successfully (" + speed.ToString("0.00") + " KB/S)");
 		}
 
 		internal static TraceCorrelation NewCorrelation(string activityName)
