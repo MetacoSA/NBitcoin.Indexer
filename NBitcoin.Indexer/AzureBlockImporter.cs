@@ -174,6 +174,7 @@ namespace NBitcoin.Indexer
 										});
 										watch.Stop();
 										IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
+										break;
 									}
 									catch(StorageException ex)
 									{
