@@ -9,6 +9,13 @@ namespace NBitcoin.Indexer.Console
 {
 	class IndexerOptions
 	{
+		[Option("ImportBlocksInAzure", DefaultValue = false, Required = false, HelpText = "Import blocks from data directory speicified in LocalSettings into azure")]
+		public bool ImportBlocksInAzure
+		{
+			get;
+			set;
+		}
+
 
 		string _Usage;
 		[HelpOption('?', "help", HelpText = "Display this help screen.")]

@@ -14,6 +14,11 @@ namespace NBitcoin.Indexer.Console
 			var options = new IndexerOptions();
 			if(Parser.Default.ParseArguments(args, options))
 			{
+				if(options.ImportBlocksInAzure)
+				{
+					var importer = AzureBlockImporter.CreateBlockImporter();
+					importer.StartImportToAzure();
+				}
 			}
 		}
 	}
