@@ -151,6 +151,7 @@ namespace NBitcoin.Indexer
 						{
 							Stopwatch watch = new Stopwatch();
 							watch.Start();
+							bool failedBefore = false;
 							while(true)
 							{
 								try
@@ -172,11 +173,11 @@ namespace NBitcoin.Indexer
 										blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
 										{
 											//Will throw if already exist, save 1 call
-											IfNotModifiedSinceTime = DateTimeOffset.MinValue
+											IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
 										}, new BlobRequestOptions()
 										{
-											MaximumExecutionTime = TimeSpan.FromSeconds(10.0),
-											ServerTimeout = TimeSpan.FromSeconds(10.0)
+											MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
+											ServerTimeout = TimeSpan.FromSeconds(60.0)
 										});
 										watch.Stop();
 										IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
@@ -195,6 +196,7 @@ namespace NBitcoin.Indexer
 								catch(Exception ex)
 								{
 									IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+									failedBefore = true;
 									Thread.Sleep(5000);
 								}
 							}
