@@ -23,7 +23,11 @@ namespace NBitcoin.Indexer
 		{
 			if(progressFile == null)
 				progressFile = "progress.dat";
-			return new AzureBlockImporter(CreateBlockStore(), CreateBlobClient(), progressFile);
+			var importer = new AzureBlockImporter(CreateBlockStore(), CreateBlobClient(), progressFile);
+			var container = ConfigurationManager.AppSettings["Azure.Blob.Container"];
+			if(container != null)
+				importer.Container = container;
+			return importer;
 		}
 
 		private static BlockStore CreateBlockStore()
@@ -41,7 +45,11 @@ namespace NBitcoin.Indexer
 		}
 
 
-		public const string Container = "nbitcoinindexer";
+		public string Container
+		{
+			get;
+			set;
+		}
 		private readonly CloudBlobClient _BlobClient;
 
 		public int TaskCount
@@ -82,6 +90,7 @@ namespace NBitcoin.Indexer
 			_Store = store;
 			_BlobClient = blobClient;
 			_ProgressFile = progressFile;
+			Container = "nbitcoinindexer";
 		}
 
 
