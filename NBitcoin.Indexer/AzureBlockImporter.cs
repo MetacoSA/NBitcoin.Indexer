@@ -111,24 +111,30 @@ namespace NBitcoin.Indexer
 				{
 					if(tasks.Count >= TaskCount)
 					{
-						foreach(var task in tasks.ToList())
-						{
-							if(task.Task.IsCompleted)
-							{
-								tasks.Remove(task);
-								if(!tasks.Any(t => t.Position < task.Position))
-								{
-									SetPosition(task.Position);
-									IndexerTrace.PositionSaved(task.Position);
-								}
-							}
-						}
+						CleanDone(tasks);
 						if(tasks.Count >= TaskCount)
 							Task.WaitAny(tasks.Select(t => t.Task).ToArray());
 					}
 					tasks.Add(Import(block));
 				}
 				Task.WaitAll(tasks.Select(t => t.Task).ToArray());
+				CleanDone(tasks);
+			}
+		}
+
+		private void CleanDone(List<ImportTask> tasks)
+		{
+			foreach(var task in tasks.ToList())
+			{
+				if(task.Task.IsCompleted)
+				{
+					tasks.Remove(task);
+					if(!tasks.Any(t => t.Position < task.Position))
+					{
+						SetPosition(task.Position);
+						IndexerTrace.PositionSaved(task.Position);
+					}
+				}
 			}
 		}
 
