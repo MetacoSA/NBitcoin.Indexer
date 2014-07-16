@@ -10,6 +10,7 @@ using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -100,6 +101,10 @@ namespace NBitcoin.Indexer
 		}
 		public void StartImportToAzure()
 		{
+			ServicePointManager.UseNagleAlgorithm = false;
+			ServicePointManager.Expect100Continue = false;
+			ServicePointManager.DefaultConnectionLimit = 100;
+
 			List<ImportTask> tasks = new List<ImportTask>();
 			using(IndexerTrace.NewCorrelation("Import to azure started").Open())
 			{
