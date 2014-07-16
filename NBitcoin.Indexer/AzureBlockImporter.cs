@@ -183,11 +183,12 @@ namespace NBitcoin.Indexer
 									MemoryStream ms = new MemoryStream();
 									block.ReadWrite(ms, true);
 									var blockBytes = ms.GetBuffer();
-									if(blockBytes.Length % 512 != 0)
-									{
-										int length = 512 - (int)(blockBytes.Length % 512);
-										Array.Resize(ref blockBytes, blockBytes.Length + length);
-									}
+
+									long length = 512 - (ms.Length % 512);
+									if(length == 512)
+										length = 0;
+									Array.Resize(ref blockBytes, (int)(ms.Length + length));
+
 									try
 									{
 										blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
