@@ -1,6 +1,7 @@
 ﻿using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using System;
@@ -92,9 +93,51 @@ namespace NBitcoin.Indexer
 		{
 			return new AzureBlockImporter(this);
 		}
+
+		public CloudTableClient CreateTableClient()
+		{
+			return new CloudTableClient(MakeUri("table"), StorageCredentials);
+		}
+	}
+
+	public class IndexedTransaction : TableEntity
+	{
+		public IndexedTransaction()
+		{
+
+		}
+		public IndexedTransaction(uint256 txId, uint256 blockId)
+		{
+			PartitionKey = (txId.GetByte(0) + (txId.GetByte(1) << 8)).ToString();
+			RowKey = txId.ToString() + "-" + blockId.ToString();
+		}
+		public IndexedTransaction(uint256 txId, uint256 blockId, OutPoint emitter)
+		{
+
+		}
+
+		[IgnoreProperty]
+		public int toto
+		{
+			get;
+			set;
+		}
 	}
 	public class AzureBlockImporter
 	{
+		class TransactionWithId
+		{
+			public uint256 TxId
+			{
+				get;
+				set;
+			}
+			public Transaction Transaction
+			{
+				get;
+				set;
+			}
+		}
 		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
 		{
 			var config = ImporterConfiguration.FromConfiguration();
@@ -125,45 +168,146 @@ namespace NBitcoin.Indexer
 			_Configuration = configuration;
 		}
 
-
-
-		class ImportTask
+		public void StartTransactionImportToAzure()
 		{
-			public Task Task
+			SetThrottling();
+			var tableClient = Configuration.CreateTableClient();
+			var store = Configuration.CreateStoreBlock();
+			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
-				get;
-				set;
-			}
-			public DiskBlockPos Position
-			{
-				get;
-				set;
+				tableClient.GetTableReference("tx").CreateIfNotExists();
+				var startPosition = GetPosition("tx");
+				var buckets = new MultiDictionary<string, TransactionWithId>();
+				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
+				{
+					foreach(var transaction in block.Item.Transactions)
+					{
+						foreach(var input in transaction.Inputs)
+						{
+
+						}
+					}
+				}
 			}
 		}
+
+
+
 		public void StartBlockImportToAzure()
 		{
 			SetThrottling();
+			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
+			CancellationTokenSource stop = new CancellationTokenSource();
+			var tasks =
+				Enumerable.Range(0, 10).Select(_ => Task.Factory.StartNew(() =>
+			{
+				try
+				{
+					foreach(var block in blocks.GetConsumingEnumerable(stop.Token))
+					{
+						SendToAzure(block);
+					}
+				}
+				catch(OperationCanceledException)
+				{
+				}
+			}, TaskCreationOptions.LongRunning)).ToArray();
+
 			var blobClient = Configuration.CreateBlobClient();
 			var store = Configuration.CreateStoreBlock();
-			List<ImportTask> tasks = new List<ImportTask>();
-			using(IndexerTrace.NewCorrelation("Import to azure started").Open())
+			var saveInterval = TimeSpan.FromMinutes(5);
+			Stopwatch watch = new Stopwatch();
+
+			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
 				var startPosition = GetPosition();
 				var lastPosition = startPosition;
 				IndexerTrace.StartingImportAt(lastPosition);
+
+				watch.Start();
 				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
 				{
-					if(tasks.Count >= TaskCount)
+					lastPosition = block.BlockPosition;
+					if(watch.Elapsed > saveInterval)
 					{
-						CleanDone(tasks);
-						if(tasks.Count >= TaskCount)
-							Task.WaitAny(tasks.Select(t => t.Task).ToArray());
+						watch.Stop();
+						watch.Reset();
+						while(blocks.Count != 0)
+						{
+							Thread.Sleep(1000);
+						}
+						SetPosition(lastPosition);
+						IndexerTrace.PositionSaved(lastPosition);
+						watch.Start();
 					}
-					tasks.Add(Import(block));
+					blocks.Add(block);
 				}
-				Task.WaitAll(tasks.Select(t => t.Task).ToArray());
-				CleanDone(tasks);
+				stop.Cancel();
+				Task.WaitAll(tasks);
+				SetPosition(lastPosition);
+				IndexerTrace.PositionSaved(lastPosition);
+			}
+		}
+
+		private void SendToAzure(StoredBlock storedBlock)
+		{
+			var block = storedBlock.Item;
+			var hash = block.GetHash().ToString();
+			using(IndexerTrace.NewCorrelation("Upload of " + hash).Open())
+			{
+				Stopwatch watch = new Stopwatch();
+				watch.Start();
+				bool failedBefore = false;
+				while(true)
+				{
+					try
+					{
+						var client = Configuration.CreateBlobClient();
+						client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
+						var container = client.GetContainerReference(Configuration.Container);
+						var blob = container.GetPageBlobReference(hash);
+						MemoryStream ms = new MemoryStream();
+						block.ReadWrite(ms, true);
+						var blockBytes = ms.GetBuffer();
+
+						long length = 512 - (ms.Length % 512);
+						if(length == 512)
+							length = 0;
+						Array.Resize(ref blockBytes, (int)(ms.Length + length));
+
+						try
+						{
+							blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
+							{
+								//Will throw if already exist, save 1 call
+								IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
+							}, new BlobRequestOptions()
+							{
+								MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
+								ServerTimeout = TimeSpan.FromSeconds(60.0)
+							});
+							watch.Stop();
+							IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
+							break;
+						}
+						catch(StorageException ex)
+						{
+							var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
+							if(!alreadyExist)
+								throw;
+							watch.Stop();
+							IndexerTrace.BlockAlreadyUploaded();
+							break;
+						}
+					}
+					catch(Exception ex)
+					{
+						IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+						failedBefore = true;
+						Thread.Sleep(5000);
+					}
+				}
 			}
 		}
 
@@ -174,102 +318,21 @@ namespace NBitcoin.Indexer
 			ServicePointManager.DefaultConnectionLimit = 100;
 		}
 
-		private void CleanDone(List<ImportTask> tasks)
+
+
+
+		private void SetPosition(DiskBlockPos diskBlockPos, string name = null)
 		{
-			foreach(var task in tasks.ToList())
-			{
-				if(task.Task.IsCompleted)
-				{
-					tasks.Remove(task);
-					if(!tasks.Any(t => t.Position < task.Position))
-					{
-						SetPosition(task.Position);
-						IndexerTrace.PositionSaved(task.Position);
-					}
-				}
-			}
+			name = NormalizeName(name);
+			File.WriteAllText(name, diskBlockPos.ToString());
 		}
 
-		private void SetPosition(DiskBlockPos diskBlockPos)
+		private DiskBlockPos GetPosition(string name = null)
 		{
-			File.WriteAllText(Configuration.ProgressFile, diskBlockPos.ToString());
-		}
-
-		private ImportTask Import(StoredBlock storedBlock)
-		{
-			var block = storedBlock.Item;
-			return
-				new ImportTask()
-				{
-					Position = storedBlock.BlockPosition,
-					Task = Task.Factory.StartNew(() =>
-					{
-						var hash = block.GetHash().ToString();
-						using(IndexerTrace.NewCorrelation("Upload of " + hash).Open())
-						{
-							Stopwatch watch = new Stopwatch();
-							watch.Start();
-							bool failedBefore = false;
-							while(true)
-							{
-								try
-								{
-									var client = Configuration.CreateBlobClient();
-									client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-									var container = client.GetContainerReference(Configuration.Container);
-									var blob = container.GetPageBlobReference(hash);
-									MemoryStream ms = new MemoryStream();
-									block.ReadWrite(ms, true);
-									var blockBytes = ms.GetBuffer();
-
-									long length = 512 - (ms.Length % 512);
-									if(length == 512)
-										length = 0;
-									Array.Resize(ref blockBytes, (int)(ms.Length + length));
-
-									try
-									{
-										blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
-										{
-											//Will throw if already exist, save 1 call
-											IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
-										}, new BlobRequestOptions()
-										{
-											MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
-											ServerTimeout = TimeSpan.FromSeconds(60.0)
-										});
-										watch.Stop();
-										IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
-										break;
-									}
-									catch(StorageException ex)
-									{
-										var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
-										if(!alreadyExist)
-											throw;
-										watch.Stop();
-										IndexerTrace.BlockAlreadyUploaded();
-										break;
-									}
-								}
-								catch(Exception ex)
-								{
-									IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
-									failedBefore = true;
-									Thread.Sleep(5000);
-								}
-							}
-						}
-					}, TaskCreationOptions.LongRunning)
-				};
-		}
-
-		
-		private DiskBlockPos GetPosition()
-		{
+			name = NormalizeName(name);
 			try
 			{
-				return DiskBlockPos.Parse(File.ReadAllText(Configuration.ProgressFile));
+				return DiskBlockPos.Parse(File.ReadAllText(name));
 			}
 			catch
 			{
@@ -277,9 +340,18 @@ namespace NBitcoin.Indexer
 			return new DiskBlockPos(0, 0);
 		}
 
-		public void StartTransactionImportToAzure()
+		private string NormalizeName(string name)
 		{
-			SetThrottling();
+			if(name == null)
+				name = Configuration.ProgressFile;
+			else
+			{
+				var originalName = Path.GetFileName(name);
+				name = name + "-" + originalName;
+			}
+			return name;
 		}
+
+
 	}
 }
