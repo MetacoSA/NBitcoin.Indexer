@@ -458,7 +458,7 @@ namespace NBitcoin.Indexer
 				name = Configuration.ProgressFile;
 			else
 			{
-				var originalName = Path.GetFileName(name);
+				var originalName = Path.GetFileName(Configuration.ProgressFile);
 				name = name + "-" + originalName;
 			}
 			return name;
