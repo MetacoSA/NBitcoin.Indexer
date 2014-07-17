@@ -181,7 +181,7 @@ namespace NBitcoin.Indexer
 			BlockingCollection<IndexedTransaction[]> transactions = new BlockingCollection<IndexedTransaction[]>(20);
 			CancellationTokenSource stop = new CancellationTokenSource();
 			var tasks =
-				Enumerable.Range(0, TaskCount).Select(_ => Task.Factory.StartNew(() =>
+				Enumerable.Range(0, TaskCount * 2).Select(_ => Task.Factory.StartNew(() =>
 				{
 					try
 					{
