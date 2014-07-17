@@ -9,7 +9,7 @@ namespace NBitcoin.Indexer.Console
 {
 	class IndexerOptions
 	{
-		[Option("ImportBlocksInAzure", DefaultValue = false, Required = false, HelpText = "Import blocks from data directory speicified in LocalSettings into azure")]
+		[Option('b', "ImportBlocksInAzure", DefaultValue = false, Required = false, HelpText = "Import blocks from data directory speicified in LocalSettings into azure container")]
 		public bool ImportBlocksInAzure
 		{
 			get;
@@ -25,6 +25,13 @@ namespace NBitcoin.Indexer.Console
 				_Usage = HelpText.AutoBuild(this, (HelpText current) => HelpText.DefaultParsingErrorsHandler(this, current));
 			return _Usage;
 			//
+		}
+
+		[Option('t', "ImportTransactionsInAzure", DefaultValue = false, Required = false, HelpText = "Import transactions from data directory speicified in LocalSettings into azure table")]
+		public bool ImportTransactionsInAzure
+		{
+			get;
+			set;
 		}
 	}
 }

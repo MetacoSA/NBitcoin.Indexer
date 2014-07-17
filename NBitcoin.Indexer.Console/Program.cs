@@ -17,10 +17,15 @@ namespace NBitcoin.Indexer.Console
 				System.Console.WriteLine(options.GetUsage());
 			if(Parser.Default.ParseArguments(args, options))
 			{
+				
+					var importer = AzureBlockImporter.CreateBlockImporter();
 				if(options.ImportBlocksInAzure)
 				{
-					var importer = AzureBlockImporter.CreateBlockImporter();
 					importer.StartBlockImportToAzure();
+				}
+				if(options.ImportTransactionsInAzure)
+				{
+					importer.StartTransactionImportToAzure();
 				}
 			}
 		}
