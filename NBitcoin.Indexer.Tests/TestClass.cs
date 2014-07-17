@@ -26,7 +26,7 @@ namespace NBitcoin.Indexer.Tests
 		public void CanUploadTransactionsToAzure()
 		{
 			AzureBlockImporter blockImporter = CreateBlockImporter();
-			blockImporter.TaskCount = 5;
+			blockImporter.TaskCount = 1;
 			blockImporter.StartTransactionImportToAzure();
 		}
 

@@ -43,5 +43,20 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceInformation("New starting import position : " + diskBlockPos.ToString());
 		}
+
+		internal static void BlockCount(int blockCount)
+		{
+			_Trace.TraceInformation("Block count : " + blockCount);
+		}
+
+		internal static void TxCount(int txCount)
+		{
+			_Trace.TraceInformation("Transaction count : " + txCount);
+		}
+
+		internal static void ErrorWhileImportingTxToAzure(Exception ex)
+		{
+			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions : " + Utils.ExceptionToString(ex));
+		}
 	}
 }

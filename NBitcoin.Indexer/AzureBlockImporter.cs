@@ -106,38 +106,43 @@ namespace NBitcoin.Indexer
 		{
 
 		}
+
+		public IndexedTransaction(uint256 txId)
+		{
+			Key = CalculateKey(txId);
+			RowKey = txId.ToString() + "-m";
+		}
 		public IndexedTransaction(uint256 txId, uint256 blockId)
 		{
-			PartitionKey = (txId.GetByte(0) + (txId.GetByte(1) << 8)).ToString();
-			RowKey = txId.ToString() + "-" + blockId.ToString();
+			Key = CalculateKey(txId);
+			RowKey = txId.ToString() + "-b" + blockId.ToString();
 		}
-		public IndexedTransaction(uint256 txId, uint256 blockId, OutPoint emitter)
+
+		private static ushort CalculateKey(uint256 txId)
 		{
-
+			return (ushort)((txId.GetByte(0) & 0xE0) + (txId.GetByte(1) << 8));
 		}
 
+
+		ushort? _Key;
 		[IgnoreProperty]
-		public int toto
+		public ushort Key
 		{
-			get;
-			set;
+			get
+			{
+				if(_Key == null)
+					_Key = ushort.Parse(PartitionKey);
+				return _Key.Value;
+			}
+			set
+			{
+				PartitionKey = value.ToString();
+				_Key = value;
+			}
 		}
 	}
 	public class AzureBlockImporter
 	{
-		class TransactionWithId
-		{
-			public uint256 TxId
-			{
-				get;
-				set;
-			}
-			public Transaction Transaction
-			{
-				get;
-				set;
-			}
-		}
 		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
 		{
 			var config = ImporterConfiguration.FromConfiguration();
@@ -171,27 +176,126 @@ namespace NBitcoin.Indexer
 		public void StartTransactionImportToAzure()
 		{
 			SetThrottling();
-			var tableClient = Configuration.CreateTableClient();
-			var store = Configuration.CreateStoreBlock();
-			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
-			{
-				tableClient.GetTableReference("tx").CreateIfNotExists();
-				var startPosition = GetPosition("tx");
-				var buckets = new MultiDictionary<string, TransactionWithId>();
-				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
-				{
-					foreach(var transaction in block.Item.Transactions)
-					{
-						foreach(var input in transaction.Inputs)
-						{
 
+			BlockingCollection<IndexedTransaction[]> transactions = new BlockingCollection<IndexedTransaction[]>(20);
+			CancellationTokenSource stop = new CancellationTokenSource();
+			var tasks =
+				Enumerable.Range(0, TaskCount).Select(_ => Task.Factory.StartNew(() =>
+				{
+					try
+					{
+						foreach(var tx in transactions.GetConsumingEnumerable(stop.Token))
+						{
+							SendToAzure(tx);
 						}
 					}
+					catch(OperationCanceledException)
+					{
+					}
+				}, TaskCreationOptions.LongRunning)).ToArray();
+
+			var tableClient = Configuration.CreateTableClient();
+			var store = Configuration.CreateStoreBlock();
+			var saveInterval = TimeSpan.FromMinutes(5);
+			Stopwatch watch = new Stopwatch();
+
+			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
+			{
+				tableClient.GetTableReference("transactions").CreateIfNotExists();
+				var startPosition = GetPosition("tx");
+				var lastPosition = startPosition;
+				IndexerTrace.StartingImportAt(lastPosition);
+				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
+				int txCount = 0;
+				int blockCount = 0;
+				watch.Start();
+				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
+				{
+					lastPosition = block.BlockPosition;
+					foreach(var transaction in block.Item.Transactions)
+					{
+						var indexed = new IndexedTransaction(transaction.GetHash(), block.Item.Header.GetHash());
+						buckets.Add(indexed.Key, indexed);
+						var collection = buckets[indexed.Key];
+						if(collection.Count == 100)
+						{
+							PushTransactions(buckets, collection, transactions, ref txCount);
+						}
+						if(watch.Elapsed > saveInterval)
+						{
+							watch.Stop();
+							watch.Reset();
+							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
+							{
+								PushTransactions(buckets, kv.Value, transactions, ref txCount);
+							}
+							WaitProcessed(transactions);
+							SetPosition(lastPosition, "tx");
+							IndexerTrace.PositionSaved(lastPosition);
+							watch.Start();
+						}
+					}
+					blockCount++;
+					IndexerTrace.BlockCount(blockCount);
+				}
+
+				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
+				{
+					PushTransactions(buckets, kv.Value, transactions, ref txCount);
+				}
+				WaitProcessed(transactions);
+				stop.Cancel();
+				Task.WaitAll(tasks);
+				SetPosition(lastPosition, "tx");
+				IndexerTrace.PositionSaved(lastPosition);
+			}
+		}
+
+		private void PushTransactions(MultiDictionary<ushort, IndexedTransaction> buckets,
+										ICollection<IndexedTransaction> indexedTransactions,
+									BlockingCollection<IndexedTransaction[]> transactions,
+									ref int txCount)
+		{
+			var array = indexedTransactions.ToArray();
+			txCount += array.Length;
+			transactions.Add(array);
+			buckets.Remove(array[0].Key);
+			IndexerTrace.TxCount(txCount);
+		}
+
+		private void SendToAzure(IndexedTransaction[] transactions)
+		{
+
+			var client = Configuration.CreateTableClient();
+			var table = client.GetTableReference("transactions");
+
+			while(true)
+			{
+				try
+				{
+					var batch = new TableBatchOperation();
+					foreach(var tx in transactions)
+					{
+						batch.Add(TableOperation.InsertOrReplace(tx));
+					}
+					table.ExecuteBatch(batch, new TableRequestOptions()
+					{
+						PayloadFormat = TablePayloadFormat.JsonNoMetadata,
+						MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
+						ServerTimeout = TimeSpan.FromSeconds(60.0)
+					});
+					break;
+				}
+				catch(Exception ex)
+				{
+					IndexerTrace.ErrorWhileImportingTxToAzure(ex);
+					Thread.Sleep(5000);
 				}
 			}
 		}
 
 
+		TimeSpan saveInterval = TimeSpan.FromMinutes(5);
 
 		public void StartBlockImportToAzure()
 		{
@@ -199,7 +303,7 @@ namespace NBitcoin.Indexer
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
 			CancellationTokenSource stop = new CancellationTokenSource();
 			var tasks =
-				Enumerable.Range(0, 10).Select(_ => Task.Factory.StartNew(() =>
+				Enumerable.Range(0, TaskCount).Select(_ => Task.Factory.StartNew(() =>
 			{
 				try
 				{
@@ -215,9 +319,8 @@ namespace NBitcoin.Indexer
 
 			var blobClient = Configuration.CreateBlobClient();
 			var store = Configuration.CreateStoreBlock();
-			var saveInterval = TimeSpan.FromMinutes(5);
 			Stopwatch watch = new Stopwatch();
-
+			int blockCount = 0;
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
@@ -233,20 +336,28 @@ namespace NBitcoin.Indexer
 					{
 						watch.Stop();
 						watch.Reset();
-						while(blocks.Count != 0)
-						{
-							Thread.Sleep(1000);
-						}
+						WaitProcessed(blocks);
 						SetPosition(lastPosition);
 						IndexerTrace.PositionSaved(lastPosition);
 						watch.Start();
 					}
 					blocks.Add(block);
+					blockCount++;
+					IndexerTrace.BlockCount(blockCount);
 				}
+				WaitProcessed(blocks);
 				stop.Cancel();
 				Task.WaitAll(tasks);
 				SetPosition(lastPosition);
 				IndexerTrace.PositionSaved(lastPosition);
+			}
+		}
+
+		private void WaitProcessed<T>(BlockingCollection<T> collection)
+		{
+			while(collection.Count != 0)
+			{
+				Thread.Sleep(1000);
 			}
 		}
 
