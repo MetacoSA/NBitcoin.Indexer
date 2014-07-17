@@ -171,6 +171,7 @@ namespace NBitcoin.Indexer
 			if(configuration == null)
 				throw new ArgumentNullException("configuration");
 			_Configuration = configuration;
+			TaskCount = 15;
 		}
 
 		public void StartTransactionImportToAzure()
