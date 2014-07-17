@@ -13,12 +13,14 @@ namespace NBitcoin.Indexer.Console
 		static void Main(string[] args)
 		{
 			var options = new IndexerOptions();
+			if(args.Length == 0)
+				System.Console.WriteLine(options.GetUsage());
 			if(Parser.Default.ParseArguments(args, options))
 			{
 				if(options.ImportBlocksInAzure)
 				{
 					var importer = AzureBlockImporter.CreateBlockImporter();
-					importer.StartImportToAzure();
+					importer.StartBlockImportToAzure();
 				}
 			}
 		}

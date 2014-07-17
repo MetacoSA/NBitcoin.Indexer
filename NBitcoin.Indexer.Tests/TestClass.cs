@@ -20,27 +20,22 @@ namespace NBitcoin.Indexer.Tests
 		{
 			AzureBlockImporter blockImporter = CreateBlockImporter();
 			blockImporter.TaskCount = 5;
-			blockImporter.StartImportToAzure();
+			blockImporter.StartBlockImportToAzure();
+		}
+		[Fact]
+		public void CanUploadTransactionsToAzure()
+		{
+			AzureBlockImporter blockImporter = CreateBlockImporter();
+			blockImporter.TaskCount = 5;
+			blockImporter.StartTransactionImportToAzure();
 		}
 
 		private AzureBlockImporter CreateBlockImporter([CallerMemberName]string folder = null)
 		{
 			TestUtils.EnsureNew(folder);
-			return new AzureBlockImporter(CreateBlockStore(), CreateBlobClient(), folder + "/progress");
-		}
-
-		private BlockStore CreateBlockStore()
-		{
-			return new BlockStore(ConfigurationManager.AppSettings["BlockDirectory"], Network.Main);
-		}
-
-		private CloudBlobClient CreateBlobClient()
-		{
-			return new CloudBlobClient
-				(
-					new Uri(ConfigurationManager.AppSettings["Azure.Blob.StorageUri"]),
-					new StorageCredentials(ConfigurationManager.AppSettings["Azure.Blob.AccountName"], ConfigurationManager.AppSettings["Azure.Blob.Key"])
-				);
+			var config = ImporterConfiguration.FromConfiguration();
+			config.ProgressFile = folder + "/progress";
+			return config.CreateImporter();
 		}
 	}
 }

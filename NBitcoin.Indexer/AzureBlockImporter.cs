@@ -17,80 +17,112 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	public class AzureBlockImporter
+	public class ImporterConfiguration
 	{
-		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
+		public static ImporterConfiguration FromConfiguration()
 		{
-			if(progressFile == null)
-				progressFile = "progress.dat";
-			var importer = new AzureBlockImporter(CreateBlockStore(), CreateBlobClient(), progressFile);
-			var container = ConfigurationManager.AppSettings["Azure.Blob.Container"];
-			if(container != null)
-				importer.Container = container;
-			return importer;
+			ImporterConfiguration config = new ImporterConfiguration();
+			var account = GetValue("Azure.AccountName", true);
+			var key = GetValue("Azure.Key", true);
+			config.StorageCredentials = new StorageCredentials(account, key);
+			config.Container = GetValue("Azure.Blob.Container", false) ?? "nbitcoinindexer";
+			config.BlockDirectory = GetValue("BlockDirectory", true);
+			var network = GetValue("Bitcoin.Network", false) ?? "Main";
+			config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
+									Network.Main :
+							 network.Equals("test", StringComparison.OrdinalIgnoreCase) ?
+							 Network.TestNet : null;
+			if(config.Network == null)
+				throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
+			return config;
 		}
 
-		private static BlockStore CreateBlockStore()
+		private static string GetValue(string config, bool required)
 		{
-			return new BlockStore(ConfigurationManager.AppSettings["BlockDirectory"], Network.Main);
+			var result = ConfigurationManager.AppSettings[config];
+			result = String.IsNullOrWhiteSpace(result) ? null : result;
+			if(result == null && required)
+				throw new ConfigurationErrorsException("AppSetting " + config + " not found");
+			return result;
 		}
-
-		private static CloudBlobClient CreateBlobClient()
+		public ImporterConfiguration()
 		{
-			return new CloudBlobClient
-				(
-					new Uri(ConfigurationManager.AppSettings["Azure.Blob.StorageUri"]),
-					new StorageCredentials(ConfigurationManager.AppSettings["Azure.Blob.AccountName"], ConfigurationManager.AppSettings["Azure.Blob.Key"])
-				);
+			ProgressFile = "progress.dat";
+			Network = Network.Main;
 		}
-
-
+		public Network Network
+		{
+			get;
+			set;
+		}
+		public string BlockDirectory
+		{
+			get;
+			set;
+		}
 		public string Container
 		{
 			get;
 			set;
 		}
-		private readonly CloudBlobClient _BlobClient;
+		public string ProgressFile
+		{
+			get;
+			set;
+		}
+		public StorageCredentials StorageCredentials
+		{
+			get;
+			set;
+		}
+		public CloudBlobClient CreateBlobClient()
+		{
+			return new CloudBlobClient(MakeUri("blob"), StorageCredentials);
+		}
+		public BlockStore CreateStoreBlock()
+		{
+			return new BlockStore(BlockDirectory, Network.Main);
+		}
+		private Uri MakeUri(string clientType)
+		{
+			return new Uri(String.Format("https://{0}.{1}.core.windows.net/", StorageCredentials.AccountName, clientType), UriKind.Absolute);
+		}
+
+		public AzureBlockImporter CreateImporter()
+		{
+			return new AzureBlockImporter(this);
+		}
+	}
+	public class AzureBlockImporter
+	{
+		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
+		{
+			var config = ImporterConfiguration.FromConfiguration();
+			if(progressFile != null)
+				config.ProgressFile = progressFile;
+			return config.CreateImporter();
+		}
+
 
 		public int TaskCount
 		{
 			get;
 			set;
 		}
-		public CloudBlobClient BlobClient
+
+		private readonly ImporterConfiguration _Configuration;
+		public ImporterConfiguration Configuration
 		{
 			get
 			{
-				return _BlobClient;
+				return _Configuration;
 			}
 		}
-		private readonly BlockStore _Store;
-		public BlockStore Store
+		public AzureBlockImporter(ImporterConfiguration configuration)
 		{
-			get
-			{
-				return _Store;
-			}
-		}
-		private readonly string _ProgressFile;
-		public string ProgressFile
-		{
-			get
-			{
-				return _ProgressFile;
-			}
-		}
-		public AzureBlockImporter(BlockStore store, CloudBlobClient blobClient, string progressFile)
-		{
-			if(store == null)
-				throw new ArgumentNullException("store");
-			if(blobClient == null)
-				throw new ArgumentNullException("blobClient");
-			TaskCount = 15;
-			_Store = store;
-			_BlobClient = blobClient;
-			_ProgressFile = progressFile;
-			Container = "nbitcoinindexer";
+			if(configuration == null)
+				throw new ArgumentNullException("configuration");
+			_Configuration = configuration;
 		}
 
 
@@ -108,20 +140,19 @@ namespace NBitcoin.Indexer
 				set;
 			}
 		}
-		public void StartImportToAzure()
+		public void StartBlockImportToAzure()
 		{
-			ServicePointManager.UseNagleAlgorithm = false;
-			ServicePointManager.Expect100Continue = false;
-			ServicePointManager.DefaultConnectionLimit = 100;
-
+			SetThrottling();
+			var blobClient = Configuration.CreateBlobClient();
+			var store = Configuration.CreateStoreBlock();
 			List<ImportTask> tasks = new List<ImportTask>();
 			using(IndexerTrace.NewCorrelation("Import to azure started").Open())
 			{
-				BlobClient.GetContainerReference(Container).CreateIfNotExists();
+				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
 				var startPosition = GetPosition();
 				var lastPosition = startPosition;
 				IndexerTrace.StartingImportAt(lastPosition);
-				foreach(var block in Store.Enumerate(new DiskBlockPosRange(startPosition)))
+				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
 				{
 					if(tasks.Count >= TaskCount)
 					{
@@ -134,6 +165,13 @@ namespace NBitcoin.Indexer
 				Task.WaitAll(tasks.Select(t => t.Task).ToArray());
 				CleanDone(tasks);
 			}
+		}
+
+		private static void SetThrottling()
+		{
+			ServicePointManager.UseNagleAlgorithm = false;
+			ServicePointManager.Expect100Continue = false;
+			ServicePointManager.DefaultConnectionLimit = 100;
 		}
 
 		private void CleanDone(List<ImportTask> tasks)
@@ -154,7 +192,7 @@ namespace NBitcoin.Indexer
 
 		private void SetPosition(DiskBlockPos diskBlockPos)
 		{
-			File.WriteAllText(ProgressFile, diskBlockPos.ToString());
+			File.WriteAllText(Configuration.ProgressFile, diskBlockPos.ToString());
 		}
 
 		private ImportTask Import(StoredBlock storedBlock)
@@ -176,9 +214,9 @@ namespace NBitcoin.Indexer
 							{
 								try
 								{
-									var client = Clone(BlobClient);
+									var client = Configuration.CreateBlobClient();
 									client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-									var container = client.GetContainerReference(Container);
+									var container = client.GetContainerReference(Configuration.Container);
 									var blob = container.GetPageBlobReference(hash);
 									MemoryStream ms = new MemoryStream();
 									block.ReadWrite(ms, true);
@@ -226,21 +264,22 @@ namespace NBitcoin.Indexer
 				};
 		}
 
-		private CloudBlobClient Clone(CloudBlobClient client)
-		{
-			return new CloudBlobClient(client.BaseUri, client.Credentials);
-		}
-
+		
 		private DiskBlockPos GetPosition()
 		{
 			try
 			{
-				return DiskBlockPos.Parse(File.ReadAllText(_ProgressFile));
+				return DiskBlockPos.Parse(File.ReadAllText(Configuration.ProgressFile));
 			}
 			catch
 			{
 			}
 			return new DiskBlockPos(0, 0);
+		}
+
+		public void StartTransactionImportToAzure()
+		{
+			SetThrottling();
 		}
 	}
 }
