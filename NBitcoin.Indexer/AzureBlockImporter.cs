@@ -86,7 +86,7 @@ namespace NBitcoin.Indexer
 		}
 		private Uri MakeUri(string clientType)
 		{
-			return new Uri(String.Format("https://{0}.{1}.core.windows.net/", StorageCredentials.AccountName, clientType), UriKind.Absolute);
+			return new Uri(String.Format("http://{0}.{1}.core.windows.net/", StorageCredentials.AccountName, clientType), UriKind.Absolute);
 		}
 
 		public AzureBlockImporter CreateImporter()
@@ -107,23 +107,34 @@ namespace NBitcoin.Indexer
 
 		}
 
-		public IndexedTransaction(uint256 txId)
+		public IndexedTransaction(Transaction tx)
 		{
-			Key = CalculateKey(txId);
-			RowKey = txId.ToString() + "-m";
-		}
-		public IndexedTransaction(uint256 txId, uint256 blockId)
-		{
-			Key = CalculateKey(txId);
-			RowKey = txId.ToString() + "-b" + blockId.ToString();
+			SetTx(tx);
+			RowKey = _txId.ToString() + "-m";
 		}
 
-		private static ushort CalculateKey(uint256 txId)
+		private void SetTx(Transaction tx)
 		{
-			return (ushort)((txId.GetByte(0) & 0xE0) + (txId.GetByte(1) << 8));
+			Transaction = tx.ToBytes();
+			_txId = Hashes.Hash256(Transaction);
+			Key = (ushort)((_txId.GetByte(0) & 0xE0) + (_txId.GetByte(1) << 8));
+		}
+		public IndexedTransaction(Transaction tx, uint256 blockId)
+		{
+			SetTx(tx);
+			RowKey = _txId.ToString() + "-b" + blockId.ToString();
 		}
 
 
+		public byte[] Transaction
+		{
+			get;
+			set;
+		}
+
+
+
+		uint256 _txId;
 		ushort? _Key;
 		[IgnoreProperty]
 		public ushort Key
@@ -131,12 +142,12 @@ namespace NBitcoin.Indexer
 			get
 			{
 				if(_Key == null)
-					_Key = ushort.Parse(PartitionKey);
+					_Key = ushort.Parse(PartitionKey, System.Globalization.NumberStyles.HexNumber);
 				return _Key.Value;
 			}
 			set
 			{
-				PartitionKey = value.ToString();
+				PartitionKey = value.ToString("X2");
 				_Key = value;
 			}
 		}
@@ -215,7 +226,7 @@ namespace NBitcoin.Indexer
 					lastPosition = block.BlockPosition;
 					foreach(var transaction in block.Item.Transactions)
 					{
-						var indexed = new IndexedTransaction(transaction.GetHash(), block.Item.Header.GetHash());
+						var indexed = new IndexedTransaction(transaction, block.Item.Header.GetHash());
 						buckets.Add(indexed.Key, indexed);
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
@@ -281,7 +292,7 @@ namespace NBitcoin.Indexer
 					}
 					table.ExecuteBatch(batch, new TableRequestOptions()
 					{
-						PayloadFormat = TablePayloadFormat.JsonNoMetadata,
+						PayloadFormat = TablePayloadFormat.Json,
 						MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
 						ServerTimeout = TimeSpan.FromSeconds(60.0)
 					});
