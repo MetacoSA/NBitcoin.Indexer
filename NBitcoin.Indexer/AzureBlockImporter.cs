@@ -277,7 +277,7 @@ namespace NBitcoin.Indexer
 
 			var client = Configuration.CreateTableClient();
 			var table = client.GetTableReference("transactions");
-
+			bool firstException = false;
 			while(true)
 			{
 				var batch = new TableBatchOperation();
@@ -291,14 +291,17 @@ namespace NBitcoin.Indexer
 					{
 						PayloadFormat = TablePayloadFormat.JsonNoMetadata,
 						MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
-						ServerTimeout = TimeSpan.FromSeconds(60.0)
+						ServerTimeout = TimeSpan.FromSeconds(60.0),
 					});
+					if(firstException)
+						IndexerTrace.RetryWorked();
 					break;
 				}
 				catch(Exception ex)
 				{
 					IndexerTrace.ErrorWhileImportingTxToAzure(ex);
 					Thread.Sleep(5000);
+					firstException = true;
 				}
 			}
 		}

@@ -58,5 +58,10 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions : " + Utils.ExceptionToString(ex));
 		}
+
+		internal static void RetryWorked()
+		{
+			_Trace.TraceInformation("Retry worked");
+		}
 	}
 }
