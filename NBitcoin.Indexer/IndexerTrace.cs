@@ -26,7 +26,7 @@ namespace NBitcoin.Indexer
 			if(time.TotalSeconds == 0.0)
 				time = TimeSpan.FromMilliseconds(10);
 			double speed = ((double)bytes / 1024.0) / time.TotalSeconds;
-			_Trace.TraceInformation("Block uploaded successfully (" + speed.ToString("0.00") + " KB/S)");
+			_Trace.TraceEvent(TraceEventType.Verbose, 0, "Block uploaded successfully (" + speed.ToString("0.00") + " KB/S)");
 		}
 
 		internal static TraceCorrelation NewCorrelation(string activityName)
@@ -46,12 +46,12 @@ namespace NBitcoin.Indexer
 
 		internal static void BlockCount(int blockCount)
 		{
-			_Trace.TraceInformation("Block count : " + blockCount);
+			_Trace.TraceEvent(blockCount % 1000 == 0 ? TraceEventType.Information : TraceEventType.Verbose, 0, "Block count : " + blockCount);
 		}
 
 		internal static void TxCount(int txCount)
 		{
-			_Trace.TraceInformation("Transaction count : " + txCount);
+			_Trace.TraceEvent(txCount % 100000 == 0 ? TraceEventType.Information : TraceEventType.Verbose, 0, "Transaction count : " + txCount);
 		}
 
 		internal static void ErrorWhileImportingTxToAzure(Exception ex)
