@@ -44,14 +44,14 @@ namespace NBitcoin.Indexer
 			_Trace.TraceInformation("New starting import position : " + diskBlockPos.ToString());
 		}
 
-		internal static void BlockCount(int blockCount)
+		internal static void BlockCount(int blockCount, bool verbose)
 		{
-			_Trace.TraceEvent(blockCount % 1000 == 0 ? TraceEventType.Information : TraceEventType.Verbose, 0, "Block count : " + blockCount);
+			_Trace.TraceEvent((!verbose) ? TraceEventType.Information : TraceEventType.Verbose, 0, "Block count : " + blockCount);
 		}
 
-		internal static void TxCount(int txCount)
+		internal static void TxCount(int txCount, bool verbose)
 		{
-			_Trace.TraceEvent(txCount % 100000 == 0 ? TraceEventType.Information : TraceEventType.Verbose, 0, "Transaction count : " + txCount);
+			_Trace.TraceEvent((!verbose) ? TraceEventType.Information : TraceEventType.Verbose, 0, "Transaction count : " + txCount);
 		}
 
 		internal static void ErrorWhileImportingTxToAzure(Exception ex)

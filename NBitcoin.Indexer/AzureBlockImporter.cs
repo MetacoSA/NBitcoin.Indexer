@@ -212,6 +212,7 @@ namespace NBitcoin.Indexer
 				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
 				int txCount = 0;
 				int blockCount = 0;
+				int lastLoggedTx = 0;
 				watch.Start();
 				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
 				{
@@ -223,7 +224,7 @@ namespace NBitcoin.Indexer
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
 						{
-							PushTransactions(buckets, collection, transactions, ref txCount);
+							PushTransactions(buckets, collection, transactions, ref txCount, ref lastLoggedTx);
 						}
 						if(watch.Elapsed > saveInterval)
 						{
@@ -231,7 +232,7 @@ namespace NBitcoin.Indexer
 							watch.Reset();
 							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
 							{
-								PushTransactions(buckets, kv.Value, transactions, ref txCount);
+								PushTransactions(buckets, kv.Value, transactions, ref txCount, ref lastLoggedTx);
 							}
 							WaitProcessed(transactions);
 							SetPosition(lastPosition, "tx");
@@ -240,12 +241,12 @@ namespace NBitcoin.Indexer
 						}
 					}
 					blockCount++;
-					IndexerTrace.BlockCount(blockCount);
+					IndexerTrace.BlockCount(blockCount, blockCount % 1000 != 0);
 				}
 
 				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
 				{
-					PushTransactions(buckets, kv.Value, transactions, ref txCount);
+					PushTransactions(buckets, kv.Value, transactions, ref txCount, ref lastLoggedTx);
 				}
 				WaitProcessed(transactions);
 				stop.Cancel();
@@ -258,13 +259,17 @@ namespace NBitcoin.Indexer
 		private void PushTransactions(MultiDictionary<ushort, IndexedTransaction> buckets,
 										ICollection<IndexedTransaction> indexedTransactions,
 									BlockingCollection<IndexedTransaction[]> transactions,
-									ref int txCount)
+									ref int txCount, ref int lastLoggedTx)
 		{
 			var array = indexedTransactions.ToArray();
 			txCount += array.Length;
 			transactions.Add(array);
 			buckets.Remove(array[0].Key);
-			IndexerTrace.TxCount(txCount);
+
+			var verbose = txCount - lastLoggedTx < 1000;
+			if(!verbose)
+				lastLoggedTx = txCount;
+			IndexerTrace.TxCount(txCount, verbose);
 		}
 
 		private void SendToAzure(IndexedTransaction[] transactions)
@@ -325,6 +330,7 @@ namespace NBitcoin.Indexer
 			var store = Configuration.CreateStoreBlock();
 			Stopwatch watch = new Stopwatch();
 			int blockCount = 0;
+			int lastLoggedBlockCount = 0;
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
@@ -347,7 +353,10 @@ namespace NBitcoin.Indexer
 					}
 					blocks.Add(block);
 					blockCount++;
-					IndexerTrace.BlockCount(blockCount);
+					var verbose = blockCount - lastLoggedBlockCount < 1000;
+					if(verbose)
+						lastLoggedBlockCount = blockCount;
+					IndexerTrace.BlockCount(blockCount, verbose);
 				}
 				WaitProcessed(blocks);
 				stop.Cancel();
