@@ -274,7 +274,8 @@ namespace NBitcoin.Indexer
 
 		private void SendToAzure(IndexedTransaction[] transactions)
 		{
-
+			if(transactions.Length == 0)
+				return;
 			var client = Configuration.CreateTableClient();
 			var table = client.GetTableReference("transactions");
 			bool firstException = false;
