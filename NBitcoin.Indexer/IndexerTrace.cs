@@ -70,5 +70,15 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceInformation("Retry worked");
 		}
+
+		internal static void LogProgress(ProgressTracker progress, ref double lastLoggedProgress)
+		{
+			var verbose = progress.CurrentProgress - lastLoggedProgress < 0.1;
+			if(!verbose)
+				lastLoggedProgress = progress.CurrentProgress;
+
+			var info = "Progress : " + progress.CurrentProgress.ToString(verbose ? "0.0000" : "0.00");
+			_Trace.TraceEvent(verbose ? TraceEventType.Verbose : TraceEventType.Information, 0, info);
+		}
 	}
 }

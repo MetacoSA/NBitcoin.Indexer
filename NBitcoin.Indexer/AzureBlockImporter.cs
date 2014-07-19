@@ -13,6 +13,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -207,16 +208,14 @@ namespace NBitcoin.Indexer
 			{
 				tableClient.GetTableReference("transactions").CreateIfNotExists();
 				var startPosition = GetPosition("tx");
-				var lastPosition = startPosition;
-				IndexerTrace.StartingImportAt(lastPosition);
+				var progress = new ProgressTracker(this, startPosition);
+				double lastLoggedProgress = 0.0;
+				IndexerTrace.StartingImportAt(startPosition);
 				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
-				int txCount = 0;
-				int blockCount = 0;
-				int lastLoggedTx = 0;
 				watch.Start();
 				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
 				{
-					lastPosition = block.BlockPosition;
+					progress.Processing(block);
 					foreach(var transaction in block.Item.Transactions)
 					{
 						var indexed = new IndexedTransaction(transaction, block.Item.Header.GetHash());
@@ -224,7 +223,7 @@ namespace NBitcoin.Indexer
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
 						{
-							PushTransactions(buckets, collection, transactions, ref txCount, ref lastLoggedTx);
+							PushTransactions(buckets, collection, transactions);
 						}
 						if(watch.Elapsed > saveInterval)
 						{
@@ -232,44 +231,36 @@ namespace NBitcoin.Indexer
 							watch.Reset();
 							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
 							{
-								PushTransactions(buckets, kv.Value, transactions, ref txCount, ref lastLoggedTx);
+								PushTransactions(buckets, kv.Value, transactions);
 							}
 							WaitProcessed(transactions);
-							SetPosition(lastPosition, "tx");
-							IndexerTrace.PositionSaved(lastPosition);
+							SetPosition(progress.LastPosition, "tx");
+							IndexerTrace.PositionSaved(progress.LastPosition);
 							watch.Start();
 						}
 					}
-					blockCount++;
-					IndexerTrace.BlockCount(blockCount, blockCount % 1000 != 0);
+					IndexerTrace.LogProgress(progress, ref lastLoggedProgress);
 				}
 
 				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
 				{
-					PushTransactions(buckets, kv.Value, transactions, ref txCount, ref lastLoggedTx);
+					PushTransactions(buckets, kv.Value, transactions);
 				}
 				WaitProcessed(transactions);
 				stop.Cancel();
 				Task.WaitAll(tasks);
-				SetPosition(lastPosition, "tx");
-				IndexerTrace.PositionSaved(lastPosition);
+				SetPosition(progress.LastPosition, "tx");
+				IndexerTrace.PositionSaved(progress.LastPosition);
 			}
 		}
 
 		private void PushTransactions(MultiDictionary<ushort, IndexedTransaction> buckets,
 										ICollection<IndexedTransaction> indexedTransactions,
-									BlockingCollection<IndexedTransaction[]> transactions,
-									ref int txCount, ref int lastLoggedTx)
+									BlockingCollection<IndexedTransaction[]> transactions)
 		{
 			var array = indexedTransactions.ToArray();
-			txCount += array.Length;
 			transactions.Add(array);
 			buckets.Remove(array[0].Key);
-
-			var verbose = txCount - lastLoggedTx < 1000;
-			if(!verbose)
-				lastLoggedTx = txCount;
-			IndexerTrace.TxCount(txCount, verbose);
 		}
 
 		private void SendToAzure(IndexedTransaction[] transactions)
@@ -333,42 +324,39 @@ namespace NBitcoin.Indexer
 			var blobClient = Configuration.CreateBlobClient();
 			var store = Configuration.CreateStoreBlock();
 			Stopwatch watch = new Stopwatch();
-			int blockCount = 0;
-			int lastLoggedBlockCount = 0;
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
 				var startPosition = GetPosition();
-				var lastPosition = startPosition;
-				IndexerTrace.StartingImportAt(lastPosition);
+				var progress = new ProgressTracker(this, startPosition);
+				var lastLoggedProgress = 0.0;
 
+				IndexerTrace.StartingImportAt(startPosition);
 				watch.Start();
 				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
 				{
-					lastPosition = block.BlockPosition;
+					progress.Processing(block);
 					if(watch.Elapsed > saveInterval)
 					{
 						watch.Stop();
 						watch.Reset();
 						WaitProcessed(blocks);
-						SetPosition(lastPosition);
-						IndexerTrace.PositionSaved(lastPosition);
+						SetPosition(progress.LastPosition);
+						IndexerTrace.PositionSaved(progress.LastPosition);
 						watch.Start();
 					}
 					blocks.Add(block);
-					blockCount++;
-					var verbose = blockCount - lastLoggedBlockCount < 1000;
-					if(verbose)
-						lastLoggedBlockCount = blockCount;
-					IndexerTrace.BlockCount(blockCount, verbose);
+					IndexerTrace.LogProgress(progress, ref lastLoggedProgress);
 				}
 				WaitProcessed(blocks);
 				stop.Cancel();
 				Task.WaitAll(tasks);
-				SetPosition(lastPosition);
-				IndexerTrace.PositionSaved(lastPosition);
+				SetPosition(progress.LastPosition);
+				IndexerTrace.PositionSaved(progress.LastPosition);
 			}
 		}
+
+
 
 		private void WaitProcessed<T>(BlockingCollection<T> collection)
 		{
