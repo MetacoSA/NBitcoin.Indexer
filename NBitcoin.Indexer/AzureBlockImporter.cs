@@ -300,7 +300,7 @@ namespace NBitcoin.Indexer
 				}
 				catch(Exception ex)
 				{
-					IndexerTrace.ErrorWhileImportingTxToAzure(ex);
+					IndexerTrace.ErrorWhileImportingTxToAzure(transactions, ex);
 					Thread.Sleep(5000);
 					firstException = true;
 				}

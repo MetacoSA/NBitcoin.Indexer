@@ -54,8 +54,15 @@ namespace NBitcoin.Indexer
 			_Trace.TraceEvent((!verbose) ? TraceEventType.Information : TraceEventType.Verbose, 0, "Transaction count : " + txCount);
 		}
 
-		internal static void ErrorWhileImportingTxToAzure(Exception ex)
+		internal static void ErrorWhileImportingTxToAzure(IndexedTransaction[] transactions, Exception ex)
 		{
+			StringBuilder builder = new StringBuilder();
+			int i = 0;
+			foreach(var tx in transactions)
+			{
+				builder.AppendLine("[ " + i + "] " + tx.PartitionKey + " " + tx.RowKey);
+				i++;
+			}
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions : " + Utils.ExceptionToString(ex));
 		}
 
