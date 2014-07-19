@@ -63,7 +63,7 @@ namespace NBitcoin.Indexer
 				builder.AppendLine("[ " + i + "] " + tx.PartitionKey + " " + tx.RowKey);
 				i++;
 			}
-			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions : " + Utils.ExceptionToString(ex));
+			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions (len:" + transactions.Length + ") : " + Utils.ExceptionToString(ex) + "\r\n" + builder.ToString());
 		}
 
 		internal static void RetryWorked()
