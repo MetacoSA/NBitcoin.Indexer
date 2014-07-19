@@ -116,7 +116,10 @@ namespace NBitcoin.Indexer
 
 		private void SetTx(Transaction tx)
 		{
-			_txId = tx.GetHash();
+			var transaction = tx.ToBytes();
+			_txId = Hashes.Hash256(transaction);
+			if(transaction.Length < 1024 * 64)
+				Transaction = transaction;
 			Key = (ushort)((_txId.GetByte(0) & 0xE0) + (_txId.GetByte(1) << 8));
 		}
 		public IndexedTransaction(Transaction tx, uint256 blockId)
@@ -125,7 +128,11 @@ namespace NBitcoin.Indexer
 			RowKey = _txId.ToString() + "-b" + blockId.ToString();
 		}
 
-
+		public byte[] Transaction
+		{
+			get;
+			set;
+		}
 
 		uint256 _txId;
 		ushort? _Key;
@@ -281,7 +288,7 @@ namespace NBitcoin.Indexer
 					}
 					table.ExecuteBatch(batch, new TableRequestOptions()
 					{
-						PayloadFormat = TablePayloadFormat.JsonNoMetadata,
+						PayloadFormat = TablePayloadFormat.Json,
 						MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
 						ServerTimeout = TimeSpan.FromSeconds(60.0),
 					});

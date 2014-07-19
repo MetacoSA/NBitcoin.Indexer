@@ -64,7 +64,7 @@ namespace NBitcoin.Indexer
 
 		internal static void LogProgress(ProgressTracker progress, ref double lastLoggedProgress)
 		{
-			var verbose = progress.CurrentProgress - lastLoggedProgress < 0.1;
+			var verbose = progress.CurrentProgress - lastLoggedProgress < 0.05;
 			if(!verbose)
 				lastLoggedProgress = progress.CurrentProgress;
 
