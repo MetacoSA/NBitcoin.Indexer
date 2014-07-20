@@ -62,8 +62,13 @@ namespace NBitcoin.Indexer.Tests
 				tester.ImportCachedBlocks();
 				tester.ImportCachedTransactions();
 
-				Transaction tx = tester.Client.GetTransaction(tester.KnownTransactionId);
-				//Assert.True(tx)
+				var tx = tester.Client.GetTransaction(tester.KnownTransactionId);
+				Assert.True(tx.Transaction.GetHash() == tester.KnownTransactionId);
+				Assert.True(tx.TransactionId == tester.KnownTransactionId);
+				Assert.True(tx.BlockIds[0] == tester.KnownBlockId);
+
+				tx = tester.Client.GetTransaction(tester.UnknownTransactionId);
+				Assert.Null(tx);
 			}
 		}
 

@@ -106,6 +106,7 @@ namespace NBitcoin.Indexer.Tests
 
 		public IndexerClient _Client;
 		public uint256 KnownTransactionId = new uint256("882b98507359823f93cf9830ee90e192c62d4964c16297c6dc3bf525d27a53cb");
+		public uint256 UnknownTransactionId = new uint256("882b98507359823f93cf9830ee90e192c62d4964c16297c6dc3bf525d27a53cd");
 		public IndexerClient Client
 		{
 			get

@@ -27,7 +27,7 @@ namespace NBitcoin.Indexer
 			_txId = Hashes.Hash256(transaction);
 			if(transaction.Length < 1024 * 64)
 				Transaction = transaction;
-			Key = (ushort)((_txId.GetByte(0) & 0xE0) + (_txId.GetByte(1) << 8));
+			Key = GetPartitionKeyUShort(_txId);
 		}
 		public TransactionEntity(Transaction tx, uint256 blockId)
 		{
@@ -58,5 +58,16 @@ namespace NBitcoin.Indexer
 				_Key = value;
 			}
 		}
+		public static string GetPartitionKey(uint256 txid)
+		{
+			var id = GetPartitionKeyUShort(txid);
+			return id.ToString("X2");
+		}
+
+		private static ushort GetPartitionKeyUShort(uint256 txid)
+		{
+			return (ushort)((txid.GetByte(0) & 0xE0) + (txid.GetByte(1) << 8));
+		}
+
 	}
 }
