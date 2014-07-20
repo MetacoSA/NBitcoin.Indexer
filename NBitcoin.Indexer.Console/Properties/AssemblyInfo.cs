@@ -8,11 +8,15 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("NBitcoin.Indexer.Console")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Microsoft")]
+[assembly: AssemblyCompany("AO-IS")]
 [assembly: AssemblyProduct("NBitcoin.Indexer.Console")]
-[assembly: AssemblyCopyright("Copyright © Microsoft 2014")]
+[assembly: AssemblyCopyright("Nicolas Dorier © AO-IS 2014")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
+[assembly: CommandLine.AssemblyLicense("LGPL v3")]
+[assembly: CommandLine.AssemblyUsage("This tool will export blocks in a blk directory filled by bitcoinq, and index blocks, transactions, or accounts into Azure",
+									"If you want to show your appreciation, vote with your wallet at 15sYbVpRh6dyWycZMwPdxJWD4xbfxReeHe ;)")]
+
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 
