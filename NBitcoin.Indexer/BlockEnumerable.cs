@@ -64,12 +64,17 @@ namespace NBitcoin.Indexer
 		}
 		public void SaveCheckpoint()
 		{
+			if(_Importer.NoSave)
+				return;
+
 			File.WriteAllText(_ProgressFile, Progress.LastPosition.ToString());
 			IndexerTrace.CheckpointSaved(Progress.LastPosition, _ProgressFile);
+
 			if(NeedSave)
 			{
 				_LastSaved = DateTime.Now;
 			}
+
 		}
 
 		public DiskBlockPos GetCheckpoint()
@@ -88,7 +93,7 @@ namespace NBitcoin.Indexer
 		{
 			get
 			{
-				return (DateTime.Now - _LastSaved) > saveInterval;
+				return (DateTime.Now - _LastSaved) > saveInterval && !_Importer.NoSave;
 			}
 		}
 

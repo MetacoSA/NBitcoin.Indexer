@@ -16,6 +16,12 @@ namespace NBitcoin.Indexer.Console
 			set;
 		}
 
+		[Option("NoSave", HelpText = "Do not save progress in a checkpoint file", Required = false, DefaultValue = false)]
+		public bool NoSave
+		{
+			get;
+			set;
+		}
 
 		string _Usage;
 		[HelpOption('?', "help", HelpText = "Display this help screen.")]

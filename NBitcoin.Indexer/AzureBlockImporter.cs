@@ -382,5 +382,11 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
+
+		public bool NoSave
+		{
+			get;
+			set;
+		}
 	}
 }

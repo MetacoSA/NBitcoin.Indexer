@@ -18,6 +18,7 @@ namespace NBitcoin.Indexer.Console
 			if(Parser.Default.ParseArguments(args, options))
 			{
 				var importer = AzureBlockImporter.CreateBlockImporter();
+				importer.NoSave = options.NoSave;
 				importer.FromBlk = options.FromBlk;
 				importer.BlkCount = options.BlkCount;
 				importer.TaskCount = options.ThreadCount;
