@@ -85,12 +85,25 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ImporterTester.cs" />
     <Compile Include="TestClass.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TestUtils.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Data\blocks\blk00000.dat" />
+    <None Include="Data\blocks\blk00001.dat" />
+    <None Include="Data\blocks\blk00002.dat" />
+    <None Include="Data\blocks\blk00003.dat" />
+    <None Include="Data\blocks\blk00004.dat" />
+    <None Include="Data\blocks\blk00005.dat" />
+    <None Include="Data\blocks\blk00006.dat" />
+    <None Include="Data\blocks\blk00007.dat" />
+    <None Include="Data\blocks\blk00008.dat" />
+    <None Include="Data\blocks\blk00009.dat" />
+    <None Include="Data\blocks\blk00010.dat" />
+    <None Include="Data\blocks\blk00011.dat" />
     <None Include="LocalSettings.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <SubType>Designer</SubType>

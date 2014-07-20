@@ -99,6 +99,19 @@ namespace NBitcoin.Indexer
 		{
 			return new CloudTableClient(MakeUri("table"), StorageCredentials);
 		}
+
+		string _TransactionTable = "transactions";
+		public string TransactionTable
+		{
+			get
+			{
+				return _TransactionTable;
+			}
+			set
+			{
+				_TransactionTable = value.ToLowerInvariant();
+			}
+		}
 	}
 
 
@@ -175,7 +188,7 @@ namespace NBitcoin.Indexer
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
-				tableClient.GetTableReference("transactions").CreateIfNotExists();
+				tableClient.GetTableReference(Configuration.TransactionTable).CreateIfNotExists();
 				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
@@ -228,7 +241,7 @@ namespace NBitcoin.Indexer
 			if(transactions.Length == 0)
 				return;
 			var client = Configuration.CreateTableClient();
-			var table = client.GetTableReference("transactions");
+			var table = client.GetTableReference(Configuration.TransactionTable);
 			bool firstException = false;
 			while(true)
 			{

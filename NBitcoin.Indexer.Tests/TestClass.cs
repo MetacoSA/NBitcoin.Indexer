@@ -18,24 +18,30 @@ namespace NBitcoin.Indexer.Tests
 		[Fact]
 		public void CanUploadBlobDirectoryToAzure()
 		{
-			AzureBlockImporter blockImporter = CreateBlockImporter();
-			blockImporter.TaskCount = 5;
-			blockImporter.StartBlockImportToAzure();
+			using(var tester = CreateTester())
+			{
+				tester.Importer.TaskCount = 15;
+				tester.Importer.BlkCount = 1;
+				tester.Importer.FromBlk = 0;
+				tester.Importer.StartBlockImportToAzure();
+			}
 		}
 		[Fact]
 		public void CanUploadTransactionsToAzure()
 		{
-			AzureBlockImporter blockImporter = CreateBlockImporter();
-			blockImporter.TaskCount = 1;
-			blockImporter.StartTransactionImportToAzure();
+			using(var tester = CreateTester())
+			{
+
+				tester.Importer.TaskCount = 15;
+				tester.Importer.BlkCount = 1;
+				tester.Importer.FromBlk = 0;
+				tester.Importer.StartTransactionImportToAzure();
+			}
 		}
 
-		private AzureBlockImporter CreateBlockImporter([CallerMemberName]string folder = null)
+		private ImporterTester CreateTester([CallerMemberName]string folder = null)
 		{
-			TestUtils.EnsureNew(folder);
-			var config = ImporterConfiguration.FromConfiguration();
-			config.ProgressFile = folder + "/progress";
-			return config.CreateImporter();
+			return new ImporterTester(folder);
 		}
 	}
 }
