@@ -102,6 +102,7 @@ namespace NBitcoin.Indexer
 		public IEnumerator<StoredBlock> GetEnumerator()
 		{
 			_Progress = new ProgressTracker(_Importer, _Range);
+			IndexerTrace.ProcessingSize(_Progress.TotalBytes);
 			_LastSaved = DateTime.Now;
 
 			var lastLoggedProgress = default(DateTime);

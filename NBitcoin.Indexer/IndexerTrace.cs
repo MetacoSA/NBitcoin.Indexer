@@ -77,5 +77,11 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceInformation("Start at position " + startPosition.ToString());
 		}
+
+		internal static void ProcessingSize(long size)
+		{
+			double inMb = (double)size / 1024.0 / 1024.0;
+			_Trace.TraceInformation("MB to process : " + inMb.ToString("0.00"));
+		}
 	}
 }

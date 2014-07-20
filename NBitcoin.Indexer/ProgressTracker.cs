@@ -65,15 +65,15 @@ namespace NBitcoin.Indexer
 			foreach(var file in new DirectoryInfo(Configuration.BlockDirectory).GetFiles().OrderBy(f => f.Name))
 			{
 				var fileIndex = GetFileIndex(file.Name);
-				if(fileIndex < 0)
+				if(fileIndex < range.Begin.File)
 					continue;
 				if(fileIndex > range.End.File)
-					continue;
+					break;
 
 				if(fileIndex == range.End.File && fileIndex == range.Begin.File)
 				{
 					var up = Math.Min(file.Length, range.End.Position);
-					sum += up - range.Begin.Position;
+					sum += Math.Max(up - range.Begin.Position, 0);
 					continue;
 				}
 				if(fileIndex == range.End.File)
@@ -83,7 +83,7 @@ namespace NBitcoin.Indexer
 				}
 				if(fileIndex == range.Begin.File)
 				{
-					sum += file.Length - range.Begin.Position;
+					sum += Math.Max(file.Length - range.Begin.Position, 0);
 					continue;
 				}
 				sum += file.Length;
