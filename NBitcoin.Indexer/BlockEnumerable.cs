@@ -32,7 +32,10 @@ namespace NBitcoin.Indexer
 			}
 
 			var startPosition = GetCheckpoint();
-			if(importer.FromBlk > startPosition.File)
+			var endPosition = new DiskBlockPos((uint)(importer.FromBlk + importer.BlkCount), 0);
+
+			if(importer.FromBlk > startPosition.File ||
+				startPosition > endPosition)
 			{
 				startPosition = new DiskBlockPos((uint)importer.FromBlk, 0);
 			}
@@ -40,7 +43,7 @@ namespace NBitcoin.Indexer
 				IndexerTrace.CheckpointLoaded(startPosition, _ProgressFile);
 
 			IndexerTrace.StartAtPosition(startPosition);
-			_Range = new DiskBlockPosRange(startPosition);
+			_Range = new DiskBlockPosRange(startPosition, endPosition);
 			_Store = Configuration.CreateStoreBlock();
 		}
 
