@@ -101,57 +101,7 @@ namespace NBitcoin.Indexer
 		}
 	}
 
-	public class IndexedTransaction : TableEntity
-	{
-		public IndexedTransaction()
-		{
-
-		}
-
-		public IndexedTransaction(Transaction tx)
-		{
-			SetTx(tx);
-			RowKey = _txId.ToString() + "-m";
-		}
-
-		private void SetTx(Transaction tx)
-		{
-			var transaction = tx.ToBytes();
-			_txId = Hashes.Hash256(transaction);
-			if(transaction.Length < 1024 * 64)
-				Transaction = transaction;
-			Key = (ushort)((_txId.GetByte(0) & 0xE0) + (_txId.GetByte(1) << 8));
-		}
-		public IndexedTransaction(Transaction tx, uint256 blockId)
-		{
-			SetTx(tx);
-			RowKey = _txId.ToString() + "-b" + blockId.ToString();
-		}
-
-		public byte[] Transaction
-		{
-			get;
-			set;
-		}
-
-		uint256 _txId;
-		ushort? _Key;
-		[IgnoreProperty]
-		public ushort Key
-		{
-			get
-			{
-				if(_Key == null)
-					_Key = ushort.Parse(PartitionKey, System.Globalization.NumberStyles.HexNumber);
-				return _Key.Value;
-			}
-			set
-			{
-				PartitionKey = value.ToString("X2");
-				_Key = value;
-			}
-		}
-	}
+	
 	public class AzureBlockImporter
 	{
 		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
@@ -185,6 +135,11 @@ namespace NBitcoin.Indexer
 			TaskCount = 15;
 		}
 
+		public void StartAddressImportToAzure()
+		{
+			SetThrottling();
+		}
+
 		public void StartTransactionImportToAzure()
 		{
 			SetThrottling();
@@ -207,22 +162,14 @@ namespace NBitcoin.Indexer
 				}, TaskCreationOptions.LongRunning)).ToArray();
 
 			var tableClient = Configuration.CreateTableClient();
-			var store = Configuration.CreateStoreBlock();
-			var saveInterval = TimeSpan.FromMinutes(5);
-			Stopwatch watch = new Stopwatch();
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				tableClient.GetTableReference("transactions").CreateIfNotExists();
-				var startPosition = GetPosition("tx");
-				var progress = new ProgressTracker(this, startPosition);
-				double lastLoggedProgress = 0.0;
-				IndexerTrace.StartingImportAt(startPosition);
 				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
-				watch.Start();
-				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
+				var storedBlocks = Enumerate("tx");
+				foreach(var block in storedBlocks)
 				{
-					progress.Processing(block);
 					foreach(var transaction in block.Item.Transactions)
 					{
 						var indexed = new IndexedTransaction(transaction, block.Item.Header.GetHash());
@@ -232,21 +179,16 @@ namespace NBitcoin.Indexer
 						{
 							PushTransactions(buckets, collection, transactions);
 						}
-						if(watch.Elapsed > saveInterval)
+						if(storedBlocks.NeedSave)
 						{
-							watch.Stop();
-							watch.Reset();
 							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
 							{
 								PushTransactions(buckets, kv.Value, transactions);
 							}
 							WaitProcessed(transactions);
-							SetPosition(progress.LastPosition, "tx");
-							IndexerTrace.PositionSaved(progress.LastPosition);
-							watch.Start();
+							storedBlocks.SaveCheckpoint();
 						}
 					}
-					IndexerTrace.LogProgress(progress, ref lastLoggedProgress);
 				}
 
 				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
@@ -256,8 +198,7 @@ namespace NBitcoin.Indexer
 				WaitProcessed(transactions);
 				stop.Cancel();
 				Task.WaitAll(tasks);
-				SetPosition(progress.LastPosition, "tx");
-				IndexerTrace.PositionSaved(progress.LastPosition);
+				storedBlocks.SaveCheckpoint();
 			}
 		}
 
@@ -329,38 +270,30 @@ namespace NBitcoin.Indexer
 			}, TaskCreationOptions.LongRunning)).ToArray();
 
 			var blobClient = Configuration.CreateBlobClient();
-			var store = Configuration.CreateStoreBlock();
-			Stopwatch watch = new Stopwatch();
+			
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
-				var startPosition = GetPosition();
-				var progress = new ProgressTracker(this, startPosition);
-				var lastLoggedProgress = 0.0;
-
-				IndexerTrace.StartingImportAt(startPosition);
-				watch.Start();
-				foreach(var block in store.Enumerate(new DiskBlockPosRange(startPosition)))
+				var storedBlocks = Enumerate();
+				foreach(var block in storedBlocks)
 				{
-					progress.Processing(block);
-					if(watch.Elapsed > saveInterval)
-					{
-						watch.Stop();
-						watch.Reset();
-						WaitProcessed(blocks);
-						SetPosition(progress.LastPosition);
-						IndexerTrace.PositionSaved(progress.LastPosition);
-						watch.Start();
-					}
 					blocks.Add(block);
-					IndexerTrace.LogProgress(progress, ref lastLoggedProgress);
+					if(storedBlocks.NeedSave)
+					{
+						WaitProcessed(blocks);
+						storedBlocks.SaveCheckpoint();
+					}
 				}
 				WaitProcessed(blocks);
 				stop.Cancel();
 				Task.WaitAll(tasks);
-				SetPosition(progress.LastPosition);
-				IndexerTrace.PositionSaved(progress.LastPosition);
+				storedBlocks.SaveCheckpoint();
 			}
+		}
+
+		private BlockEnumerable Enumerate(string checkpointName = null)
+		{
+			return new BlockEnumerable(this,checkpointName);
 		}
 
 
@@ -444,36 +377,9 @@ namespace NBitcoin.Indexer
 
 
 
-		private void SetPosition(DiskBlockPos diskBlockPos, string name = null)
-		{
-			name = NormalizeName(name);
-			File.WriteAllText(name, diskBlockPos.ToString());
-		}
+		
 
-		private DiskBlockPos GetPosition(string name = null)
-		{
-			name = NormalizeName(name);
-			try
-			{
-				return DiskBlockPos.Parse(File.ReadAllText(name));
-			}
-			catch
-			{
-			}
-			return new DiskBlockPos(0, 0);
-		}
-
-		private string NormalizeName(string name)
-		{
-			if(name == null)
-				name = Configuration.ProgressFile;
-			else
-			{
-				var originalName = Path.GetFileName(Configuration.ProgressFile);
-				name = name + "-" + originalName;
-			}
-			return name;
-		}
+	
 
 
 	}

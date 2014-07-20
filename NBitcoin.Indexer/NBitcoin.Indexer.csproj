@@ -84,6 +84,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AzureBlockImporter.cs" />
+    <Compile Include="BlockEnumerable.cs" />
+    <Compile Include="IndexedAddress.cs" />
+    <Compile Include="IndexedTransaction.cs" />
     <Compile Include="IndexerTrace.cs" />
     <Compile Include="ProgressTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

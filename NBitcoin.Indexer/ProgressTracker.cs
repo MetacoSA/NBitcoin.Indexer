@@ -29,7 +29,6 @@ namespace NBitcoin.Indexer
 		public ProgressTracker(AzureBlockImporter importer, DiskBlockPos startPosition)
 		{
 			_Importer = importer;
-
 			TotalBytes = GetTotalBytes(new DiskBlockPosRange(startPosition));
 			ProcessedBytes = 0;
 			LastPosition = startPosition;
@@ -60,7 +59,8 @@ namespace NBitcoin.Indexer
 
 		private long GetTotalBytes(DiskBlockPosRange range = null)
 		{
-			range = DiskBlockPosRange.All;
+			if(range == null)
+				range = DiskBlockPosRange.All;
 			long sum = 0;
 			foreach(var file in new DirectoryInfo(Configuration.BlockDirectory).GetFiles().OrderBy(f => f.Name))
 			{
