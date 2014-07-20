@@ -34,14 +34,14 @@ namespace NBitcoin.Indexer
 			return new TraceCorrelation(_Trace, activityName);
 		}
 
-		internal static void StartingImportAt(DiskBlockPos lastPosition)
+		internal static void CheckpointLoaded(DiskBlockPos lastPosition, string file)
 		{
-			_Trace.TraceInformation("Starting import at position " + lastPosition);
+			_Trace.TraceInformation("Checkpoint loaded : " + lastPosition + " (" + file + ")");
 		}
 
-		internal static void PositionSaved(DiskBlockPos diskBlockPos)
+		internal static void CheckpointSaved(DiskBlockPos diskBlockPos, string file)
 		{
-			_Trace.TraceInformation("New starting import position : " + diskBlockPos.ToString());
+			_Trace.TraceInformation("New checkpoint : " + diskBlockPos.ToString() + " (" + file + ")");
 		}
 
 
@@ -62,14 +62,10 @@ namespace NBitcoin.Indexer
 			_Trace.TraceInformation("Retry worked");
 		}
 
-		internal static void LogProgress(ProgressTracker progress, ref double lastLoggedProgress)
+		internal static void LogProgress(ProgressTracker progress)
 		{
-			var verbose = progress.CurrentProgress - lastLoggedProgress < 0.05;
-			if(!verbose)
-				lastLoggedProgress = progress.CurrentProgress;
-
-			var info = "Progress : " + progress.CurrentProgress.ToString(verbose ? "0.0000" : "0.00");
-			_Trace.TraceEvent(verbose ? TraceEventType.Verbose : TraceEventType.Information, 0, info);
+			var info = "Progress : " + progress.CurrentProgress.ToString("0.000");
+			_Trace.TraceInformation(info);
 		}
 	}
 }

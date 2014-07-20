@@ -211,6 +211,8 @@ namespace NBitcoin.Indexer
 			buckets.Remove(array[0].Key);
 		}
 
+		TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
+
 		private void SendToAzure(IndexedTransaction[] transactions)
 		{
 			if(transactions.Length == 0)
@@ -230,8 +232,8 @@ namespace NBitcoin.Indexer
 					table.ExecuteBatch(batch, new TableRequestOptions()
 					{
 						PayloadFormat = TablePayloadFormat.Json,
-						MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
-						ServerTimeout = TimeSpan.FromSeconds(60.0),
+						MaximumExecutionTime = _Timeout,
+						ServerTimeout = _Timeout,
 					});
 					if(firstException)
 						IndexerTrace.RetryWorked();
@@ -340,8 +342,8 @@ namespace NBitcoin.Indexer
 								IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
 							}, new BlobRequestOptions()
 							{
-								MaximumExecutionTime = TimeSpan.FromSeconds(60.0),
-								ServerTimeout = TimeSpan.FromSeconds(60.0)
+								MaximumExecutionTime = _Timeout,
+								ServerTimeout = _Timeout
 							});
 							watch.Stop();
 							IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);

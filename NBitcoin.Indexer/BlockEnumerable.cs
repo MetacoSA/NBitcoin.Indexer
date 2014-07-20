@@ -32,7 +32,7 @@ namespace NBitcoin.Indexer
 			}
 
 			var startPosition = GetCheckpoint();
-			IndexerTrace.StartingImportAt(startPosition);
+			IndexerTrace.CheckpointLoaded(startPosition, _ProgressFile);
 			_Range = new DiskBlockPosRange(startPosition);
 			_Store = Configuration.CreateStoreBlock();
 		}
@@ -40,11 +40,11 @@ namespace NBitcoin.Indexer
 		private string _ProgressFile;
 		private ProgressTracker _Progress;
 		private AzureBlockImporter _Importer;
-		private double _LastLoggedProgress;
 		private DiskBlockPosRange _Range;
 		private BlockStore _Store;
 		private TimeSpan saveInterval = TimeSpan.FromMinutes(5.0);
-		private Stopwatch _Watch;
+		private TimeSpan _LogInterval = TimeSpan.FromSeconds(5.0);
+		private DateTime _LastSaved;
 		public ProgressTracker Progress
 		{
 			get
@@ -55,12 +55,10 @@ namespace NBitcoin.Indexer
 		public void SaveCheckpoint()
 		{
 			File.WriteAllText(_ProgressFile, Progress.LastPosition.ToString());
-			IndexerTrace.PositionSaved(Progress.LastPosition);
+			IndexerTrace.CheckpointSaved(Progress.LastPosition, _ProgressFile);
 			if(NeedSave)
 			{
-				_Watch.Reset();
-				_Watch.Start();
-				NeedSave = false;
+				_LastSaved = DateTime.Now;
 			}
 		}
 
@@ -78,8 +76,10 @@ namespace NBitcoin.Indexer
 
 		public bool NeedSave
 		{
-			get;
-			private set;
+			get
+			{
+				return (DateTime.Now - _LastSaved) > saveInterval;
+			}
 		}
 
 		#region IEnumerable<StoredBlock> Members
@@ -88,18 +88,19 @@ namespace NBitcoin.Indexer
 		{
 			_Progress = new ProgressTracker(_Importer, _Range.Begin);
 			_LastLoggedProgress = 0.0;
-			_Watch = new Stopwatch();
-			_Watch.Start();
+			_LastSaved = DateTime.Now;
+
+			var lastLoggedProgress = default(DateTime);
+
 			foreach(var block in _Store.Enumerate(_Range))
 			{
 				_Progress.Processing(block);
-				if(_Watch.Elapsed > saveInterval && !NeedSave)
-				{
-					_Watch.Stop();
-					NeedSave = true;
-				}
 				yield return block;
-				IndexerTrace.LogProgress(_Progress, ref _LastLoggedProgress);
+				if(DateTime.Now - lastLoggedProgress > _LogInterval)
+				{
+					lastLoggedProgress = DateTime.Now;
+					IndexerTrace.LogProgress(_Progress);
+				}
 			}
 		}
 
