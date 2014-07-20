@@ -33,5 +33,12 @@ namespace NBitcoin.Indexer.Console
 			get;
 			set;
 		}
+
+		[Option('u', "UploadThreadCount", DefaultValue=-1, Required=false, HelpText="Number of simultaneous uploads (default is recommended value 15 for blocks upload, 30 for transactions upload)")]
+		public int ThreadCount
+		{
+			get;
+			set;
+		}
 	}
 }

@@ -17,8 +17,8 @@ namespace NBitcoin.Indexer.Console
 				System.Console.WriteLine(options.GetUsage());
 			if(Parser.Default.ParseArguments(args, options))
 			{
-				
-					var importer = AzureBlockImporter.CreateBlockImporter();
+				var importer = AzureBlockImporter.CreateBlockImporter();
+				importer.TaskCount = options.ThreadCount;
 				if(options.ImportBlocksInAzure)
 				{
 					importer.StartBlockImportToAzure();

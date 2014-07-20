@@ -101,7 +101,7 @@ namespace NBitcoin.Indexer
 		}
 	}
 
-	
+
 	public class AzureBlockImporter
 	{
 		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
@@ -132,7 +132,7 @@ namespace NBitcoin.Indexer
 			if(configuration == null)
 				throw new ArgumentNullException("configuration");
 			_Configuration = configuration;
-			TaskCount = 15;
+			TaskCount = -1;
 		}
 
 		public void StartAddressImportToAzure()
@@ -140,27 +140,35 @@ namespace NBitcoin.Indexer
 			SetThrottling();
 		}
 
+		public Task[] CreateTasks<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, CancellationToken cancel, int defaultTaskCount)
+		{
+
+			var tasks =
+				Enumerable.Range(0, TaskCount == -1 ? defaultTaskCount : TaskCount).Select(_ => Task.Factory.StartNew(() =>
+			{
+				try
+				{
+					foreach(var item in collection.GetConsumingEnumerable(cancel))
+					{
+						action(item);
+					}
+				}
+				catch(OperationCanceledException)
+				{
+				}
+			}, TaskCreationOptions.LongRunning)).ToArray();
+			IndexerTrace.TaskCount(tasks.Length);
+			return tasks;
+		}
+
 		public void StartTransactionImportToAzure()
 		{
 			SetThrottling();
 
 			BlockingCollection<IndexedTransaction[]> transactions = new BlockingCollection<IndexedTransaction[]>(20);
-			CancellationTokenSource stop = new CancellationTokenSource();
-			var tasks =
-				Enumerable.Range(0, TaskCount * 2).Select(_ => Task.Factory.StartNew(() =>
-				{
-					try
-					{
-						foreach(var tx in transactions.GetConsumingEnumerable(stop.Token))
-						{
-							SendToAzure(tx);
-						}
-					}
-					catch(OperationCanceledException)
-					{
-					}
-				}, TaskCreationOptions.LongRunning)).ToArray();
 
+			var stop = new CancellationTokenSource();
+			var tasks = CreateTasks(transactions, SendToAzure, stop.Token, 30);
 			var tableClient = Configuration.CreateTableClient();
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
@@ -255,24 +263,10 @@ namespace NBitcoin.Indexer
 		{
 			SetThrottling();
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
-			CancellationTokenSource stop = new CancellationTokenSource();
-			var tasks =
-				Enumerable.Range(0, TaskCount).Select(_ => Task.Factory.StartNew(() =>
-			{
-				try
-				{
-					foreach(var block in blocks.GetConsumingEnumerable(stop.Token))
-					{
-						SendToAzure(block);
-					}
-				}
-				catch(OperationCanceledException)
-				{
-				}
-			}, TaskCreationOptions.LongRunning)).ToArray();
-
+			var stop = new CancellationTokenSource();
+			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 30);
 			var blobClient = Configuration.CreateBlobClient();
-			
+
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
 				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
@@ -295,7 +289,7 @@ namespace NBitcoin.Indexer
 
 		private BlockEnumerable Enumerate(string checkpointName = null)
 		{
-			return new BlockEnumerable(this,checkpointName);
+			return new BlockEnumerable(this, checkpointName);
 		}
 
 
@@ -379,9 +373,9 @@ namespace NBitcoin.Indexer
 
 
 
-		
 
-	
+
+
 
 
 	}

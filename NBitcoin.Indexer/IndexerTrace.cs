@@ -67,5 +67,10 @@ namespace NBitcoin.Indexer
 			var info = "Progress : " + progress.CurrentProgress.ToString("0.000");
 			_Trace.TraceInformation(info);
 		}
+
+		internal static void TaskCount(int count)
+		{
+			_Trace.TraceInformation("Upload thread count : " + count);
+		}
 	}
 }
