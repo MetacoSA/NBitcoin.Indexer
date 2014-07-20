@@ -8,14 +8,14 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	public class IndexedTransaction : TableEntity
+	class TransactionEntity : TableEntity
 	{
-		public IndexedTransaction()
+		public TransactionEntity()
 		{
 
 		}
 
-		public IndexedTransaction(Transaction tx)
+		public TransactionEntity(Transaction tx)
 		{
 			SetTx(tx);
 			RowKey = _txId.ToString() + "-m";
@@ -29,7 +29,7 @@ namespace NBitcoin.Indexer
 				Transaction = transaction;
 			Key = (ushort)((_txId.GetByte(0) & 0xE0) + (_txId.GetByte(1) << 8));
 		}
-		public IndexedTransaction(Transaction tx, uint256 blockId)
+		public TransactionEntity(Transaction tx, uint256 blockId)
 		{
 			SetTx(tx);
 			RowKey = _txId.ToString() + "-b" + blockId.ToString();

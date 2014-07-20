@@ -53,6 +53,19 @@ namespace NBitcoin.Indexer.Tests
 				Assert.Null(block);
 			}
 		}
+		[Fact]
+		public void CanGetTransaction()
+		{
+			using(var tester = CreateTester("cached"))
+			{
+				tester.Cached = true;
+				tester.ImportCachedBlocks();
+				tester.ImportCachedTransactions();
+
+				Transaction tx = tester.Client.GetTransaction(tester.KnownTransactionId);
+				//Assert.True(tx)
+			}
+		}
 
 		private ImporterTester CreateTester([CallerMemberName]string folder = null)
 		{

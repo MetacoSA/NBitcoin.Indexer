@@ -82,8 +82,9 @@ namespace NBitcoin.Indexer.Tests
 
 		internal void ImportCachedBlocks()
 		{
-			if(!Importer.Configuration.GetBlocksContainer().GetPageBlobReference(KnownBlockId.ToString()).Exists())
+			if(Client.GetBlock(KnownBlockId) == null)
 			{
+				Importer.NoSave = true;
 				Importer.TaskCount = 15;
 				Importer.BlkCount = 1;
 				Importer.FromBlk = 0;
@@ -91,7 +92,20 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
+		internal void ImportCachedTransactions()
+		{
+			if(Client.GetTransaction(KnownTransactionId) == null)
+			{
+				Importer.NoSave = true;
+				Importer.TaskCount = 15;
+				Importer.BlkCount = 1;
+				Importer.FromBlk = 0;
+				Importer.StartTransactionImportToAzure();
+			}
+		}
+
 		public IndexerClient _Client;
+		public uint256 KnownTransactionId = new uint256("882b98507359823f93cf9830ee90e192c62d4964c16297c6dc3bf525d27a53cb");
 		public IndexerClient Client
 		{
 			get
@@ -103,5 +117,7 @@ namespace NBitcoin.Indexer.Tests
 				return _Client;
 			}
 		}
+
+
 	}
 }

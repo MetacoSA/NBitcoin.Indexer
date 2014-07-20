@@ -120,7 +120,7 @@ namespace NBitcoin.Indexer
 		{
 			SetThrottling();
 
-			BlockingCollection<IndexedTransaction[]> transactions = new BlockingCollection<IndexedTransaction[]>(20);
+			BlockingCollection<TransactionEntity[]> transactions = new BlockingCollection<TransactionEntity[]>(20);
 
 			var stop = new CancellationTokenSource();
 			var tasks = CreateTasks(transactions, SendToAzure, stop.Token, 30);
@@ -128,13 +128,13 @@ namespace NBitcoin.Indexer
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetTransactionTable().CreateIfNotExists();
-				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
+				var buckets = new MultiDictionary<ushort, TransactionEntity>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
 				{
 					foreach(var transaction in block.Item.Transactions)
 					{
-						var indexed = new IndexedTransaction(transaction, block.Item.Header.GetHash());
+						var indexed = new TransactionEntity(transaction, block.Item.Header.GetHash());
 						buckets.Add(indexed.Key, indexed);
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
@@ -143,7 +143,7 @@ namespace NBitcoin.Indexer
 						}
 						if(storedBlocks.NeedSave)
 						{
-							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
+							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<TransactionEntity>>>)buckets).ToArray())
 							{
 								PushTransactions(buckets, kv.Value, transactions);
 							}
@@ -153,7 +153,7 @@ namespace NBitcoin.Indexer
 					}
 				}
 
-				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<IndexedTransaction>>>)buckets).ToArray())
+				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<TransactionEntity>>>)buckets).ToArray())
 				{
 					PushTransactions(buckets, kv.Value, transactions);
 				}
@@ -164,9 +164,9 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		private void PushTransactions(MultiDictionary<ushort, IndexedTransaction> buckets,
-										ICollection<IndexedTransaction> indexedTransactions,
-									BlockingCollection<IndexedTransaction[]> transactions)
+		private void PushTransactions(MultiDictionary<ushort, TransactionEntity> buckets,
+										ICollection<TransactionEntity> indexedTransactions,
+									BlockingCollection<TransactionEntity[]> transactions)
 		{
 			var array = indexedTransactions.ToArray();
 			transactions.Add(array);
@@ -175,7 +175,7 @@ namespace NBitcoin.Indexer
 
 		TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-		private void SendToAzure(IndexedTransaction[] transactions)
+		private void SendToAzure(TransactionEntity[] transactions)
 		{
 			if(transactions.Length == 0)
 				return;

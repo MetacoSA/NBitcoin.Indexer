@@ -29,6 +29,7 @@ namespace NBitcoin.Indexer
 			{
 				var originalName = Path.GetFileName(Configuration.ProgressFile);
 				_ProgressFile = checkpointName + "-" + originalName;
+				_ProgressFile = Path.Combine(Path.GetDirectoryName(Configuration.ProgressFile), _ProgressFile);
 			}
 
 			var startPosition = GetCheckpoint();

@@ -45,7 +45,7 @@ namespace NBitcoin.Indexer
 		}
 
 
-		internal static void ErrorWhileImportingTxToAzure(IndexedTransaction[] transactions, Exception ex)
+		internal static void ErrorWhileImportingTxToAzure(TransactionEntity[] transactions, Exception ex)
 		{
 			StringBuilder builder = new StringBuilder();
 			int i = 0;
