@@ -19,40 +19,20 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	public class ImporterConfiguration
+	public class ImporterConfiguration : IndexerConfiguration
 	{
-		public static ImporterConfiguration FromConfiguration()
+		public new static ImporterConfiguration FromConfiguration()
 		{
 			ImporterConfiguration config = new ImporterConfiguration();
-			var account = GetValue("Azure.AccountName", true);
-			var key = GetValue("Azure.Key", true);
-			config.StorageCredentials = new StorageCredentials(account, key);
-			config.Container = GetValue("Azure.Blob.Container", false) ?? "nbitcoinindexer";
+			Fill(config);
 			config.BlockDirectory = GetValue("BlockDirectory", true);
-			var network = GetValue("Bitcoin.Network", false) ?? "Main";
-			config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
-									Network.Main :
-							 network.Equals("test", StringComparison.OrdinalIgnoreCase) ?
-							 Network.TestNet : null;
-			if(config.Network == null)
-				throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
 			return config;
-		}
-
-		private static string GetValue(string config, bool required)
-		{
-			var result = ConfigurationManager.AppSettings[config];
-			result = String.IsNullOrWhiteSpace(result) ? null : result;
-			if(result == null && required)
-				throw new ConfigurationErrorsException("AppSetting " + config + " not found");
-			return result;
 		}
 		public ImporterConfiguration()
 		{
 			ProgressFile = "progress.dat";
-			Network = Network.Main;
 		}
-		public Network Network
+		public string ProgressFile
 		{
 			get;
 			set;
@@ -62,55 +42,15 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
-		public string Container
-		{
-			get;
-			set;
-		}
-		public string ProgressFile
-		{
-			get;
-			set;
-		}
-		public StorageCredentials StorageCredentials
-		{
-			get;
-			set;
-		}
-		public CloudBlobClient CreateBlobClient()
-		{
-			return new CloudBlobClient(MakeUri("blob"), StorageCredentials);
-		}
+
 		public BlockStore CreateStoreBlock()
 		{
 			return new BlockStore(BlockDirectory, Network.Main);
-		}
-		private Uri MakeUri(string clientType)
-		{
-			return new Uri(String.Format("http://{0}.{1}.core.windows.net/", StorageCredentials.AccountName, clientType), UriKind.Absolute);
 		}
 
 		public AzureBlockImporter CreateImporter()
 		{
 			return new AzureBlockImporter(this);
-		}
-
-		public CloudTableClient CreateTableClient()
-		{
-			return new CloudTableClient(MakeUri("table"), StorageCredentials);
-		}
-
-		string _TransactionTable = "transactions";
-		public string TransactionTable
-		{
-			get
-			{
-				return _TransactionTable;
-			}
-			set
-			{
-				_TransactionTable = value.ToLowerInvariant();
-			}
 		}
 	}
 
@@ -184,11 +124,10 @@ namespace NBitcoin.Indexer
 
 			var stop = new CancellationTokenSource();
 			var tasks = CreateTasks(transactions, SendToAzure, stop.Token, 30);
-			var tableClient = Configuration.CreateTableClient();
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
-				tableClient.GetTableReference(Configuration.TransactionTable).CreateIfNotExists();
+				Configuration.GetTransactionTable().CreateIfNotExists();
 				var buckets = new MultiDictionary<ushort, IndexedTransaction>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
@@ -240,8 +179,7 @@ namespace NBitcoin.Indexer
 		{
 			if(transactions.Length == 0)
 				return;
-			var client = Configuration.CreateTableClient();
-			var table = client.GetTableReference(Configuration.TransactionTable);
+			var table = Configuration.GetTransactionTable();
 			bool firstException = false;
 			while(true)
 			{
@@ -280,11 +218,10 @@ namespace NBitcoin.Indexer
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
 			var stop = new CancellationTokenSource();
 			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 15);
-			var blobClient = Configuration.CreateBlobClient();
 
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
-				blobClient.GetContainerReference(Configuration.Container).CreateIfNotExists();
+				Configuration.GetBlocksContainer().CreateIfNotExists();
 				var storedBlocks = Enumerate();
 				foreach(var block in storedBlocks)
 				{

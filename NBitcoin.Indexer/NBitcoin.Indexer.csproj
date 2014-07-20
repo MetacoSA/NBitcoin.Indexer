@@ -89,6 +89,8 @@
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="IndexedAddress.cs" />
     <Compile Include="IndexedTransaction.cs" />
+    <Compile Include="IndexerClient.cs" />
+    <Compile Include="IndexerConfiguration.cs" />
     <Compile Include="IndexerTrace.cs" />
     <Compile Include="ProgressTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

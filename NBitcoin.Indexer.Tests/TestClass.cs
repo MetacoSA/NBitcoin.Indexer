@@ -39,6 +39,21 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
+		[Fact]
+		public void CanGetBlock()
+		{
+			using(var tester = CreateTester("cached"))
+			{
+				tester.Cached = true;
+				tester.ImportCachedBlocks();
+
+				var block = tester.Client.GetBlock(tester.KnownBlockId);
+				Assert.True(block.CheckMerkleRoot());
+				block = tester.Client.GetBlock(tester.UnknownBlockId);
+				Assert.Null(block);
+			}
+		}
+
 		private ImporterTester CreateTester([CallerMemberName]string folder = null)
 		{
 			return new ImporterTester(folder);
