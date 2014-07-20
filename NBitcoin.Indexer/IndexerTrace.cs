@@ -36,7 +36,7 @@ namespace NBitcoin.Indexer
 
 		internal static void CheckpointLoaded(DiskBlockPos lastPosition, string file)
 		{
-			_Trace.TraceInformation("Checkpoint loaded : " + lastPosition + " (" + file + ")");
+			_Trace.TraceInformation("Checkpoint loaded " + "(" + file + ")");
 		}
 
 		internal static void CheckpointSaved(DiskBlockPos diskBlockPos, string file)
@@ -71,6 +71,11 @@ namespace NBitcoin.Indexer
 		internal static void TaskCount(int count)
 		{
 			_Trace.TraceInformation("Upload thread count : " + count);
+		}
+
+		internal static void StartAtPosition(DiskBlockPos startPosition)
+		{
+			_Trace.TraceInformation("Start at position " + startPosition.ToString());
 		}
 	}
 }

@@ -39,6 +39,7 @@ namespace NBitcoin.Indexer
 			else
 				IndexerTrace.CheckpointLoaded(startPosition, _ProgressFile);
 
+			IndexerTrace.StartAtPosition(startPosition);
 			_Range = new DiskBlockPosRange(startPosition);
 			_Store = Configuration.CreateStoreBlock();
 		}
