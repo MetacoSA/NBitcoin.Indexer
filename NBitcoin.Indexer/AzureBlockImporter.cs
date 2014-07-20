@@ -264,7 +264,7 @@ namespace NBitcoin.Indexer
 			SetThrottling();
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
 			var stop = new CancellationTokenSource();
-			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 30);
+			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 15);
 			var blobClient = Configuration.CreateBlobClient();
 
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())

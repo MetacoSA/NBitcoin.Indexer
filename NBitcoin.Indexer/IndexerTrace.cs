@@ -18,7 +18,7 @@ namespace NBitcoin.Indexer
 
 		internal static void BlockAlreadyUploaded()
 		{
-			_Trace.TraceInformation("Block already uploaded");
+			_Trace.TraceEvent(TraceEventType.Verbose, 0, "Block already uploaded");
 		}
 
 		internal static void BlockUploaded(TimeSpan time, int bytes)
