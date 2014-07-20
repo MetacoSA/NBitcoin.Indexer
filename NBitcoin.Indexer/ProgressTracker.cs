@@ -69,10 +69,22 @@ namespace NBitcoin.Indexer
 					continue;
 				if(fileIndex > range.End.File)
 					continue;
+
+				if(fileIndex == range.End.File && fileIndex == range.Begin.File)
+				{
+					var up = Math.Min(file.Length, range.End.Position);
+					sum += up - range.Begin.Position;
+					continue;
+				}
 				if(fileIndex == range.End.File)
 				{
 					sum += Math.Min(file.Length, range.End.Position);
-					break;
+					continue;
+				}
+				if(fileIndex == range.Begin.File)
+				{
+					sum += file.Length - range.Begin.Position;
+					continue;
 				}
 				sum += file.Length;
 			}
