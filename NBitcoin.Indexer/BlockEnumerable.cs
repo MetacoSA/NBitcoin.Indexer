@@ -19,10 +19,10 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public BlockEnumerable(AzureBlockImporter azureBlockImporter,
+		public BlockEnumerable(AzureBlockImporter importer,
 							   string checkpointName = null)
 		{
-			this._Importer = azureBlockImporter;
+			this._Importer = importer;
 			if(checkpointName == null)
 				_ProgressFile = Configuration.ProgressFile;
 			else
@@ -32,7 +32,13 @@ namespace NBitcoin.Indexer
 			}
 
 			var startPosition = GetCheckpoint();
-			IndexerTrace.CheckpointLoaded(startPosition, _ProgressFile);
+			if(importer.FromBlk > startPosition.File)
+			{
+				startPosition = new DiskBlockPos((uint)importer.FromBlk, 0);
+			}
+			else
+				IndexerTrace.CheckpointLoaded(startPosition, _ProgressFile);
+
 			_Range = new DiskBlockPosRange(startPosition);
 			_Store = Configuration.CreateStoreBlock();
 		}
@@ -91,8 +97,17 @@ namespace NBitcoin.Indexer
 
 			var lastLoggedProgress = default(DateTime);
 
+			int previousBlk = -1;
+			int blkCount = 0;
 			foreach(var block in _Store.Enumerate(_Range))
 			{
+				if(block.BlockPosition.File != previousBlk)
+				{
+					blkCount++;
+					previousBlk = (int)block.BlockPosition.File;
+					if(blkCount > _Importer.BlkCount)
+						break;
+				}
 				_Progress.Processing(block);
 				yield return block;
 				if(DateTime.Now - lastLoggedProgress > _LogInterval)

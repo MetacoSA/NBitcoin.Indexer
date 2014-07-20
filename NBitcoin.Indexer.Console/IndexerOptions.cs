@@ -27,6 +27,33 @@ namespace NBitcoin.Indexer.Console
 			//
 		}
 
+		[Option('c', "CountBlkFiles", HelpText = "Count the number of blk file downloaded by bitcoinq", DefaultValue = false, Required = false)]
+		public bool CountBlkFiles
+		{
+			get;
+			set;
+		}
+
+		[Option("FromBlk",
+			HelpText = "The blk file where processing will start",
+			DefaultValue = 0,
+			Required = false)]
+		public int FromBlk
+		{
+			get;
+			set;
+		}
+
+		[Option("CountBlk",
+			Required = false,
+			DefaultValue = 999999,
+			HelpText = "The number of blk file that must be processed")]
+		public int BlkCount
+		{
+			get;
+			set;
+		}
+
 		[Option('t', "ImportTransactionsInAzure", DefaultValue = false, Required = false, HelpText = "Import transactions from data directory speicified in LocalSettings into azure table")]
 		public bool ImportTransactionsInAzure
 		{

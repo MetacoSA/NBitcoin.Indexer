@@ -18,6 +18,8 @@ namespace NBitcoin.Indexer.Console
 			if(Parser.Default.ParseArguments(args, options))
 			{
 				var importer = AzureBlockImporter.CreateBlockImporter();
+				importer.FromBlk = options.FromBlk;
+				importer.BlkCount = options.BlkCount;
 				importer.TaskCount = options.ThreadCount;
 				if(options.ImportBlocksInAzure)
 				{
@@ -26,6 +28,20 @@ namespace NBitcoin.Indexer.Console
 				if(options.ImportTransactionsInAzure)
 				{
 					importer.StartTransactionImportToAzure();
+				}
+				if(options.CountBlkFiles)
+				{
+					var dir = new DirectoryInfo(importer.Configuration.BlockDirectory);
+					if(!dir.Exists)
+					{
+						System.Console.WriteLine(dir.FullName + " does not exists");
+						return;
+					}
+					System.Console.WriteLine("Blk files count : " +
+						dir
+						.GetFiles()
+						.Where(f => f.Name.EndsWith(".dat"))
+						.Where(f => f.Name.StartsWith("blk")).Count());
 				}
 			}
 		}

@@ -133,6 +133,8 @@ namespace NBitcoin.Indexer
 				throw new ArgumentNullException("configuration");
 			_Configuration = configuration;
 			TaskCount = -1;
+			FromBlk = 0;
+			BlkCount = 9999999;
 		}
 
 		public void StartAddressImportToAzure()
@@ -369,14 +371,16 @@ namespace NBitcoin.Indexer
 			ServicePointManager.Expect100Continue = false;
 			ServicePointManager.DefaultConnectionLimit = 100;
 		}
+		public int FromBlk
+		{
+			get;
+			set;
+		}
 
-
-
-
-
-
-
-
-
+		public int BlkCount
+		{
+			get;
+			set;
+		}
 	}
 }
