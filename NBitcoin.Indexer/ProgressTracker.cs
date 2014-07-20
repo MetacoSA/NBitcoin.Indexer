@@ -26,12 +26,12 @@ namespace NBitcoin.Indexer
 				return _Importer.Configuration;
 			}
 		}
-		public ProgressTracker(AzureBlockImporter importer, DiskBlockPos startPosition)
+		public ProgressTracker(AzureBlockImporter importer, DiskBlockPosRange range)
 		{
 			_Importer = importer;
-			TotalBytes = GetTotalBytes(new DiskBlockPosRange(startPosition));
+			TotalBytes = GetTotalBytes(range);
 			ProcessedBytes = 0;
-			LastPosition = startPosition;
+			LastPosition = range.Begin;
 		}
 
 		public DiskBlockPos LastPosition
