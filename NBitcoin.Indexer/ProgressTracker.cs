@@ -10,8 +10,8 @@ namespace NBitcoin.Indexer
 {
 	public class ProgressTracker
 	{
-		private readonly AzureBlockImporter _Importer;
-		public AzureBlockImporter Importer
+		private readonly AzureIndexer _Importer;
+		public AzureIndexer Importer
 		{
 			get
 			{
@@ -26,7 +26,7 @@ namespace NBitcoin.Indexer
 				return _Importer.Configuration;
 			}
 		}
-		public ProgressTracker(AzureBlockImporter importer, DiskBlockPosRange range)
+		public ProgressTracker(AzureIndexer importer, DiskBlockPosRange range)
 		{
 			_Importer = importer;
 			TotalBytes = GetTotalBytes(range);

@@ -10,8 +10,8 @@ namespace NBitcoin.Indexer.Tests
 {
 	class ImporterTester : IDisposable
 	{
-		private readonly AzureBlockImporter _Importer;
-		public AzureBlockImporter Importer
+		private readonly AzureIndexer _Importer;
+		public AzureIndexer Importer
 		{
 			get
 			{

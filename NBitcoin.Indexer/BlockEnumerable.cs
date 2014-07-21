@@ -19,7 +19,7 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public BlockEnumerable(AzureBlockImporter importer,
+		public BlockEnumerable(AzureIndexer importer,
 							   string checkpointName = null)
 		{
 			this._Importer = importer;
@@ -50,7 +50,7 @@ namespace NBitcoin.Indexer
 
 		private string _ProgressFile;
 		private ProgressTracker _Progress;
-		private AzureBlockImporter _Importer;
+		private AzureIndexer _Importer;
 		private DiskBlockPosRange _Range;
 		private BlockStore _Store;
 		private TimeSpan saveInterval = TimeSpan.FromMinutes(5.0);

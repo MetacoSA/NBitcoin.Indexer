@@ -48,16 +48,16 @@ namespace NBitcoin.Indexer
 			return new BlockStore(BlockDirectory, Network.Main);
 		}
 
-		public AzureBlockImporter CreateImporter()
+		public AzureIndexer CreateImporter()
 		{
-			return new AzureBlockImporter(this);
+			return new AzureIndexer(this);
 		}
 	}
 
 
-	public class AzureBlockImporter
+	public class AzureIndexer
 	{
-		public static AzureBlockImporter CreateBlockImporter(string progressFile = null)
+		public static AzureIndexer CreateBlockImporter(string progressFile = null)
 		{
 			var config = ImporterConfiguration.FromConfiguration();
 			if(progressFile != null)
@@ -80,7 +80,7 @@ namespace NBitcoin.Indexer
 				return _Configuration;
 			}
 		}
-		public AzureBlockImporter(ImporterConfiguration configuration)
+		public AzureIndexer(ImporterConfiguration configuration)
 		{
 			if(configuration == null)
 				throw new ArgumentNullException("configuration");
