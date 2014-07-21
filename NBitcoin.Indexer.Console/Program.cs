@@ -30,6 +30,10 @@ namespace NBitcoin.Indexer.Console
 				{
 					importer.StartTransactionImportToAzure();
 				}
+				if(options.ImportAddressesInAzure)
+				{
+					importer.StartAddressImportToAzure();
+				}
 				if(options.CountBlkFiles)
 				{
 					var dir = new DirectoryInfo(importer.Configuration.BlockDirectory);

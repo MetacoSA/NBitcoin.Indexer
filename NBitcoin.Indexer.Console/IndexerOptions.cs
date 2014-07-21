@@ -60,8 +60,15 @@ namespace NBitcoin.Indexer.Console
 			set;
 		}
 
-		[Option('t', "ImportTransactionsInAzure", DefaultValue = false, Required = false, HelpText = "Import transactions from data directory speicified in LocalSettings into azure table")]
+		[Option('t', "ImportTransactionsInAzure", DefaultValue = false, Required = false, HelpText = "Import transactions from data directory specified in LocalSettings into azure table")]
 		public bool ImportTransactionsInAzure
+		{
+			get;
+			set;
+		}
+
+		[Option('a', "ImportAddressesInAzure", DefaultValue = false, Required = false, HelpText = "Import bitcoin addresses from data directory specified in LocalSettings into azure table")]
+		public bool ImportAddressesInAzure
 		{
 			get;
 			set;
