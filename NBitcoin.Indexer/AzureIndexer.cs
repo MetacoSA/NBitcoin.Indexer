@@ -166,6 +166,7 @@ namespace NBitcoin.Indexer
 						foreach(var kv in entryByAddress)
 						{
 							var bucket = buckets[kv.Value.PartitionKey];
+							kv.Value.Flush();
 							bucket.Add(kv.Value);
 							if(bucket.Count == 100)
 							{
