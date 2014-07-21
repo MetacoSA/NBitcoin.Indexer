@@ -92,6 +92,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Data\blocks2\blk00000.dat" />
     <None Include="Data\blocks\blk00000.dat" />
     <None Include="Data\blocks\blk00001.dat" />
     <None Include="Data\blocks\blk00002.dat" />
@@ -119,6 +120,7 @@
       <Name>NBitcoin.Indexer</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

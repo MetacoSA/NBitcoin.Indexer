@@ -2,6 +2,7 @@
 using NBitcoin.DataEncoders;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,52 +11,49 @@ namespace NBitcoin.Indexer
 {
 	internal class IndexedAddressEntry : TableEntity
 	{
-		public const int MaxOutpoint = 100;
-
-		public IndexedAddressEntry()
+		public IndexedAddressEntry(string txid, BitcoinAddress address)
 		{
-
-		}
-		public IndexedAddressEntry(TxDestination reciever, OutPoint[] spendable)
-		{
-			SetAccount(reciever);
-			SetOutpoint(spendable);
+			var wif = address.ToString();
+			PartitionKey = new string(wif.Skip(wif.Length - 3).ToArray());
+			RowKey = wif + "-" + txid;
 		}
 
-		private void SetOutpoint(OutPoint[] spendables)
+		MemoryStream receiveStream = new MemoryStream();
+		public void AddReceive(int n)
 		{
-			if(spendables.Length > 100) //Prevent any column of AzureTable to go more than 64k
-				throw new ArgumentOutOfRangeException("spendables", "You can save at most 100 outpoints in an entry");
-
-			StringBuilder builder = new StringBuilder();
-			foreach(var spendable in spendables)
-			{
-				builder.Append(spendable.N + ":" + spendable.Hash + ";");
-			}
-			OutPoints = builder.ToString();
+			var nCompact = new CompactVarInt((ulong)n,4);
+			nCompact.ReadWrite(receiveStream, true);
 		}
 
-		private void SetAccount(TxDestination account)
+		MemoryStream outpointStream = new MemoryStream();
+		public void AddSend(OutPoint outpoint)
 		{
-			var suffix = account is KeyId ? "a" : "s";
-			var accountStr = account.ToString();
-			PartitionKey = accountStr.Substring(3);
-			RowKey = accountStr + "-" + suffix + "-" + Encoders.Hex.EncodeData(RandomUtils.GetBytes(10));
+			outpoint.ReadWrite(outpointStream, true);
 		}
-		public IndexedAddressEntry(uint256 txId, TxDestination sender, OutPoint[] spent)
+		public void Flush()
 		{
-			SetAccount(sender);
-			SetOutpoint(spent);
-			SpendingTx = txId.ToString();
+			SentOutpoints = GetBytes(outpointStream);
+			ReceivedOutput = GetBytes(receiveStream);
 		}
 
-		public string SpendingTx
+		private byte[] GetBytes(MemoryStream stream)
+		{
+			if(stream.Length == 0)
+				return null;
+			var buffer = stream.GetBuffer();
+			Array.Resize(ref buffer, (int)stream.Length);
+			if(buffer.Length > 1024*64)
+				throw new ArgumentOutOfRangeException("stream", "Value too big to enter in an Azure Table Column");
+			return buffer;
+		}
+
+		public byte[] ReceivedOutput
 		{
 			get;
 			set;
 		}
 
-		public string OutPoints
+		public byte[] SentOutpoints
 		{
 			get;
 			set;

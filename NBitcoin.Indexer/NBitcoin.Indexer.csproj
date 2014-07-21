@@ -87,7 +87,6 @@
   <ItemGroup>
     <Compile Include="AzureIndexer.cs" />
     <Compile Include="BlockEnumerable.cs" />
-    <Compile Include="IndexedAddress.cs" />
     <Compile Include="IndexedAddressEntry.cs" />
     <Compile Include="IndexedTransaction.cs" />
     <Compile Include="TransactionEntity.cs" />

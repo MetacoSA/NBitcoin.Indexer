@@ -40,6 +40,19 @@ namespace NBitcoin.Indexer.Tests
 		}
 
 		[Fact]
+		public void CanUploadAddressesToAzure()
+		{
+			using(var tester = CreateTester())
+			{
+				tester.Importer.Configuration.BlockDirectory = "../../Data/blocks2";
+				tester.Importer.TaskCount = 15;
+				tester.Importer.BlkCount = 1;
+				tester.Importer.FromBlk = 0;
+				tester.Importer.StartAddressImportToAzure();
+			}
+		}
+
+		[Fact]
 		public void CanGetBlock()
 		{
 			using(var tester = CreateTester("cached"))

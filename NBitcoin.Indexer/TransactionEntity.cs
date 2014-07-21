@@ -68,6 +68,9 @@ namespace NBitcoin.Indexer
 		{
 			return (ushort)((txid.GetByte(0) & 0xE0) + (txid.GetByte(1) << 8));
 		}
-
+		public override string ToString()
+		{
+			return PartitionKey + " " + RowKey;
+		}
 	}
 }

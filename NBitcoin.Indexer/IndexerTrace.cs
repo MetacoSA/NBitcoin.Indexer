@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.WindowsAzure.Storage.Table;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -45,16 +46,16 @@ namespace NBitcoin.Indexer
 		}
 
 
-		internal static void ErrorWhileImportingTxToAzure(TransactionEntity[] transactions, Exception ex)
+		internal static void ErrorWhileImportingEntitiesToAzure(TableEntity[] entities, Exception ex)
 		{
 			StringBuilder builder = new StringBuilder();
 			int i = 0;
-			foreach(var tx in transactions)
+			foreach(var entity in entities)
 			{
-				builder.AppendLine("[ " + i + "] " + tx.PartitionKey + " " + tx.RowKey);
+				builder.AppendLine("[" + i + "] " + entity.ToString());
 				i++;
 			}
-			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing transactions (len:" + transactions.Length + ") : " + Utils.ExceptionToString(ex) + "\r\n" + builder.ToString());
+			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing entities (len:" + entities.Length + ") : " + Utils.ExceptionToString(ex) + "\r\n" + builder.ToString());
 		}
 
 		internal static void RetryWorked()

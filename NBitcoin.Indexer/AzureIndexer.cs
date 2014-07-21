@@ -90,11 +90,6 @@ namespace NBitcoin.Indexer
 			BlkCount = 9999999;
 		}
 
-		public void StartAddressImportToAzure()
-		{
-			SetThrottling();
-		}
-
 		public Task[] CreateTasks<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, CancellationToken cancel, int defaultTaskCount)
 		{
 
@@ -116,6 +111,133 @@ namespace NBitcoin.Indexer
 			return tasks;
 		}
 
+		public void StartAddressImportToAzure()
+		{
+			SetThrottling();
+			BlockingCollection<IndexedAddressEntry[]> indexedEntries = new BlockingCollection<IndexedAddressEntry[]>(100);
+			var stop = new CancellationTokenSource();
+
+			var tasks = CreateTasks(indexedEntries, (entries) => SendToAzure(entries, Configuration.GetBalanceTable()), stop.Token, 30);
+			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
+			{
+				Configuration.GetBalanceTable().CreateIfNotExists();
+				var buckets = new MultiDictionary<string, IndexedAddressEntry>();
+
+				var storedBlocks = Enumerate("balances");
+				foreach(var block in storedBlocks)
+				{
+					foreach(var tx in block.Item.Transactions)
+					{
+						var txId = tx.GetHash().ToString();
+
+						Dictionary<string, IndexedAddressEntry> entryByAddress = new Dictionary<string, IndexedAddressEntry>();
+						foreach(var input in tx.Inputs)
+						{
+							var signer = GetSigner(input.ScriptSig);
+							if(signer != null)
+							{
+								IndexedAddressEntry entry = null;
+								if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
+								{
+									entry = new IndexedAddressEntry(txId, signer);
+									entryByAddress.Add(signer.ToString(), entry);
+								}
+								entry.AddSend(input.PrevOut);
+							}
+						}
+
+						int i = 0;
+						foreach(var output in tx.Outputs)
+						{
+							var receiver = GetReciever(output.ScriptPubKey);
+							if(receiver != null)
+							{
+								IndexedAddressEntry entry = null;
+								if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
+								{
+									entry = new IndexedAddressEntry(txId, receiver);
+									entryByAddress.Add(receiver.ToString(), entry);
+								}
+								entry.AddReceive(i);
+							}
+							i++;
+						}
+
+						foreach(var kv in entryByAddress)
+						{
+							var bucket = buckets[kv.Value.PartitionKey];
+							bucket.Add(kv.Value);
+							if(bucket.Count == 100)
+							{
+								indexedEntries.Add(bucket.ToArray());
+								buckets.Remove(kv.Value.PartitionKey);
+							}
+						}
+
+						if(storedBlocks.NeedSave)
+						{
+							foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
+							{
+								indexedEntries.Add(kv.Value.ToArray());
+							}
+							buckets.Clear();
+							WaitProcessed(indexedEntries);
+							storedBlocks.SaveCheckpoint();
+						}
+					}
+
+				}
+
+				foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
+				{
+					indexedEntries.Add(kv.Value.ToArray());
+				}
+				buckets.Clear();
+				WaitProcessed(indexedEntries);
+				stop.Cancel();
+				Task.WaitAll(tasks);
+				storedBlocks.SaveCheckpoint();
+			}
+		}
+
+		private BitcoinAddress GetReciever(Script scriptPubKey)
+		{
+			var payToHash = payToPubkeyHash.ExtractScriptPubKeyParameters(scriptPubKey);
+			if(payToHash != null)
+			{
+				return new BitcoinAddress(payToHash, Configuration.Network);
+			}
+
+			var payToScript = payToScriptHash.ExtractScriptPubKeyParameters(scriptPubKey);
+			if(payToScript != null)
+			{
+				return new BitcoinScriptAddress(payToScript, Configuration.Network);
+			}
+			return null;
+		}
+
+
+
+
+
+		PayToPubkeyHashTemplate payToPubkeyHash = new PayToPubkeyHashTemplate();
+		PayToScriptHashTemplate payToScriptHash = new PayToScriptHashTemplate();
+		private BitcoinAddress GetSigner(Script scriptSig)
+		{
+			var pubKey = payToPubkeyHash.ExtractScriptSigParameters(scriptSig);
+			if(pubKey != null)
+			{
+				return new BitcoinAddress(pubKey.PublicKey.ID, Configuration.Network);
+			}
+			var p2sh = payToScriptHash.ExtractScriptSigParameters(scriptSig);
+			if(p2sh != null)
+			{
+				return new BitcoinScriptAddress(p2sh.RedeemScript.ID, Configuration.Network);
+			}
+			return null;
+		}
+
+
 		public void StartTransactionImportToAzure()
 		{
 			SetThrottling();
@@ -123,7 +245,7 @@ namespace NBitcoin.Indexer
 			BlockingCollection<TransactionEntity[]> transactions = new BlockingCollection<TransactionEntity[]>(20);
 
 			var stop = new CancellationTokenSource();
-			var tasks = CreateTasks(transactions, SendToAzure, stop.Token, 30);
+			var tasks = CreateTasks(transactions, (txs) => SendToAzure(txs, Configuration.GetTransactionTable()), stop.Token, 30);
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
@@ -175,18 +297,17 @@ namespace NBitcoin.Indexer
 
 		TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-		private void SendToAzure(TransactionEntity[] transactions)
+		private void SendToAzure(TableEntity[] entities, CloudTable table)
 		{
-			if(transactions.Length == 0)
+			if(entities.Length == 0)
 				return;
-			var table = Configuration.GetTransactionTable();
 			bool firstException = false;
 			while(true)
 			{
 				var batch = new TableBatchOperation();
 				try
 				{
-					foreach(var tx in transactions)
+					foreach(var tx in entities)
 					{
 						batch.Add(TableOperation.InsertOrReplace(tx));
 					}
@@ -202,15 +323,13 @@ namespace NBitcoin.Indexer
 				}
 				catch(Exception ex)
 				{
-					IndexerTrace.ErrorWhileImportingTxToAzure(transactions, ex);
+					IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities, ex);
 					Thread.Sleep(5000);
 					firstException = true;
 				}
 			}
 		}
 
-
-		TimeSpan saveInterval = TimeSpan.FromMinutes(5);
 
 		public void StartBlockImportToAzure()
 		{
