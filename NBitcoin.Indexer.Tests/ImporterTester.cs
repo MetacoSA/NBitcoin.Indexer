@@ -22,7 +22,7 @@ namespace NBitcoin.Indexer.Tests
 		public ImporterTester(string folder)
 		{
 			TestUtils.EnsureNew(folder);
-			var config = ImporterConfiguration.FromConfiguration();
+			var config = IndexerServerConfiguration.FromConfiguration();
 			config.ProgressFile = folder + "/progress";
 			config.BlockDirectory = "../../Data/blocks";
 			config.TransactionTable = folder;

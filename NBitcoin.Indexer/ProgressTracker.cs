@@ -19,7 +19,7 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public ImporterConfiguration Configuration
+		public IndexerServerConfiguration Configuration
 		{
 			get
 			{

@@ -19,16 +19,16 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	public class ImporterConfiguration : IndexerConfiguration
+	public class IndexerServerConfiguration : IndexerConfiguration
 	{
-		public new static ImporterConfiguration FromConfiguration()
+		public new static IndexerServerConfiguration FromConfiguration()
 		{
-			ImporterConfiguration config = new ImporterConfiguration();
+			IndexerServerConfiguration config = new IndexerServerConfiguration();
 			Fill(config);
 			config.BlockDirectory = GetValue("BlockDirectory", true);
 			return config;
 		}
-		public ImporterConfiguration()
+		public IndexerServerConfiguration()
 		{
 			ProgressFile = "progress.dat";
 		}
@@ -59,7 +59,7 @@ namespace NBitcoin.Indexer
 	{
 		public static AzureIndexer CreateBlockImporter(string progressFile = null)
 		{
-			var config = ImporterConfiguration.FromConfiguration();
+			var config = IndexerServerConfiguration.FromConfiguration();
 			if(progressFile != null)
 				config.ProgressFile = progressFile;
 			return config.CreateImporter();
@@ -72,15 +72,15 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
-		private readonly ImporterConfiguration _Configuration;
-		public ImporterConfiguration Configuration
+		private readonly IndexerServerConfiguration _Configuration;
+		public IndexerServerConfiguration Configuration
 		{
 			get
 			{
 				return _Configuration;
 			}
 		}
-		public AzureIndexer(ImporterConfiguration configuration)
+		public AzureIndexer(IndexerServerConfiguration configuration)
 		{
 			if(configuration == null)
 				throw new ArgumentNullException("configuration");

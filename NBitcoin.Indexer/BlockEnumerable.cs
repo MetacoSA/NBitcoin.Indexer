@@ -11,7 +11,7 @@ namespace NBitcoin.Indexer
 	public class BlockEnumerable : IEnumerable<StoredBlock>
 	{
 
-		public ImporterConfiguration Configuration
+		public IndexerServerConfiguration Configuration
 		{
 			get
 			{
