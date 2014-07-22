@@ -24,7 +24,11 @@ namespace NBitcoin.Indexer
 
 		public static string GetPartitionKey(string wif)
 		{
-			return new string(wif.Skip(wif.Length - 3).ToArray());
+			char[] c = new char[3];
+			c[0] = (int)(wif[wif.Length - 3]) % 2 == 0 ? 'a' : 'b';
+			c[1] = wif[wif.Length - 2];
+			c[2] = wif[wif.Length - 1];
+			return new string(c);
 		}
 
 		MemoryStream receiveStream = new MemoryStream();
