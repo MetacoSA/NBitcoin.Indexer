@@ -84,5 +84,10 @@ namespace NBitcoin.Indexer
 			double inMb = (double)size / 1024.0 / 1024.0;
 			_Trace.TraceInformation("MB to process : " + inMb.ToString("0.00"));
 		}
+
+		internal static void ErrorWhileImportingBalancesToAzure(Exception ex, string txid)
+		{
+			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing balances on " + txid + " \r\n" + Utils.ExceptionToString(ex));
+		}
 	}
 }

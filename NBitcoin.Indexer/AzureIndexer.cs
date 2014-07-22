@@ -129,64 +129,70 @@ namespace NBitcoin.Indexer
 					foreach(var tx in block.Item.Transactions)
 					{
 						var txId = tx.GetHash().ToString();
-
-						Dictionary<string, IndexedAddressEntry> entryByAddress = new Dictionary<string, IndexedAddressEntry>();
-						foreach(var input in tx.Inputs)
+						try
 						{
-							var signer = GetSigner(input.ScriptSig);
-							if(signer != null)
+							Dictionary<string, IndexedAddressEntry> entryByAddress = new Dictionary<string, IndexedAddressEntry>();
+							foreach(var input in tx.Inputs)
 							{
-								IndexedAddressEntry entry = null;
-								if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
+								var signer = GetSigner(input.ScriptSig);
+								if(signer != null)
 								{
-									entry = new IndexedAddressEntry(txId, signer);
-									entryByAddress.Add(signer.ToString(), entry);
+									IndexedAddressEntry entry = null;
+									if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
+									{
+										entry = new IndexedAddressEntry(txId, signer);
+										entryByAddress.Add(signer.ToString(), entry);
+									}
+									entry.AddSend(input.PrevOut);
 								}
-								entry.AddSend(input.PrevOut);
 							}
-						}
 
-						int i = 0;
-						foreach(var output in tx.Outputs)
-						{
-							var receiver = GetReciever(output.ScriptPubKey);
-							if(receiver != null)
+							int i = 0;
+							foreach(var output in tx.Outputs)
 							{
-								IndexedAddressEntry entry = null;
-								if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
+								var receiver = GetReciever(output.ScriptPubKey);
+								if(receiver != null)
 								{
-									entry = new IndexedAddressEntry(txId, receiver);
-									entryByAddress.Add(receiver.ToString(), entry);
+									IndexedAddressEntry entry = null;
+									if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
+									{
+										entry = new IndexedAddressEntry(txId, receiver);
+										entryByAddress.Add(receiver.ToString(), entry);
+									}
+									entry.AddReceive(i);
 								}
-								entry.AddReceive(i);
+								i++;
 							}
-							i++;
-						}
 
-						foreach(var kv in entryByAddress)
-						{
-							var bucket = buckets[kv.Value.PartitionKey];
-							kv.Value.Flush();
-							bucket.Add(kv.Value);
-							if(bucket.Count == 100)
+							foreach(var kv in entryByAddress)
 							{
-								indexedEntries.Add(bucket.ToArray());
-								buckets.Remove(kv.Value.PartitionKey);
+								var bucket = buckets[kv.Value.PartitionKey];
+								kv.Value.Flush();
+								bucket.Add(kv.Value);
+								if(bucket.Count == 100)
+								{
+									indexedEntries.Add(bucket.ToArray());
+									buckets.Remove(kv.Value.PartitionKey);
+								}
+							}
+
+							if(storedBlocks.NeedSave)
+							{
+								foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
+								{
+									indexedEntries.Add(kv.Value.ToArray());
+								}
+								buckets.Clear();
+								WaitProcessed(indexedEntries);
+								storedBlocks.SaveCheckpoint();
 							}
 						}
-
-						if(storedBlocks.NeedSave)
+						catch(Exception ex)
 						{
-							foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
-							{
-								indexedEntries.Add(kv.Value.ToArray());
-							}
-							buckets.Clear();
-							WaitProcessed(indexedEntries);
-							storedBlocks.SaveCheckpoint();
+							IndexerTrace.ErrorWhileImportingBalancesToAzure(ex, txId);
+							throw;
 						}
 					}
-
 				}
 
 				foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())

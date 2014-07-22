@@ -11,17 +11,26 @@ namespace NBitcoin.Indexer
 {
 	internal class IndexedAddressEntry : TableEntity
 	{
+		public IndexedAddressEntry()
+		{
+
+		}
 		public IndexedAddressEntry(string txid, BitcoinAddress address)
 		{
 			var wif = address.ToString();
-			PartitionKey = new string(wif.Skip(wif.Length - 3).ToArray());
+			PartitionKey = GetPartitionKey(wif);
 			RowKey = wif + "-" + txid;
+		}
+
+		public static string GetPartitionKey(string wif)
+		{
+			return new string(wif.Skip(wif.Length - 3).ToArray());
 		}
 
 		MemoryStream receiveStream = new MemoryStream();
 		public void AddReceive(int n)
 		{
-			var nCompact = new CompactVarInt((ulong)n,4);
+			var nCompact = new CompactVarInt((ulong)n, 4);
 			nCompact.ReadWrite(receiveStream, true);
 		}
 
@@ -42,11 +51,18 @@ namespace NBitcoin.Indexer
 				return null;
 			var buffer = stream.GetBuffer();
 			Array.Resize(ref buffer, (int)stream.Length);
-			if(buffer.Length > 1024*64)
+			if(buffer.Length > 1024 * 64)
 				throw new ArgumentOutOfRangeException("stream", "Value too big to enter in an Azure Table Column");
 			return buffer;
 		}
 
+		public string TransactionId
+		{
+			get
+			{
+				return RowKey.Split('-')[1];
+			}
+		}
 		public byte[] ReceivedOutput
 		{
 			get;
@@ -54,6 +70,65 @@ namespace NBitcoin.Indexer
 		}
 
 		public byte[] SentOutpoints
+		{
+			get;
+			set;
+		}
+
+
+		public List<int> GetReceivedOutput()
+		{
+			List<int> indexes = new List<int>();
+			if(ReceivedOutput == null)
+				return indexes;
+			MemoryStream ms = new MemoryStream(ReceivedOutput);
+			ms.Position = 0;
+			while(ms.Position != ms.Length)
+			{
+				CompactVarInt value = new CompactVarInt(4);
+				value.ReadWrite(ms, false);
+				indexes.Add((int)value.ToLong());
+			}
+			return indexes;
+		}
+
+		public List<OutPoint> GetSentOutpoints()
+		{
+			List<OutPoint> outpoints = new List<OutPoint>();
+			if(SentOutpoints == null)
+				return outpoints;
+			MemoryStream ms = new MemoryStream(SentOutpoints);
+			ms.Position = 0;
+			while(ms.Position != ms.Length)
+			{
+				OutPoint outpoint = new OutPoint();
+				outpoint.ReadWrite(ms, false);
+				outpoints.Add(outpoint);
+			}
+			return outpoints;
+		}
+
+		public string BlockIds
+		{
+			get;
+			set;
+		}
+
+		internal uint256[] GetBlockIds()
+		{
+			if(BlockIds == null)
+				return new uint256[0];
+			return BlockIds
+				.Split(new char[] { '-' }, StringSplitOptions.RemoveEmptyEntries)
+				.Select(s => new uint256(s)).ToArray();
+		}
+
+		internal void SetBlockIds(uint256[] blockIds)
+		{
+			BlockIds = String.Join("-", blockIds.OfType<object>().ToArray());
+		}
+
+		public string Money
 		{
 			get;
 			set;

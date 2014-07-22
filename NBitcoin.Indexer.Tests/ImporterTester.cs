@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Table;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,7 +19,7 @@ namespace NBitcoin.Indexer.Tests
 				return _Importer;
 			}
 		}
-
+		string _Folder;
 		public ImporterTester(string folder)
 		{
 			TestUtils.EnsureNew(folder);
@@ -32,6 +33,13 @@ namespace NBitcoin.Indexer.Tests
 			GetTransactionTable().CreateIfNotExists();
 
 			config.GetBlocksContainer().CreateIfNotExists();
+			_Folder = folder;
+		}
+
+		internal BlockStore CreateLocalBlockStore()
+		{
+			var dir = Directory.CreateDirectory(Path.Combine(_Folder, "blocks"));
+			return new BlockStore(dir.FullName, Network.Main);
 		}
 
 
@@ -120,5 +128,7 @@ namespace NBitcoin.Indexer.Tests
 		}
 
 
+
+		
 	}
 }

@@ -65,19 +65,23 @@ namespace NBitcoin.Indexer
 		/// <returns>All transactions (with null entries for unfound transactions)</returns>
 		public IndexedTransaction[] GetTransactions(params uint256[] txIds)
 		{
-			var table = Configuration.GetTransactionTable();
 			var result = new IndexedTransaction[txIds.Length];
 			var queries = new TableQuery<TransactionEntity>[txIds.Length];
 			try
 			{
 				Parallel.For(0, txIds.Length, i =>
 				{
+					var table = Configuration.GetTransactionTable();
 					queries[i] = new TableQuery<TransactionEntity>()
 									.Where(
 											TableQuery.CombineFilters(
 												TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, TransactionEntity.GetPartitionKey(txIds[i])),
 												TableOperators.And,
-												TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txIds[i].ToString())
+												TableQuery.CombineFilters(
+													TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txIds[i].ToString() + "-"),
+													TableOperators.And,
+													TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, txIds[i].ToString() + "|")
+												)
 										  ));
 
 					var entities = table.ExecuteQuery(queries[i]).ToArray();
@@ -94,6 +98,9 @@ namespace NBitcoin.Indexer
 								if(block != null)
 								{
 									result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
+									entities[0].Transaction = result[i].Transaction.ToBytes();
+									if(entities[0].Transaction.Length < 1024 * 64)
+										table.Execute(TableOperation.Merge(entities[0]));
 									break;
 								}
 							}
@@ -108,6 +115,135 @@ namespace NBitcoin.Indexer
 				throw ex.InnerException;
 			}
 			return result;
+		}
+
+
+		public AddressEntry[] GetEntries(BitcoinAddress address)
+		{
+			var addressStr = address.ToString();
+			var table = Configuration.GetBalanceTable();
+			var query = new TableQuery<IndexedAddressEntry>()
+							.Where(
+							TableQuery.CombineFilters(
+												TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, IndexedAddressEntry.GetPartitionKey(addressStr)),
+												TableOperators.And,
+												TableQuery.CombineFilters(
+													TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, addressStr + "-"),
+													TableOperators.And,
+													TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, addressStr + "|")
+												)
+							));
+
+			var indexedEntries = table.ExecuteQuery(query);
+			List<AddressEntry> result = new List<AddressEntry>();
+			foreach(var indexEntry in indexedEntries)
+			{
+				var entry = new AddressEntry();
+				entry.Address = address;
+				entry.TransactionId = new uint256(indexEntry.TransactionId);
+				if(indexEntry.Money == null)
+					if(LazyLoad(indexEntry))
+					{
+						table.Execute(TableOperation.Merge(indexEntry));
+					}
+				entry.BalanceChange = indexEntry.Money == null ? (Money)null : Money.Parse(indexEntry.Money);
+				entry.BlockIds = indexEntry.GetBlockIds();
+				result.Add(entry);
+			}
+			return result.ToArray();
+		}
+
+		private bool LazyLoad(IndexedAddressEntry indexAddress)
+		{
+			var txId = new uint256(indexAddress.TransactionId);
+			var indexedTx = GetTransaction(txId);
+			if(indexedTx == null)
+				return false;
+
+			indexAddress.SetBlockIds(indexedTx.BlockIds);
+
+			Money total = Money.Zero;
+
+			var received = indexAddress.GetReceivedOutput();
+
+			total =
+				total +
+				indexedTx.Transaction.Outputs.Where((o, i) => received.Contains(i))
+				.Select(o => o.Value)
+				.Sum();
+
+
+			Dictionary<uint256, Transaction> transactionsCache = new Dictionary<uint256, Transaction>();
+			transactionsCache.Add(indexedTx.Transaction.GetHash(), indexedTx.Transaction);
+
+			var sentOutputs = indexAddress.GetSentOutpoints();
+
+			foreach(var sent in sentOutputs)
+			{
+				Transaction sourceTransaction = null;
+				if(!transactionsCache.TryGetValue(sent.Hash, out sourceTransaction))
+				{
+					var sourceIndexedTx = GetTransaction(sent.Hash);
+					if(sourceIndexedTx != null)
+					{
+						sourceTransaction = sourceIndexedTx.Transaction;
+						transactionsCache.Add(sent.Hash, sourceTransaction);
+					}
+				}
+				if(sourceTransaction == null || sourceTransaction.Outputs.Count <= sent.N)
+				{
+					return false;
+				}
+				var sourceOutput = sourceTransaction.Outputs[(int)sent.N];
+				total = total - sourceOutput.Value;
+			}
+
+
+			indexAddress.Money = total.ToString();
+			return true;
+		}
+		public AddressEntry[] GetEntries(KeyId keyId)
+		{
+			return GetEntries(new BitcoinAddress(keyId, Configuration.Network));
+		}
+		public AddressEntry[] GetEntries(PubKey pubKey)
+		{
+			return GetEntries(pubKey.GetAddress(Configuration.Network));
+		}
+
+
+	}
+
+	public class AddressEntry
+	{
+		public uint256 TransactionId
+		{
+			get;
+			set;
+		}
+
+		public BitcoinAddress Address
+		{
+			get;
+			set;
+		}
+
+		public List<OutPoint> Spent
+		{
+			get;
+			set;
+		}
+
+		public uint256[] BlockIds
+		{
+			get;
+			set;
+		}
+
+		public Money BalanceChange
+		{
+			get;
+			set;
 		}
 	}
 }
