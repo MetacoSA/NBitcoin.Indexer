@@ -134,6 +134,8 @@ namespace NBitcoin.Indexer
 							Dictionary<string, IndexedAddressEntry> entryByAddress = new Dictionary<string, IndexedAddressEntry>();
 							foreach(var input in tx.Inputs)
 							{
+								if(tx.IsCoinBase)
+									break;
 								var signer = GetSigner(input.ScriptSig);
 								if(signer != null)
 								{
