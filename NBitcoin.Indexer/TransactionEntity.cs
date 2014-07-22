@@ -25,8 +25,8 @@ namespace NBitcoin.Indexer
 		{
 			var transaction = tx.ToBytes();
 			_txId = Hashes.Hash256(transaction);
-			if(transaction.Length < 1024 * 64)
-				Transaction = transaction;
+			//if(transaction.Length < 1024 * 64)
+			//	Transaction = transaction;
 			Key = GetPartitionKeyUShort(_txId);
 		}
 		public TransactionEntity(Transaction tx, uint256 blockId)
