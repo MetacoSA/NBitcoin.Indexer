@@ -52,6 +52,10 @@ namespace NBitcoin.Indexer.Tests
 				var receiver = new Key().PubKey;
 				var b1 = new Block()
 				{
+					Header =
+					{
+						Nonce = RandomUtils.GetUInt32()
+					},
 					Transactions =
 					{
 						new Transaction()
@@ -67,6 +71,10 @@ namespace NBitcoin.Indexer.Tests
 
 				var b2 = new Block()
 				{
+					Header =
+					{
+						Nonce = RandomUtils.GetUInt32()
+					},
 					Transactions =
 					{
 						new Transaction()
@@ -105,6 +113,43 @@ namespace NBitcoin.Indexer.Tests
 				Assert.Equal(1, entries.Length);
 				Assert.Equal<Money>("2.0", entries[0].BalanceChange);
 				entries = tester.Client.GetEntries(receiver);
+
+				var b3 = new Block()
+				{
+					Header =
+					{
+						Nonce = RandomUtils.GetUInt32()
+					},
+					Transactions =
+					{
+						new Transaction()
+						{
+							Inputs = 
+							{
+								new TxIn(new OutPoint(new uint256("bf6b530a4fd7fb107f52a8c433bc10e9388d129a6bb26567685e8b0674a76a2a"),0))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,sender)
+								}
+							},
+							Outputs = 
+							{
+								new TxOut("2.1",receiver.GetAddress(Network.Main)),
+								new TxOut("8.0",sender.GetAddress(Network.Main))
+							}
+						}
+					}
+				};
+				store.Append(b3);
+
+				tester.Importer.StartBlockImportToAzure();
+				tester.Importer.StartTransactionImportToAzure();
+				tester.Importer.StartAddressImportToAzure();
+
+				entries = tester.Client.GetEntries(receiver);
+				Assert.Equal<Money>("2.1", entries[1].BalanceChange);
+
+				entries = tester.Client.GetEntries(sender);
 			}
 		}
 

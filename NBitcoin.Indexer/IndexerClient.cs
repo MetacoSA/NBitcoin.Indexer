@@ -148,6 +148,7 @@ namespace NBitcoin.Indexer
 					}
 				entry.BalanceChange = indexEntry.Money == null ? (Money)null : Money.Parse(indexEntry.Money);
 				entry.BlockIds = indexEntry.GetBlockIds();
+				entry.Received = indexEntry.GetReceivedOutput();
 				result.Add(entry);
 			}
 			return result.ToArray();
@@ -165,7 +166,6 @@ namespace NBitcoin.Indexer
 			Money total = Money.Zero;
 
 			var received = indexAddress.GetReceivedOutput();
-
 			total =
 				total +
 				indexedTx.Transaction.Outputs.Where((o, i) => received.Contains(i))
@@ -241,6 +241,12 @@ namespace NBitcoin.Indexer
 		}
 
 		public Money BalanceChange
+		{
+			get;
+			set;
+		}
+
+		public List<int> Received
 		{
 			get;
 			set;
