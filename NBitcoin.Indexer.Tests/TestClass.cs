@@ -5,6 +5,7 @@ using NBitcoin.DataEncoders;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -106,12 +107,12 @@ namespace NBitcoin.Indexer.Tests
 
 				var entries = tester.Client.GetEntries(sender);
 				Assert.Equal(2, entries.Length);
-				Assert.Equal<Money>("10.0", entries[1].BalanceChange);
-				Assert.Equal<Money>("-2.0", entries[0].BalanceChange);
+				AssertContainsMoney("10.0", entries);
+				AssertContainsMoney("-2.0", entries);
 
 				entries = tester.Client.GetEntries(receiver);
 				Assert.Equal(1, entries.Length);
-				Assert.Equal<Money>("2.0", entries[0].BalanceChange);
+				AssertContainsMoney("2.0", entries);
 				entries = tester.Client.GetEntries(receiver);
 
 				var b3 = new Block()
@@ -147,10 +148,17 @@ namespace NBitcoin.Indexer.Tests
 				tester.Importer.StartAddressImportToAzure();
 
 				entries = tester.Client.GetEntries(receiver);
-				Assert.Equal<Money>("2.1", entries[1].BalanceChange);
+				AssertContainsMoney("2.1", entries);
 
 				entries = tester.Client.GetEntries(sender);
+				AssertContainsMoney(null, entries);
 			}
+		}
+
+		[DebuggerHidden]
+		private void AssertContainsMoney(Money expected, AddressEntry[] entries)
+		{
+			Assert.True(entries.Any(e => e.BalanceChange == expected));
 		}
 
 		[Fact]

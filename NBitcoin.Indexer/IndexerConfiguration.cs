@@ -88,7 +88,7 @@ namespace NBitcoin.Indexer
 		}
 		public CloudBlobContainer GetBlocksContainer()
 		{
-			return CreateBlobClient().GetContainerReference(TransactionTable);
+			return CreateBlobClient().GetContainerReference(Container);
 		}
 
 		private Uri MakeUri(string clientType)

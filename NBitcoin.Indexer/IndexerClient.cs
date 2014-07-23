@@ -206,6 +206,14 @@ namespace NBitcoin.Indexer
 		{
 			return GetEntries(new BitcoinAddress(keyId, Configuration.Network));
 		}
+		public AddressEntry[] GetEntries(ScriptId scriptId)
+		{
+			return GetEntries(new BitcoinScriptAddress(scriptId, Configuration.Network));
+		}
+		public AddressEntry[] GetEntries(BitcoinScriptAddress scriptAddress)
+		{
+			return GetEntries((BitcoinAddress)scriptAddress);
+		}
 		public AddressEntry[] GetEntries(PubKey pubKey)
 		{
 			return GetEntries(pubKey.GetAddress(Configuration.Network));
@@ -250,6 +258,11 @@ namespace NBitcoin.Indexer
 		{
 			get;
 			set;
+		}
+
+		public override string ToString()
+		{
+			return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
 		}
 	}
 }
