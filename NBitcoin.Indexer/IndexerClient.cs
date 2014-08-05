@@ -134,10 +134,13 @@ namespace NBitcoin.Indexer
 												)
 							));
 
-			var indexedEntries = table.ExecuteQuery(query);
+			var indexedEntriesGroups = table
+									.ExecuteQuery(query)
+									.GroupBy(e => e.TransactionId);
 			List<AddressEntry> result = new List<AddressEntry>();
-			foreach(var indexEntry in indexedEntries)
+			foreach(var indexEntryGroup in indexedEntriesGroups)
 			{
+				var indexEntry = indexEntryGroup.First();
 				var entry = new AddressEntry();
 				entry.Address = address;
 				entry.TransactionId = new uint256(indexEntry.TransactionId);
@@ -147,7 +150,9 @@ namespace NBitcoin.Indexer
 						table.Execute(TableOperation.Merge(indexEntry));
 					}
 				entry.BalanceChange = indexEntry.Money == null ? (Money)null : Money.Parse(indexEntry.Money);
-				entry.BlockIds = indexEntry.GetBlockIds();
+				entry.BlockIds = indexEntryGroup
+										.Where(s => s.BlockId != String.Empty)
+										.Select(s => new uint256(s.BlockId)).ToArray();
 				entry.Received = indexEntry.GetReceivedOutput();
 				result.Add(entry);
 			}
@@ -160,8 +165,6 @@ namespace NBitcoin.Indexer
 			var indexedTx = GetTransaction(txId);
 			if(indexedTx == null)
 				return false;
-
-			indexAddress.SetBlockIds(indexedTx.BlockIds);
 
 			Money total = Money.Zero;
 

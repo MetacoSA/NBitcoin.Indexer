@@ -126,6 +126,7 @@ namespace NBitcoin.Indexer
 				var storedBlocks = Enumerate("balances");
 				foreach(var block in storedBlocks)
 				{
+					var blockId = block.Item.Header.GetHash().ToString();
 					foreach(var tx in block.Item.Transactions)
 					{
 						var txId = tx.GetHash().ToString();
@@ -142,7 +143,7 @@ namespace NBitcoin.Indexer
 									IndexedAddressEntry entry = null;
 									if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
 									{
-										entry = new IndexedAddressEntry(txId, signer);
+										entry = new IndexedAddressEntry(txId, signer, blockId);
 										entryByAddress.Add(signer.ToString(), entry);
 									}
 									entry.AddSend(input.PrevOut);
@@ -158,7 +159,7 @@ namespace NBitcoin.Indexer
 									IndexedAddressEntry entry = null;
 									if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
 									{
-										entry = new IndexedAddressEntry(txId, receiver);
+										entry = new IndexedAddressEntry(txId, receiver, blockId);
 										entryByAddress.Add(receiver.ToString(), entry);
 									}
 									entry.AddReceive(i);

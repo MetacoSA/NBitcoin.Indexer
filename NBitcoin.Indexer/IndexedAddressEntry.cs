@@ -15,11 +15,11 @@ namespace NBitcoin.Indexer
 		{
 
 		}
-		public IndexedAddressEntry(string txid, BitcoinAddress address)
+		public IndexedAddressEntry(string txid, BitcoinAddress address, string blockId)
 		{
 			var wif = address.ToString();
 			PartitionKey = GetPartitionKey(wif);
-			RowKey = wif + "-" + txid;
+			RowKey = wif + "-" + txid + "-" + blockId;
 		}
 
 		public static string GetPartitionKey(string wif)
@@ -67,6 +67,16 @@ namespace NBitcoin.Indexer
 				return RowKey.Split('-')[1];
 			}
 		}
+		public string BlockId
+		{
+			get
+			{
+				var splitted = RowKey.Split('-');
+				if(splitted.Length < 3)
+					return "";
+				return RowKey.Split('-')[2];
+			}
+		}
 		public byte[] ReceivedOutput
 		{
 			get;
@@ -112,25 +122,6 @@ namespace NBitcoin.Indexer
 			return outpoints;
 		}
 
-		public string BlockIds
-		{
-			get;
-			set;
-		}
-
-		internal uint256[] GetBlockIds()
-		{
-			if(BlockIds == null)
-				return new uint256[0];
-			return BlockIds
-				.Split(new char[] { '-' }, StringSplitOptions.RemoveEmptyEntries)
-				.Select(s => new uint256(s)).ToArray();
-		}
-
-		internal void SetBlockIds(uint256[] blockIds)
-		{
-			BlockIds = String.Join("-", blockIds.OfType<object>().ToArray());
-		}
 
 		public string Money
 		{
@@ -140,7 +131,7 @@ namespace NBitcoin.Indexer
 
 		public override string ToString()
 		{
-			return "RowKey : " + RowKey + " | Outpoints size : " + (SentOutpoints == null ? 0 : SentOutpoints.Length);
+			return "RowKey : " + RowKey;
 		}
 	}
 }

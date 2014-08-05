@@ -107,7 +107,8 @@ namespace NBitcoin.Indexer.Tests
 
 				var entries = tester.Client.GetEntries(sender);
 				Assert.Equal(2, entries.Length);
-				AssertContainsMoney("10.0", entries);
+				var entry = AssertContainsMoney("10.0", entries);
+				Assert.Equal(entry.BlockIds[0], b1.GetHash());
 				AssertContainsMoney("-2.0", entries);
 
 				entries = tester.Client.GetEntries(receiver);
@@ -156,9 +157,11 @@ namespace NBitcoin.Indexer.Tests
 		}
 
 		[DebuggerHidden]
-		private void AssertContainsMoney(Money expected, AddressEntry[] entries)
+		private AddressEntry AssertContainsMoney(Money expected, AddressEntry[] entries)
 		{
-			Assert.True(entries.Any(e => e.BalanceChange == expected));
+			var entry = entries.FirstOrDefault(e => e.BalanceChange == expected);
+			Assert.True(entry != null);
+			return entry;
 		}
 
 		[Fact]
