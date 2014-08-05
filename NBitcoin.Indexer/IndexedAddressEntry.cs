@@ -137,5 +137,10 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
+
+		public override string ToString()
+		{
+			return "RowKey : " + RowKey + " | Outpoints size : " + SentOutpoints.Length;
+		}
 	}
 }
