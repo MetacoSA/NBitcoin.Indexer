@@ -154,6 +154,7 @@ namespace NBitcoin.Indexer
 										.Where(s => s.BlockId != String.Empty)
 										.Select(s => new uint256(s.BlockId)).ToArray();
 				entry.Received = indexEntry.GetReceivedOutput();
+				entry.Spent = indexEntry.GetSentOutpoints();
 				result.Add(entry);
 			}
 			return result.ToArray();

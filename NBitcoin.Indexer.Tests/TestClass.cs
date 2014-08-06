@@ -109,7 +109,12 @@ namespace NBitcoin.Indexer.Tests
 				Assert.Equal(2, entries.Length);
 				var entry = AssertContainsMoney("10.0", entries);
 				Assert.Equal(entry.BlockIds[0], b1.GetHash());
-				AssertContainsMoney("-2.0", entries);
+
+				entry = AssertContainsMoney("-2.0", entries);
+				Assert.NotNull(entry.Spent);
+				Assert.Equal(1, entry.Spent.Count);
+				Assert.Equal(b1.Transactions[0].GetHash(), entry.Spent[0].Hash);
+				Assert.Equal(0, (int)entry.Spent[0].N);
 
 				entries = tester.Client.GetEntries(receiver);
 				Assert.Equal(1, entries.Length);
