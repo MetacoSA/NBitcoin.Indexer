@@ -45,20 +45,11 @@ namespace NBitcoin.Indexer
 		}
 		public void Flush()
 		{
-			SentOutpoints = GetBytes(outpointStream);
-			ReceivedOutput = GetBytes(receiveStream);
+			SentOutpoints = Helper.GetBytes(outpointStream);
+			ReceivedOutput = Helper.GetBytes(receiveStream);
 		}
 
-		private byte[] GetBytes(MemoryStream stream)
-		{
-			if(stream.Length == 0)
-				return null;
-			var buffer = stream.GetBuffer();
-			Array.Resize(ref buffer, (int)stream.Length);
-			if(buffer.Length > 1024 * 64)
-				throw new ArgumentOutOfRangeException("stream", "Value too big to enter in an Azure Table Column");
-			return buffer;
-		}
+
 
 		public string TransactionId
 		{
@@ -108,30 +99,157 @@ namespace NBitcoin.Indexer
 
 		public List<OutPoint> GetSentOutpoints()
 		{
-			List<OutPoint> outpoints = new List<OutPoint>();
-			if(SentOutpoints == null)
-				return outpoints;
-			MemoryStream ms = new MemoryStream(SentOutpoints);
-			ms.Position = 0;
-			while(ms.Position != ms.Length)
-			{
-				OutPoint outpoint = new OutPoint();
-				outpoint.ReadWrite(ms, false);
-				outpoints.Add(outpoint);
-			}
-			return outpoints;
+			return Helper.DeserializeList<OutPoint>(SentOutpoints);
 		}
 
 
-		public string Money
+		internal List<TxOut> GetReceivedTxOut()
 		{
-			get;
-			set;
+			return Helper.DeserializeList<TxOut>(ReceivedTxOuts);
 		}
+
 
 		public override string ToString()
 		{
 			return "RowKey : " + RowKey;
+		}
+
+		byte[] _SentTxOuts;
+		[IgnoreProperty]
+		public byte[] SentTxOuts
+		{
+			get
+			{
+				if(_SentTxOuts == null)
+					_SentTxOuts = Helper.Concat(SentTxOuts1, SentTxOuts2, SentTxOuts3, SentTxOuts4);
+				return _SentTxOuts;
+			}
+			set
+			{
+				_SentTxOuts = value;
+				Helper.Spread(value, 1024 * 63, ref _SentTxOuts1, ref _SentTxOuts2, ref _SentTxOuts3, ref _SentTxOuts4);
+			}
+		}
+
+		byte[] _SentTxOuts1;
+		public byte[] SentTxOuts1
+		{
+			get
+			{
+				return _SentTxOuts1;
+			}
+			set
+			{
+				_SentTxOuts1 = value;
+			}
+		}
+		byte[] _SentTxOuts2;
+		public byte[] SentTxOuts2
+		{
+			get
+			{
+				return _SentTxOuts2;
+			}
+			set
+			{
+				_SentTxOuts2 = value;
+			}
+		}
+		byte[] _SentTxOuts3;
+		public byte[] SentTxOuts3
+		{
+			get
+			{
+				return _SentTxOuts3;
+			}
+			set
+			{
+				_SentTxOuts3 = value;
+			}
+		}
+		byte[] _SentTxOuts4;
+		public byte[] SentTxOuts4
+		{
+			get
+			{
+				return _SentTxOuts4;
+			}
+			set
+			{
+				_SentTxOuts4 = value;
+			}
+		}
+
+		byte[] _ReceivedTxOuts;
+
+		[IgnoreProperty]
+		public byte[] ReceivedTxOuts
+		{
+			get
+			{
+				if(_ReceivedTxOuts == null)
+					_ReceivedTxOuts = Helper.Concat(_ReceivedTxOuts1, _ReceivedTxOuts2, _ReceivedTxOuts3, _ReceivedTxOuts4);
+				return _ReceivedTxOuts;
+			}
+			set
+			{
+				_ReceivedTxOuts = value;
+				Helper.Spread(value, 1024 * 63, ref _ReceivedTxOuts1, ref _ReceivedTxOuts2, ref _ReceivedTxOuts3, ref _ReceivedTxOuts4);
+			}
+		}
+
+		byte[] _ReceivedTxOuts1;
+		public byte[] ReceivedTxOuts1
+		{
+			get
+			{
+				return _ReceivedTxOuts1;
+			}
+			set
+			{
+				_ReceivedTxOuts1 = value;
+			}
+		}
+		byte[] _ReceivedTxOuts2;
+		public byte[] ReceivedTxOuts2
+		{
+			get
+			{
+				return _ReceivedTxOuts2;
+			}
+			set
+			{
+				_ReceivedTxOuts2 = value;
+			}
+		}
+		byte[] _ReceivedTxOuts3;
+		public byte[] ReceivedTxOuts3
+		{
+			get
+			{
+				return _ReceivedTxOuts3;
+			}
+			set
+			{
+				_ReceivedTxOuts3 = value;
+			}
+		}
+
+		byte[] _ReceivedTxOuts4;
+		public byte[] ReceivedTxOuts4
+		{
+			get
+			{
+				return _ReceivedTxOuts4;
+			}
+			set
+			{
+				_ReceivedTxOuts4 = value;
+			}
+		}
+		internal List<TxOut> GetSentTxOuts()
+		{
+			return Helper.DeserializeList<TxOut>(SentTxOuts);
 		}
 	}
 }

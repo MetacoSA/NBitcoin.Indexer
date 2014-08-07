@@ -21,12 +21,29 @@ namespace NBitcoin.Indexer
 				blockIds.Add(new uint256(parts[1]));
 			}
 			BlockIds = blockIds.ToArray();
-			var bytes = entities.Select(e => e.Transaction).FirstOrDefault(e => e != null);
-			if(bytes != null)
+			var loadedEntity = entities.Where(e => e.Transaction != null).FirstOrDefault();
+			if(loadedEntity != null)
 			{
+				var bytes = loadedEntity.Transaction;
 				Transaction tx = new Transaction();
 				tx.ReadWrite(bytes);
 				Transaction = tx;
+
+				if(loadedEntity.SpentOutputs != null)
+				{
+					SpentTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.SpentOutputs).ToArray();
+				}
+			}
+
+		}
+
+		public Money Fees
+		{
+			get
+			{
+				if(SpentTxOuts == null || Transaction == null)
+					return null;
+				return SpentTxOuts.Select(o => o.Value).Sum() - Transaction.TotalOut;
 			}
 		}
 		public uint256[] BlockIds
@@ -43,6 +60,12 @@ namespace NBitcoin.Indexer
 		{
 			get;
 			internal set;
+		}
+
+		public TxOut[] SpentTxOuts
+		{
+			get;
+			set;
 		}
 	}
 }

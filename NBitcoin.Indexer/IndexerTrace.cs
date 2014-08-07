@@ -89,5 +89,10 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing balances on " + txid + " \r\n" + Utils.ExceptionToString(ex));
 		}
+
+		internal static void MissingTransactionFromDatabase(uint256 txid)
+		{
+			_Trace.TraceEvent(TraceEventType.Error, 0, "Missing transaction from index while fetching outputs " + txid);
+		}
 	}
 }

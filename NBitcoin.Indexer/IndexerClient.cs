@@ -52,10 +52,13 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-
+		public IndexedTransaction GetTransaction(bool lazyLoadSpentOutput, uint256 txId)
+		{
+			return GetTransactions(lazyLoadSpentOutput, new uint256[] { txId }).First();
+		}
 		public IndexedTransaction GetTransaction(uint256 txId)
 		{
-			return GetTransactions(txId).First();
+			return GetTransactions(true, new[] { txId }).First();
 		}
 
 		/// <summary>
@@ -63,7 +66,7 @@ namespace NBitcoin.Indexer
 		/// </summary>
 		/// <param name="txIds"></param>
 		/// <returns>All transactions (with null entries for unfound transactions)</returns>
-		public IndexedTransaction[] GetTransactions(params uint256[] txIds)
+		public IndexedTransaction[] GetTransactions(bool lazyLoadSpentOutput, uint256[] txIds)
 		{
 			var result = new IndexedTransaction[txIds.Length];
 			var queries = new TableQuery<TransactionEntity>[txIds.Length];
@@ -92,21 +95,58 @@ namespace NBitcoin.Indexer
 						result[i] = new IndexedTransaction(entities);
 						if(result[i].Transaction == null)
 						{
-							foreach(var blockId in result[i].BlockIds)
+							foreach(var block in result[i].BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
 							{
-								var block = GetBlock(blockId);
-								if(block != null)
+								result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
+								entities[0].Transaction = result[i].Transaction.ToBytes();
+								if(entities[0].Transaction.Length < 1024 * 64)
+									table.Execute(TableOperation.Merge(entities[0]));
+								break;
+							}
+						}
+
+						var needTxOut = result[i].SpentTxOuts == null && lazyLoadSpentOutput && result[i].Transaction != null;
+						if(needTxOut)
+						{
+							var tasks =
+								result[i].Transaction
+									 .Inputs
+									 .Select(txin => Task.Run(() =>
+									 {
+										 var fromTx = GetTransactions(false, new uint256[] { txin.PrevOut.Hash }).FirstOrDefault();
+										 if(fromTx == null)
+										 {
+											 IndexerTrace.MissingTransactionFromDatabase(txin.PrevOut.Hash);
+											 return null;
+										 }
+										 return fromTx.Transaction.Outputs[(int)txin.PrevOut.N];
+									 }))
+									 .ToArray();
+
+							Task.WaitAll(tasks);
+							if(tasks.All(t => t.Result != null))
+							{
+								var outputs = tasks.Select(t => t.Result).ToArray();
+								result[i].SpentTxOuts = outputs;
+								entities[0].SpentOutputs = Helper.SerializeList(outputs);
+								if(entities[0].SpentOutputs != null)
+									table.Execute(TableOperation.Merge(entities[0]));
+							}
+							else
+							{
+								if(result[i].Transaction.IsCoinBase)
 								{
-									result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
-									entities[0].Transaction = result[i].Transaction.ToBytes();
-									if(entities[0].Transaction.Length < 1024 * 64)
+									result[i].SpentTxOuts = new TxOut[0];
+									entities[0].SpentOutputs = Helper.SerializeList(new TxOut[0]);
+									if(entities[0].SpentOutputs != null)
 										table.Execute(TableOperation.Merge(entities[0]));
-									break;
 								}
 							}
-							if(result[i].Transaction == null)
-								result[i] = null;
+
 						}
+
+						if(result[i].Transaction == null)
+							result[i] = null;
 					}
 				});
 			}
@@ -144,17 +184,18 @@ namespace NBitcoin.Indexer
 				var entry = new AddressEntry();
 				entry.Address = address;
 				entry.TransactionId = new uint256(indexEntry.TransactionId);
-				if(indexEntry.Money == null)
+				if(indexEntry.ReceivedTxOuts == null)
 					if(LazyLoad(indexEntry))
 					{
 						table.Execute(TableOperation.Merge(indexEntry));
 					}
-				entry.BalanceChange = indexEntry.Money == null ? (Money)null : Money.Parse(indexEntry.Money);
 				entry.BlockIds = indexEntryGroup
 										.Where(s => s.BlockId != String.Empty)
 										.Select(s => new uint256(s.BlockId)).ToArray();
-				entry.Received = indexEntry.GetReceivedOutput();
+				entry.ReceivedTxOuts = indexEntry.GetReceivedTxOut();
 				entry.Spent = indexEntry.GetSentOutpoints();
+				entry.SpentTxOuts = indexEntry.GetSentTxOuts();
+				entry.BalanceChange = (indexEntry.SentTxOuts == null || indexEntry.ReceivedTxOuts == null) ? null : entry.ReceivedTxOuts.Select(t => t.Value).Sum() - entry.SpentTxOuts.Select(t => t.Value).Sum();
 				result.Add(entry);
 			}
 			return result.ToArray();
@@ -170,16 +211,15 @@ namespace NBitcoin.Indexer
 			Money total = Money.Zero;
 
 			var received = indexAddress.GetReceivedOutput();
-			total =
-				total +
-				indexedTx.Transaction.Outputs.Where((o, i) => received.Contains(i))
-				.Select(o => o.Value)
-				.Sum();
+			indexAddress.ReceivedTxOuts =
+							Helper.SerializeList(indexedTx.Transaction.Outputs.Where((o, i) => received.Contains(i))
+							.ToList());
 
 
 			Dictionary<uint256, Transaction> transactionsCache = new Dictionary<uint256, Transaction>();
 			transactionsCache.Add(indexedTx.Transaction.GetHash(), indexedTx.Transaction);
 
+			List<TxOut> sentTxOut = new List<TxOut>();
 			var sentOutputs = indexAddress.GetSentOutpoints();
 
 			foreach(var sent in sentOutputs)
@@ -187,7 +227,7 @@ namespace NBitcoin.Indexer
 				Transaction sourceTransaction = null;
 				if(!transactionsCache.TryGetValue(sent.Hash, out sourceTransaction))
 				{
-					var sourceIndexedTx = GetTransaction(sent.Hash);
+					var sourceIndexedTx = GetTransactions(false, new uint256[] { sent.Hash }).FirstOrDefault();
 					if(sourceIndexedTx != null)
 					{
 						sourceTransaction = sourceIndexedTx.Transaction;
@@ -198,12 +238,10 @@ namespace NBitcoin.Indexer
 				{
 					return false;
 				}
-				var sourceOutput = sourceTransaction.Outputs[(int)sent.N];
-				total = total - sourceOutput.Value;
+				sentTxOut.Add(sourceTransaction.Outputs[(int)sent.N]);
 			}
 
-
-			indexAddress.Money = total.ToString();
+			indexAddress.SentTxOuts = Helper.SerializeList(sentTxOut);
 			return true;
 		}
 		public AddressEntry[] GetEntries(KeyId keyId)
@@ -252,13 +290,19 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
+		Money _BalanceChange;
 		public Money BalanceChange
 		{
 			get;
 			set;
 		}
 
-		public List<int> Received
+		public List<TxOut> ReceivedTxOuts
+		{
+			get;
+			set;
+		}
+		public List<TxOut> SpentTxOuts
 		{
 			get;
 			set;

@@ -41,6 +41,24 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
+		[Fact]
+		public void CanSpreadBytes()
+		{
+			var actual = Helper.Concat(new byte[] { 1, 2, 3 }, new byte[] { 4, 5, 6 }, null, null);
+			var expected = new byte[] { 1, 2, 3, 4, 5, 6 };
+			Assert.True(actual.SequenceEqual(expected));
+
+			byte[] a = null;
+			byte[] b = null;
+			byte[] c = null;
+			byte[] d = null;
+
+			Helper.Spread(new byte[] { 1, 2, 3, 4, 5, 6, 7 }, 3, ref a, ref b, ref c, ref d);
+			Assert.True(a.SequenceEqual(new byte[] { 1, 2, 3 }));
+			Assert.True(b.SequenceEqual(new byte[] { 4, 5, 6 }));
+			Assert.True(c.SequenceEqual(new byte[] { 7 }));
+			Assert.Null(d);
+		}
 
 		TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
 		[Fact]
@@ -158,6 +176,47 @@ namespace NBitcoin.Indexer.Tests
 
 				entries = tester.Client.GetEntries(sender);
 				AssertContainsMoney(null, entries);
+
+				var b4 = new Block()
+				{
+					Header =
+					{
+						Nonce = RandomUtils.GetUInt32()
+					},
+					Transactions =
+					{
+						new Transaction()
+						{
+							Inputs = 
+							{
+								new TxIn(new OutPoint(b3.Transactions[0].GetHash(),0))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,receiver)
+								}
+							},
+							Outputs = 
+							{
+								new TxOut("1.5",sender.GetAddress(Network.Main)),
+							}
+						}
+					}
+				};
+				store.Append(b4);
+
+				tester.Importer.StartBlockImportToAzure();
+				tester.Importer.StartTransactionImportToAzure();
+				tester.Importer.StartAddressImportToAzure();
+
+				var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
+				Assert.Null(tx.SpentTxOuts);
+
+				tx = tester.Client.GetTransaction(true, b4.Transactions[0].GetHash());
+				Assert.NotNull(tx.SpentTxOuts);
+				Assert.Equal(Money.Parse("0.60"), tx.Fees);
+				Assert.True(tx.SpentTxOuts[0].ToBytes().SequenceEqual(b3.Transactions[0].Outputs[0].ToBytes()));
+				tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
+				Assert.NotNull(tx);
 			}
 		}
 

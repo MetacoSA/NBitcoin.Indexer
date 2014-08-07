@@ -41,6 +41,12 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
+		public byte[] SpentOutputs
+		{
+			get;
+			set;
+		}
+
 		uint256 _txId;
 		ushort? _Key;
 		[IgnoreProperty]
@@ -72,5 +78,7 @@ namespace NBitcoin.Indexer
 		{
 			return PartitionKey + " " + RowKey;
 		}
+
+		
 	}
 }
