@@ -193,7 +193,9 @@ namespace NBitcoin.Indexer
 										.Where(s => s.BlockId != String.Empty)
 										.Select(s => new uint256(s.BlockId)).ToArray();
 				entry.ReceivedTxOuts = indexEntry.GetReceivedTxOut();
-				entry.Spent = indexEntry.GetSentOutpoints();
+				entry.ReceivedTxInIndex = indexEntry.GetReceivedOutput();
+
+				entry.SpentOutpoints = indexEntry.GetSentOutpoints();
 				entry.SpentTxOuts = indexEntry.GetSentTxOuts();
 				entry.BalanceChange = (indexEntry.SentTxOuts == null || indexEntry.ReceivedTxOuts == null) ? null : entry.ReceivedTxOuts.Select(t => t.Value).Sum() - entry.SpentTxOuts.Select(t => t.Value).Sum();
 				result.Add(entry);
@@ -278,7 +280,7 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
-		public List<OutPoint> Spent
+		public List<OutPoint> SpentOutpoints
 		{
 			get;
 			set;
@@ -290,7 +292,6 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
-		Money _BalanceChange;
 		public Money BalanceChange
 		{
 			get;
@@ -311,6 +312,19 @@ namespace NBitcoin.Indexer
 		public override string ToString()
 		{
 			return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
+		}
+
+		public IEnumerable<OutPoint> ReceivedOutpoints
+		{
+			get
+			{
+				return ReceivedTxInIndex.Select(i => new OutPoint(TransactionId, i));
+			}
+		}
+		public List<int> ReceivedTxInIndex
+		{
+			get;
+			set;
 		}
 	}
 }

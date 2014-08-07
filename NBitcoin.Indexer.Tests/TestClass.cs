@@ -126,13 +126,14 @@ namespace NBitcoin.Indexer.Tests
 				var entries = tester.Client.GetEntries(sender);
 				Assert.Equal(2, entries.Length);
 				var entry = AssertContainsMoney("10.0", entries);
+				Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedOutpoints));
 				Assert.Equal(entry.BlockIds[0], b1.GetHash());
 
 				entry = AssertContainsMoney("-2.0", entries);
-				Assert.NotNull(entry.Spent);
-				Assert.Equal(1, entry.Spent.Count);
-				Assert.Equal(b1.Transactions[0].GetHash(), entry.Spent[0].Hash);
-				Assert.Equal(0, (int)entry.Spent[0].N);
+				Assert.NotNull(entry.SpentOutpoints);
+				Assert.Equal(1, entry.SpentOutpoints.Count);
+				Assert.Equal(b1.Transactions[0].GetHash(), entry.SpentOutpoints[0].Hash);
+				Assert.Equal(0, (int)entry.SpentOutpoints[0].N);
 
 				entries = tester.Client.GetEntries(receiver);
 				Assert.Equal(1, entries.Length);
@@ -214,6 +215,7 @@ namespace NBitcoin.Indexer.Tests
 				tx = tester.Client.GetTransaction(true, b4.Transactions[0].GetHash());
 				Assert.NotNull(tx.SpentTxOuts);
 				Assert.Equal(Money.Parse("0.60"), tx.Fees);
+
 				Assert.True(tx.SpentTxOuts[0].ToBytes().SequenceEqual(b3.Transactions[0].Outputs[0].ToBytes()));
 				tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
 				Assert.NotNull(tx);
