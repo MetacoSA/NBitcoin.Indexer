@@ -114,14 +114,14 @@ namespace NBitcoin.Indexer
 		public void StartAddressImportToAzure()
 		{
 			SetThrottling();
-			BlockingCollection<IndexedAddressEntry[]> indexedEntries = new BlockingCollection<IndexedAddressEntry[]>(100);
+			BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
 			var stop = new CancellationTokenSource();
 
 			var tasks = CreateTasks(indexedEntries, (entries) => SendToAzure(entries, Configuration.GetBalanceTable()), stop.Token, 30);
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetBalanceTable().CreateIfNotExists();
-				var buckets = new MultiValueDictionary<string, IndexedAddressEntry>();
+				var buckets = new MultiValueDictionary<string, AddressEntry.Entity>();
 
 				var storedBlocks = Enumerate("balances");
 				foreach(var block in storedBlocks)
@@ -132,7 +132,7 @@ namespace NBitcoin.Indexer
 						var txId = tx.GetHash().ToString();
 						try
 						{
-							Dictionary<string, IndexedAddressEntry> entryByAddress = new Dictionary<string, IndexedAddressEntry>();
+							Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
 							foreach(var input in tx.Inputs)
 							{
 								if(tx.IsCoinBase)
@@ -140,10 +140,10 @@ namespace NBitcoin.Indexer
 								var signer = GetSigner(input.ScriptSig);
 								if(signer != null)
 								{
-									IndexedAddressEntry entry = null;
+									AddressEntry.Entity entry = null;
 									if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
 									{
-										entry = new IndexedAddressEntry(txId, signer, blockId);
+										entry = new AddressEntry.Entity(txId, signer, blockId);
 										entryByAddress.Add(signer.ToString(), entry);
 									}
 									entry.AddSend(input.PrevOut);
@@ -156,10 +156,10 @@ namespace NBitcoin.Indexer
 								var receiver = GetReciever(output.ScriptPubKey);
 								if(receiver != null)
 								{
-									IndexedAddressEntry entry = null;
+									AddressEntry.Entity entry = null;
 									if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
 									{
-										entry = new IndexedAddressEntry(txId, receiver, blockId);
+										entry = new AddressEntry.Entity(txId, receiver, blockId);
 										entryByAddress.Add(receiver.ToString(), entry);
 									}
 									entry.AddReceive(i);
@@ -181,9 +181,9 @@ namespace NBitcoin.Indexer
 
 							if(storedBlocks.NeedSave)
 							{
-								foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
+								foreach(var kv in buckets.AsLookup().ToArray())
 								{
-									indexedEntries.Add(kv.Value.ToArray());
+									indexedEntries.Add(kv.ToArray());
 								}
 								buckets.Clear();
 								WaitProcessed(indexedEntries);
@@ -252,7 +252,7 @@ namespace NBitcoin.Indexer
 		{
 			SetThrottling();
 
-			BlockingCollection<TransactionEntity[]> transactions = new BlockingCollection<TransactionEntity[]>(20);
+			BlockingCollection<IndexedTransactionEntry.Entity[]> transactions = new BlockingCollection<IndexedTransactionEntry.Entity[]>(20);
 
 			var stop = new CancellationTokenSource();
 			var tasks = CreateTasks(transactions, (txs) => SendToAzure(txs, Configuration.GetTransactionTable()), stop.Token, 30);
@@ -260,13 +260,13 @@ namespace NBitcoin.Indexer
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetTransactionTable().CreateIfNotExists();
-				var buckets = new MultiValueDictionary<ushort, TransactionEntity>();
+				var buckets = new MultiValueDictionary<ushort, IndexedTransactionEntry.Entity>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
 				{
 					foreach(var transaction in block.Item.Transactions)
 					{
-						var indexed = new TransactionEntity(transaction, block.Item.Header.GetHash());
+						var indexed = new IndexedTransactionEntry.Entity(transaction, block.Item.Header.GetHash());
 						buckets.Add(indexed.Key, indexed);
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
@@ -296,9 +296,9 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		private void PushTransactions(MultiValueDictionary<ushort, TransactionEntity> buckets,
-										IEnumerable<TransactionEntity> indexedTransactions,
-									BlockingCollection<TransactionEntity[]> transactions)
+		private void PushTransactions(MultiValueDictionary<ushort, IndexedTransactionEntry.Entity> buckets,
+										IEnumerable<IndexedTransactionEntry.Entity> indexedTransactions,
+									BlockingCollection<IndexedTransactionEntry.Entity[]> transactions)
 		{
 			var array = indexedTransactions.ToArray();
 			transactions.Add(array);
