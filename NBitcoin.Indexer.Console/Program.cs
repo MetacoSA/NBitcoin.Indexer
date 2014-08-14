@@ -26,6 +26,10 @@ namespace NBitcoin.Indexer.Console
 				{
 					importer.StartBlockImportToAzure();
 				}
+				if(options.ImportChainInAzure)
+				{
+					importer.ImportMainChain();
+				}
 				if(options.ImportTransactionsInAzure)
 				{
 					importer.StartTransactionImportToAzure();

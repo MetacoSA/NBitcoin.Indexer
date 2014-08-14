@@ -74,6 +74,13 @@ namespace NBitcoin.Indexer.Console
 			set;
 		}
 
+		[Option('m', "ImportMainChainInAzure", DefaultValue = false, Required = false, HelpText = "Import the current main chain into azure table")]
+		public bool ImportChainInAzure
+		{
+			get;
+			set;
+		}
+
 		[Option('u', "UploadThreadCount", DefaultValue = -1, Required = false, HelpText = "Number of simultaneous uploads (default value is 15 for blocks upload, 30 for transactions upload)")]
 		public int ThreadCount
 		{
