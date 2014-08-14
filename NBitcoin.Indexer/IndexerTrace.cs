@@ -125,5 +125,14 @@ namespace NBitcoin.Indexer
 		{
 			return ToString(chainedBlock.HashBlock, chainedBlock.Height);
 		}
+
+		internal static void RemainingBlockChain(int height, int maxHeight)
+		{
+			int remaining = height - maxHeight;
+			if(remaining % 1000 == 0 && remaining != 0)
+			{
+				_Trace.TraceInformation("Remaining chain block to index : " + remaining + " (" + height + "/" + maxHeight + ")");
+			}
+		}
 	}
 }

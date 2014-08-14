@@ -423,6 +423,7 @@ namespace NBitcoin.Indexer
 						batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
 					}
 					lastPartition = partition;
+					IndexerTrace.RemainingBlockChain(height, chain.Tip.Height);
 				}
 				if(batch.Count > 0)
 				{
