@@ -17,30 +17,30 @@ namespace NBitcoin.Indexer.Console
 				System.Console.WriteLine(options.GetUsage());
 			if(Parser.Default.ParseArguments(args, options))
 			{
-				var importer = AzureIndexer.CreateBlockImporter();
-				importer.NoSave = options.NoSave;
-				importer.FromBlk = options.FromBlk;
-				importer.BlkCount = options.BlkCount;
-				importer.TaskCount = options.ThreadCount;
-				if(options.ImportBlocksInAzure)
+				var indexer = AzureIndexer.CreateIndexer();
+				indexer.NoSave = options.NoSave;
+				indexer.FromBlk = options.FromBlk;
+				indexer.BlkCount = options.BlkCount;
+				indexer.TaskCount = options.ThreadCount;
+				if(options.IndexBlocks)
 				{
-					importer.StartBlockImportToAzure();
+					indexer.IndexBlocks();
 				}
-				if(options.ImportChainInAzure)
+				if(options.IndexChain)
 				{
-					importer.ImportMainChain();
+					indexer.IndexMainChain();
 				}
-				if(options.ImportTransactionsInAzure)
+				if(options.IndexTransactions)
 				{
-					importer.StartTransactionImportToAzure();
+					indexer.IndexTransactions();
 				}
-				if(options.ImportAddressesInAzure)
+				if(options.IndexAddresses)
 				{
-					importer.StartAddressImportToAzure();
+					indexer.IndexAddresses();
 				}
 				if(options.CountBlkFiles)
 				{
-					var dir = new DirectoryInfo(importer.Configuration.BlockDirectory);
+					var dir = new DirectoryInfo(indexer.Configuration.BlockDirectory);
 					if(!dir.Exists)
 					{
 						System.Console.WriteLine(dir.FullName + " does not exists");

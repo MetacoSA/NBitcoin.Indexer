@@ -48,7 +48,7 @@ namespace NBitcoin.Indexer
 			return new BlockStore(BlockDirectory, Network.Main);
 		}
 
-		public AzureIndexer CreateImporter()
+		public AzureIndexer CreateIndexer()
 		{
 			return new AzureIndexer(this);
 		}
@@ -57,12 +57,12 @@ namespace NBitcoin.Indexer
 
 	public class AzureIndexer
 	{
-		public static AzureIndexer CreateBlockImporter(string progressFile = null)
+		public static AzureIndexer CreateIndexer(string progressFile = null)
 		{
 			var config = IndexerServerConfiguration.FromConfiguration();
 			if(progressFile != null)
 				config.ProgressFile = progressFile;
-			return config.CreateImporter();
+			return config.CreateIndexer();
 		}
 
 
@@ -111,7 +111,7 @@ namespace NBitcoin.Indexer
 			return tasks;
 		}
 
-		public void StartAddressImportToAzure()
+		public void IndexAddresses()
 		{
 			SetThrottling();
 			BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
@@ -248,7 +248,7 @@ namespace NBitcoin.Indexer
 		}
 
 
-		public void StartTransactionImportToAzure()
+		public void IndexTransactions()
 		{
 			SetThrottling();
 
@@ -341,7 +341,7 @@ namespace NBitcoin.Indexer
 		}
 
 
-		public void StartBlockImportToAzure()
+		public void IndexBlocks()
 		{
 			SetThrottling();
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
@@ -368,7 +368,7 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public void ImportMainChain()
+		public void IndexMainChain()
 		{
 			SetThrottling();
 			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);

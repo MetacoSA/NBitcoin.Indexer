@@ -9,10 +9,10 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer.Tests
 {
-	class ImporterTester : IDisposable
+	class IndexerTester : IDisposable
 	{
 		private readonly AzureIndexer _Importer;
-		public AzureIndexer Importer
+		public AzureIndexer Indexer
 		{
 			get
 			{
@@ -20,7 +20,7 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 		string _Folder;
-		public ImporterTester(string folder)
+		public IndexerTester(string folder)
 		{
 			TestUtils.EnsureNew(folder);
 			var config = IndexerServerConfiguration.FromConfiguration();
@@ -29,7 +29,7 @@ namespace NBitcoin.Indexer.Tests
 			config.TransactionTable = folder;
 			config.Container = folder;
 
-			_Importer = config.CreateImporter();
+			_Importer = config.CreateIndexer();
 
 
 			foreach(var table in config.EnumerateTables())
@@ -92,11 +92,11 @@ namespace NBitcoin.Indexer.Tests
 		{
 			if(Client.GetBlock(KnownBlockId) == null)
 			{
-				Importer.NoSave = true;
-				Importer.TaskCount = 15;
-				Importer.BlkCount = 1;
-				Importer.FromBlk = 0;
-				Importer.StartBlockImportToAzure();
+				Indexer.NoSave = true;
+				Indexer.TaskCount = 15;
+				Indexer.BlkCount = 1;
+				Indexer.FromBlk = 0;
+				Indexer.IndexBlocks();
 			}
 		}
 
@@ -104,11 +104,11 @@ namespace NBitcoin.Indexer.Tests
 		{
 			if(Client.GetTransaction(KnownTransactionId) == null)
 			{
-				Importer.NoSave = true;
-				Importer.TaskCount = 15;
-				Importer.BlkCount = 1;
-				Importer.FromBlk = 0;
-				Importer.StartTransactionImportToAzure();
+				Indexer.NoSave = true;
+				Indexer.TaskCount = 15;
+				Indexer.BlkCount = 1;
+				Indexer.FromBlk = 0;
+				Indexer.IndexTransactions();
 			}
 		}
 
@@ -121,7 +121,7 @@ namespace NBitcoin.Indexer.Tests
 			{
 				if(_Client == null)
 				{
-					_Client = Importer.Configuration.CreateIndexerClient();
+					_Client = Indexer.Configuration.CreateIndexerClient();
 				}
 				return _Client;
 			}

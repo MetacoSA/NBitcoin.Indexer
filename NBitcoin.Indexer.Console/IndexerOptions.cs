@@ -9,8 +9,8 @@ namespace NBitcoin.Indexer.Console
 {
 	class IndexerOptions
 	{
-		[Option('b', "ImportBlocksInAzure", DefaultValue = false, Required = false, HelpText = "Import blocks from data directory speicified in LocalSettings into azure container")]
-		public bool ImportBlocksInAzure
+		[Option('b', "IndexBlocks", DefaultValue = false, Required = false, HelpText = "Index blocks into azure blob container")]
+		public bool IndexBlocks
 		{
 			get;
 			set;
@@ -60,22 +60,22 @@ namespace NBitcoin.Indexer.Console
 			set;
 		}
 
-		[Option('t', "ImportTransactionsInAzure", DefaultValue = false, Required = false, HelpText = "Import transactions from data directory specified in LocalSettings into azure table")]
-		public bool ImportTransactionsInAzure
+		[Option('t', "IndexTransactions", DefaultValue = false, Required = false, HelpText = "Index transactions into azure table")]
+		public bool IndexTransactions
 		{
 			get;
 			set;
 		}
 
-		[Option('a', "ImportAddressesInAzure", DefaultValue = false, Required = false, HelpText = "Import bitcoin addresses from data directory specified in LocalSettings into azure table")]
-		public bool ImportAddressesInAzure
+		[Option('a', "IndexAddresses", DefaultValue = false, Required = false, HelpText = "Index bitcoin addresses into azure table")]
+		public bool IndexAddresses
 		{
 			get;
 			set;
 		}
 
-		[Option('m', "ImportMainChainInAzure", DefaultValue = false, Required = false, HelpText = "Import the current main chain into azure table")]
-		public bool ImportChainInAzure
+		[Option('m', "IndexMainChain", DefaultValue = false, Required = false, HelpText = "Index the main chain into azure table")]
+		public bool IndexChain
 		{
 			get;
 			set;

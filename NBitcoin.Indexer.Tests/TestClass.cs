@@ -22,10 +22,10 @@ namespace NBitcoin.Indexer.Tests
 		{
 			using(var tester = CreateTester())
 			{
-				tester.Importer.TaskCount = 15;
-				tester.Importer.BlkCount = 1;
-				tester.Importer.FromBlk = 0;
-				tester.Importer.StartBlockImportToAzure();
+				tester.Indexer.TaskCount = 15;
+				tester.Indexer.BlkCount = 1;
+				tester.Indexer.FromBlk = 0;
+				tester.Indexer.IndexBlocks();
 			}
 		}
 		[Fact]
@@ -34,10 +34,10 @@ namespace NBitcoin.Indexer.Tests
 			using(var tester = CreateTester())
 			{
 
-				tester.Importer.TaskCount = 15;
-				tester.Importer.BlkCount = 1;
-				tester.Importer.FromBlk = 0;
-				tester.Importer.StartTransactionImportToAzure();
+				tester.Indexer.TaskCount = 15;
+				tester.Indexer.BlkCount = 1;
+				tester.Indexer.FromBlk = 0;
+				tester.Indexer.IndexTransactions();
 			}
 		}
 
@@ -66,14 +66,14 @@ namespace NBitcoin.Indexer.Tests
 			using(var tester = CreateTester())
 			{
 				var store = tester.CreateLocalBlockStore();
-				tester.Importer.Configuration.BlockDirectory = store.Folder.FullName;
+				tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
 				var chain = new Chain(Network.Main);
 
 				BlockGenerator generator = new BlockGenerator(store);
 				generator.Generate();
 				var fork = generator.Generate();
 				var firstTip = generator.Generate();
-				tester.Importer.ImportMainChain();
+				tester.Indexer.IndexMainChain();
 
 				var result = tester.Client.GetChainChangesUntilFork(chain, true).ToList();
 				Assert.Equal(result[0].BlockId, firstTip.GetHash());
@@ -96,7 +96,7 @@ namespace NBitcoin.Indexer.Tests
 				generator.Generate();
 				var secondTip = generator.Generate();
 
-				tester.Importer.ImportMainChain();
+				tester.Indexer.IndexMainChain();
 				Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
 
 				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
@@ -169,12 +169,12 @@ namespace NBitcoin.Indexer.Tests
 				};
 				store.Append(b2);
 
-				tester.Importer.Configuration.BlockDirectory = store.Folder.FullName;
-				tester.Importer.TaskCount = 15;
+				tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
+				tester.Indexer.TaskCount = 15;
 
-				tester.Importer.StartBlockImportToAzure();
-				tester.Importer.StartTransactionImportToAzure();
-				tester.Importer.StartAddressImportToAzure();
+				tester.Indexer.IndexBlocks();
+				tester.Indexer.IndexTransactions();
+				tester.Indexer.IndexAddresses();
 
 				var entries = tester.Client.GetEntries(sender);
 				Assert.Equal(2, entries.Length);
@@ -222,9 +222,9 @@ namespace NBitcoin.Indexer.Tests
 				};
 				store.Append(b3);
 
-				tester.Importer.StartBlockImportToAzure();
-				tester.Importer.StartTransactionImportToAzure();
-				tester.Importer.StartAddressImportToAzure();
+				tester.Indexer.IndexBlocks();
+				tester.Indexer.IndexTransactions();
+				tester.Indexer.IndexAddresses();
 
 				entries = tester.Client.GetEntries(receiver);
 				AssertContainsMoney("2.1", entries);
@@ -260,9 +260,9 @@ namespace NBitcoin.Indexer.Tests
 				};
 				store.Append(b4);
 
-				tester.Importer.StartBlockImportToAzure();
-				tester.Importer.StartTransactionImportToAzure();
-				tester.Importer.StartAddressImportToAzure();
+				tester.Indexer.IndexBlocks();
+				tester.Indexer.IndexTransactions();
+				tester.Indexer.IndexAddresses();
 
 				var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
 				Assert.Null(tx.SpentTxOuts);
@@ -318,9 +318,9 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
-		private ImporterTester CreateTester([CallerMemberName]string folder = null)
+		private IndexerTester CreateTester([CallerMemberName]string folder = null)
 		{
-			return new ImporterTester(folder);
+			return new IndexerTester(folder);
 		}
 	}
 }
