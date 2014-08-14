@@ -102,6 +102,15 @@ namespace NBitcoin.Indexer.Tests
 				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
 				result.UpdateChain(chain);
 				Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
+
+				var ultimateTip = generator.Generate(200);
+				tester.Indexer.IndexMainChain();
+				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+
+				Assert.Equal(ultimateTip.Header.GetHash(), result[0].BlockId);
+				Assert.Equal(tester.Client.GetBestBlock().BlockId, result[0].BlockId);
+				result.UpdateChain(chain);
+				Assert.Equal(ultimateTip.Header.GetHash(), chain.Tip.HashBlock);
 			}
 		}
 

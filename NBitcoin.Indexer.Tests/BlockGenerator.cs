@@ -33,5 +33,15 @@ namespace NBitcoin.Indexer.Tests
 				return _Chain;
 			}
 		}
+
+		public Block Generate(int count)
+		{
+			Block last = null;
+			for(int i = 0 ; i < count ; i++)
+			{
+				last = Generate();
+			}
+			return last;
+		}
 	}
 }

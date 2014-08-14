@@ -49,7 +49,7 @@ namespace NBitcoin.Indexer
 
 			public static string GetPartitionKey(int height)
 			{
-				return HeightToString(height % 100);
+				return HeightToString(height / 100);
 			}
 			public byte[] BlockId
 			{
