@@ -198,9 +198,9 @@ namespace NBitcoin.Indexer
 					}
 				}
 
-				foreach(var kv in ((IEnumerable<KeyValuePair<string, ICollection<IndexedAddressEntry>>>)buckets).ToArray())
+				foreach(var kv in buckets.AsLookup().ToArray())
 				{
-					indexedEntries.Add(kv.Value.ToArray());
+					indexedEntries.Add(kv.ToArray());
 				}
 				buckets.Clear();
 				WaitProcessed(indexedEntries);
