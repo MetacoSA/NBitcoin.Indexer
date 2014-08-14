@@ -121,7 +121,7 @@ namespace NBitcoin.Indexer
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetBalanceTable().CreateIfNotExists();
-				var buckets = new MultiDictionary<string, IndexedAddressEntry>();
+				var buckets = new MultiValueDictionary<string, IndexedAddressEntry>();
 
 				var storedBlocks = Enumerate("balances");
 				foreach(var block in storedBlocks)
@@ -169,9 +169,9 @@ namespace NBitcoin.Indexer
 
 							foreach(var kv in entryByAddress)
 							{
-								var bucket = buckets[kv.Value.PartitionKey];
 								kv.Value.Flush();
-								bucket.Add(kv.Value);
+								buckets.Add(kv.Value.PartitionKey, kv.Value);
+								var bucket = buckets[kv.Value.PartitionKey];
 								if(bucket.Count == 100)
 								{
 									indexedEntries.Add(bucket.ToArray());
@@ -260,7 +260,7 @@ namespace NBitcoin.Indexer
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetTransactionTable().CreateIfNotExists();
-				var buckets = new MultiDictionary<ushort, TransactionEntity>();
+				var buckets = new MultiValueDictionary<ushort, TransactionEntity>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
 				{
@@ -275,9 +275,9 @@ namespace NBitcoin.Indexer
 						}
 						if(storedBlocks.NeedSave)
 						{
-							foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<TransactionEntity>>>)buckets).ToArray())
+							foreach(var kv in buckets.AsLookup().ToArray())
 							{
-								PushTransactions(buckets, kv.Value, transactions);
+								PushTransactions(buckets, kv, transactions);
 							}
 							WaitProcessed(transactions);
 							storedBlocks.SaveCheckpoint();
@@ -285,9 +285,9 @@ namespace NBitcoin.Indexer
 					}
 				}
 
-				foreach(var kv in ((IEnumerable<KeyValuePair<ushort, ICollection<TransactionEntity>>>)buckets).ToArray())
+				foreach(var kv in buckets.AsLookup().ToArray())
 				{
-					PushTransactions(buckets, kv.Value, transactions);
+					PushTransactions(buckets, kv, transactions);
 				}
 				WaitProcessed(transactions);
 				stop.Cancel();
@@ -296,8 +296,8 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		private void PushTransactions(MultiDictionary<ushort, TransactionEntity> buckets,
-										ICollection<TransactionEntity> indexedTransactions,
+		private void PushTransactions(MultiValueDictionary<ushort, TransactionEntity> buckets,
+										IEnumerable<TransactionEntity> indexedTransactions,
 									BlockingCollection<TransactionEntity[]> transactions)
 		{
 			var array = indexedTransactions.ToArray();
@@ -365,6 +365,69 @@ namespace NBitcoin.Indexer
 				stop.Cancel();
 				Task.WaitAll(tasks);
 				storedBlocks.SaveCheckpoint();
+			}
+		}
+
+		public void ImportMainChain()
+		{
+			SetThrottling();
+			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
+			var stop = new CancellationTokenSource();
+			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 15);
+
+			using(IndexerTrace.NewCorrelation("Import Main chain").Open())
+			{
+				var table = Configuration.GetChainTable();
+				table.CreateIfNotExists();
+				var store = Configuration.CreateStoreBlock();
+				var chain = store.BuildChain();
+				IndexerTrace.LocalMainChainTip(chain.Tip.HashBlock, chain.Tip.Height);
+				var client = Configuration.CreateIndexerClient();
+				var changes = client.GetChainChangesUntilFork(chain, true).ToList();
+
+				var height = 0;
+				if(changes.Count != 0)
+				{
+					IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
+					if(changes[0].Height > chain.Tip.Height)
+					{
+						IndexerTrace.LocalMainChainIsLate();
+						return;
+					}
+					height = changes[changes.Count - 1].Height - 1;
+				}
+
+				IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
+
+
+				string lastPartition = null;
+				TableBatchOperation batch = new TableBatchOperation();
+				for(int i = height ; i <= chain.Tip.Height ; i++)
+				{
+					var block = chain.GetBlock(i);
+					var entry = new ChainChangeEntry()
+					{
+						BlockId = block.HashBlock,
+						Header = block.Header,
+						Height = block.Height
+					};
+					var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
+					if((partition == lastPartition || lastPartition == null) && batch.Count < 100)
+					{
+						batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+					}
+					else
+					{
+						table.ExecuteBatch(batch);
+						batch = new TableBatchOperation();
+						batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+					}
+					lastPartition = partition;
+				}
+				if(batch.Count > 0)
+				{
+					table.ExecuteBatch(batch);
+				}
 			}
 		}
 
@@ -467,5 +530,7 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
+
+
 	}
 }

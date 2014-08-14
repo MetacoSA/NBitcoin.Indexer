@@ -60,6 +60,57 @@ namespace NBitcoin.Indexer.Tests
 			Assert.Null(d);
 		}
 
+		[Fact]
+		public void CanImportMainChain()
+		{
+			using(var tester = CreateTester())
+			{
+				var store = tester.CreateLocalBlockStore();
+				tester.Importer.Configuration.BlockDirectory = store.Folder.FullName;
+				var chain = new Chain(Network.Main);
+
+				BlockGenerator generator = new BlockGenerator(store);
+				generator.Generate();
+				var fork = generator.Generate();
+				var firstTip = generator.Generate();
+				tester.Importer.ImportMainChain();
+
+				var result = tester.Client.GetChainChangesUntilFork(chain, true).ToList();
+				Assert.Equal(result[0].BlockId, firstTip.GetHash());
+				Assert.Equal(result.Last().BlockId, chain.Tip.HashBlock);
+				Assert.Equal(result.Count, 4);
+
+				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+				Assert.Equal(result[0].BlockId, firstTip.GetHash());
+				Assert.NotEqual(result.Last().BlockId, chain.Tip.HashBlock);
+				Assert.Equal(result.Count, 3);
+
+				Assert.Equal(firstTip.GetHash(), tester.Client.GetBestBlock().BlockId);
+
+				result.UpdateChain(chain);
+
+				Assert.Equal(firstTip.GetHash(), chain.Tip.HashBlock);
+
+				generator.Chain.SetTip(fork.Header);
+				generator.Generate();
+				generator.Generate();
+				var secondTip = generator.Generate();
+
+				tester.Importer.ImportMainChain();
+				Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
+
+				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+				result.UpdateChain(chain);
+				Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
+			}
+		}
+
+		public List<ChainChange> SeeChainChanges(Chain chain)
+		{
+			chain.Changes.Rewind();
+			return chain.Changes.Enumerate().ToList();
+		}
+
 		TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
 		[Fact]
 		public void CanUploadAddressesToAzure()
@@ -73,7 +124,8 @@ namespace NBitcoin.Indexer.Tests
 				{
 					Header =
 					{
-						Nonce = RandomUtils.GetUInt32()
+						Nonce = RandomUtils.GetUInt32(),
+						HashPrevBlock = Network.Main.GetGenesis().GetHash()
 					},
 					Transactions =
 					{
@@ -92,7 +144,8 @@ namespace NBitcoin.Indexer.Tests
 				{
 					Header =
 					{
-						Nonce = RandomUtils.GetUInt32()
+						Nonce = RandomUtils.GetUInt32(),
+						HashPrevBlock = b1.GetHash()
 					},
 					Transactions =
 					{
@@ -144,7 +197,8 @@ namespace NBitcoin.Indexer.Tests
 				{
 					Header =
 					{
-						Nonce = RandomUtils.GetUInt32()
+						Nonce = RandomUtils.GetUInt32(),
+						HashPrevBlock = b2.GetHash()
 					},
 					Transactions =
 					{
@@ -182,7 +236,8 @@ namespace NBitcoin.Indexer.Tests
 				{
 					Header =
 					{
-						Nonce = RandomUtils.GetUInt32()
+						Nonce = RandomUtils.GetUInt32(),
+						HashPrevBlock = b3.GetHash(),
 					},
 					Transactions =
 					{

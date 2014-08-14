@@ -30,7 +30,12 @@ namespace NBitcoin.Indexer.Tests
 			config.Container = folder;
 
 			_Importer = config.CreateImporter();
-			GetTransactionTable().CreateIfNotExists();
+
+
+			foreach(var table in config.EnumerateTables())
+			{
+				table.CreateIfNotExists();
+			}
 
 			config.GetBlocksContainer().CreateIfNotExists();
 			_Folder = folder;
@@ -50,13 +55,15 @@ namespace NBitcoin.Indexer.Tests
 		{
 			if(!Cached)
 			{
-				var table = GetTransactionTable();
-				var entities = table.ExecuteQuery(new TableQuery()).ToList();
-				Parallel.ForEach(entities, e =>
+				foreach(var table in _Importer.Configuration.EnumerateTables())
 				{
-					table.Execute(TableOperation.Delete(e));
-				});
-
+					table.CreateIfNotExists();
+					var entities = table.ExecuteQuery(new TableQuery()).ToList();
+					Parallel.ForEach(entities, e =>
+					{
+						table.Execute(TableOperation.Delete(e));
+					});
+				}
 				var client = _Importer.Configuration.CreateBlobClient();
 				var container = client.GetContainerReference(_Importer.Configuration.Container);
 				var blobs = container.ListBlobs().ToList();
@@ -68,13 +75,6 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
-		private CloudTable GetTransactionTable()
-		{
-			var client = _Importer.Configuration.CreateTableClient();
-			var table = client.GetTableReference(_Importer.Configuration.TransactionTable);
-			table.CreateIfNotExists();
-			return table;
-		}
 
 		#endregion
 
@@ -128,7 +128,5 @@ namespace NBitcoin.Indexer.Tests
 		}
 
 
-
-		
 	}
 }

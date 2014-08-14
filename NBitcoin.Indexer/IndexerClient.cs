@@ -29,6 +29,7 @@ namespace NBitcoin.Indexer
 			_Configuration = configuration;
 		}
 
+
 		public Block GetBlock(uint256 blockId)
 		{
 			var ms = new MemoryStream();
@@ -157,6 +158,36 @@ namespace NBitcoin.Indexer
 			return result;
 		}
 
+		public ChainChangeEntry GetBestBlock()
+		{
+			var table = Configuration.GetChainTable();
+			var query = new TableQuery<ChainChangeEntry.Entity>()
+						.Take(1);
+			var entity = table.ExecuteQuery<ChainChangeEntry.Entity>(query).FirstOrDefault();
+			if(entity == null)
+				return null;
+			return entity.ToObject();
+		}
+
+		public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(Chain chain, bool forkIncluded)
+		{
+			var table = Configuration.GetChainTable();
+			var query = new TableQuery<ChainChangeEntry.Entity>();
+			List<ChainChangeEntry> blocks = new List<ChainChangeEntry>();
+			foreach(var block in table.ExecuteQuery(query).Select(e => e.ToObject()))
+			{
+				var blockChained = chain.GetBlock(block.BlockId);
+				if(blockChained != null)
+				{
+					if(forkIncluded)
+						yield return block;
+					break;
+				}
+				else
+					yield return block;
+			}
+		}
+
 
 		public AddressEntry[] GetEntries(BitcoinAddress address)
 		{
@@ -262,8 +293,6 @@ namespace NBitcoin.Indexer
 		{
 			return GetEntries(pubKey.GetAddress(Configuration.Network));
 		}
-
-
 	}
 
 	public class AddressEntry

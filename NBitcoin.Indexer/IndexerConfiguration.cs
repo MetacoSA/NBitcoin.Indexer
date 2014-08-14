@@ -86,6 +86,11 @@ namespace NBitcoin.Indexer
 		{
 			return CreateTableClient().GetTableReference(BalanceTable);
 		}
+		public CloudTable GetChainTable()
+		{
+			return CreateTableClient().GetTableReference(ChainTable);
+		}
+
 		public CloudBlobContainer GetBlocksContainer()
 		{
 			return CreateBlobClient().GetContainerReference(Container);
@@ -126,6 +131,26 @@ namespace NBitcoin.Indexer
 			{
 				_BalanceTable = value.ToLowerInvariant();
 			}
+		}
+
+		string _ChainTable = "chain";
+		public string ChainTable
+		{
+			get
+			{
+				return _ChainTable;
+			}
+			set
+			{
+				_ChainTable = value.ToLowerInvariant();
+			}
+		}
+
+		public IEnumerable<CloudTable> EnumerateTables()
+		{
+			yield return GetTransactionTable();
+			yield return GetBalanceTable();
+			yield return GetChainTable();
 		}
 	}
 }

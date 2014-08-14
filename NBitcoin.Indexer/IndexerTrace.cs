@@ -94,5 +94,36 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Missing transaction from index while fetching outputs " + txid);
 		}
+
+
+		internal static void LocalMainChainTip(uint256 blockId, int height)
+		{
+			_Trace.TraceInformation("Local main tip " + ToString(blockId, height));
+		}
+
+		private static string ToString(uint256 blockId, int height)
+		{
+			return "Height : " + height + ", BlockId : " + blockId;
+		}
+
+		internal static void RemoteMainChainTip(uint256 blockId, int height)
+		{
+			_Trace.TraceInformation("Remote main tip " + ToString(blockId, height));
+		}
+
+		internal static void LocalMainChainIsLate()
+		{
+			_Trace.TraceInformation("Local main chain is late");
+		}
+
+		public static void ImportingChain(ChainedBlock from, ChainedBlock to)
+		{
+			_Trace.TraceInformation("Importing blocks from " + ToString(from) + " to " + ToString(to) + " (both included)");
+		}
+
+		private static string ToString(ChainedBlock chainedBlock)
+		{
+			return ToString(chainedBlock.HashBlock, chainedBlock.Height);
+		}
 	}
 }
