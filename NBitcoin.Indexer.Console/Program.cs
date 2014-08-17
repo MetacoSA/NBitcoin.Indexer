@@ -17,6 +17,7 @@ namespace NBitcoin.Indexer.Console
 				System.Console.WriteLine(options.GetUsage());
 			if(Parser.Default.ParseArguments(args, options))
 			{
+				System.Console.WriteLine("NBitcoin.Indexer " + typeof(AzureIndexer).Assembly.GetName().Version);
 				var indexer = AzureIndexer.CreateIndexer();
 				indexer.NoSave = options.NoSave;
 				indexer.FromBlk = options.FromBlk;
