@@ -96,9 +96,9 @@ namespace NBitcoin.Indexer
 		}
 
 
-		internal static void LocalMainChainTip(uint256 blockId, int height)
+		internal static void LocalMainChainTip(ChainedBlock block)
 		{
-			_Trace.TraceInformation("Local main tip " + ToString(blockId, height));
+			_Trace.TraceInformation("Local main tip " + ToString(block));
 		}
 
 		private static string ToString(uint256 blockId, int height)
@@ -135,6 +135,11 @@ namespace NBitcoin.Indexer
 			{
 				_Trace.TraceInformation("Remaining chain block to index : " + remaining + " (" + height + "/" + maxHeight + ")");
 			}
+		}
+
+		internal static void LocalMainChainIsUpToDate(ChainedBlock block)
+		{
+			_Trace.TraceInformation("Local main chain is up to date " + ToString(block));
 		}
 	}
 }

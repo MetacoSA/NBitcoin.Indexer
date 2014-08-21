@@ -425,7 +425,7 @@ namespace NBitcoin.Indexer
 				try
 				{
 					node.SynchronizeChain(chain);
-					IndexerTrace.LocalMainChainTip(chain.Tip.HashBlock, chain.Tip.Height);
+					IndexerTrace.LocalMainChainTip(chain.Tip);
 					var client = Configuration.CreateIndexerClient();
 					var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
 
@@ -439,6 +439,11 @@ namespace NBitcoin.Indexer
 							return;
 						}
 						height = changes[changes.Count - 1].Height + 1;
+						if(height > chain.Height)
+						{
+							IndexerTrace.LocalMainChainIsUpToDate(chain.Tip);
+							return;
+						}
 					}
 
 					IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
