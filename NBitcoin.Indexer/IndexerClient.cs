@@ -169,22 +169,34 @@ namespace NBitcoin.Indexer
 			return entity.ToObject();
 		}
 
-		public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(Chain chain, bool forkIncluded)
+		public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded)
 		{
 			var table = Configuration.GetChainTable();
 			var query = new TableQuery<ChainChangeEntry.Entity>();
 			List<ChainChangeEntry> blocks = new List<ChainChangeEntry>();
 			foreach(var block in table.ExecuteQuery(query).Select(e => e.ToObject()))
 			{
-				var blockChained = chain.GetBlock(block.BlockId);
-				if(blockChained != null)
-				{
-					if(forkIncluded)
-						yield return block;
-					break;
-				}
-				else
+				if(block.Height > currentTip.Height)
 					yield return block;
+				else if(block.Height < currentTip.Height)
+				{
+					currentTip = currentTip.FindAncestorOrSelf(block.Height);
+				}
+
+				if(block.Height == currentTip.Height)
+				{
+					if(block.BlockId == currentTip.HashBlock)
+					{
+						if(forkIncluded)
+							yield return block;
+						break;
+					}
+					else
+					{
+						yield return block;
+						currentTip = currentTip.Previous;
+					}
+				}
 			}
 		}
 

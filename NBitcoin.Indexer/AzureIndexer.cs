@@ -4,6 +4,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
+using NBitcoin.Protocol;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -26,6 +27,7 @@ namespace NBitcoin.Indexer
 			IndexerServerConfiguration config = new IndexerServerConfiguration();
 			Fill(config);
 			config.BlockDirectory = GetValue("BlockDirectory", true);
+			config.Node = GetValue("Node", false);
 			return config;
 		}
 		public IndexerServerConfiguration()
@@ -51,6 +53,45 @@ namespace NBitcoin.Indexer
 		public AzureIndexer CreateIndexer()
 		{
 			return new AzureIndexer(this);
+		}
+
+		public Node GetNode()
+		{
+			if(String.IsNullOrEmpty(Node))
+				throw new ConfigurationErrorsException("Node setting is not configured");
+
+			var splitted = Node.Split(':');
+			var port = splitted.Length == 1 ? Network.DefaultPort : int.Parse(splitted[1]);
+			IPAddress address = null;
+			try
+			{
+				address = IPAddress.Parse(splitted[0]);
+			}
+			catch(FormatException)
+			{
+				address = Dns.GetHostEntry(splitted[0]).AddressList[0];
+			}
+			return new NodeServer(Network).GetNodeByEndpoint(new IPEndPoint(address, port));
+		}
+
+		public string Node
+		{
+			get;
+			set;
+		}
+
+		public Chain GetLocalChain(string name)
+		{
+			var path = name;
+			if(!String.IsNullOrEmpty(ChainDirectory))
+				path = Path.Combine(ChainDirectory, name);
+			return new Chain(Network, new StreamObjectStream<ChainChange>(File.Open(path + ".dat", FileMode.OpenOrCreate)));
+		}
+
+		public string ChainDirectory
+		{
+			get;
+			set;
 		}
 	}
 
@@ -379,55 +420,64 @@ namespace NBitcoin.Indexer
 			{
 				var table = Configuration.GetChainTable();
 				table.CreateIfNotExists();
-				var store = Configuration.CreateStoreBlock();
-				var chain = store.BuildChain();
-				IndexerTrace.LocalMainChainTip(chain.Tip.HashBlock, chain.Tip.Height);
-				var client = Configuration.CreateIndexerClient();
-				var changes = client.GetChainChangesUntilFork(chain, true).ToList();
-
-				var height = 0;
-				if(changes.Count != 0)
+				var node = Configuration.GetNode();
+				var chain = Configuration.GetLocalChain("ImportMainChain");
+				try
 				{
-					IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
-					if(changes[0].Height > chain.Tip.Height)
+					node.SynchronizeChain(chain);
+					IndexerTrace.LocalMainChainTip(chain.Tip.HashBlock, chain.Tip.Height);
+					var client = Configuration.CreateIndexerClient();
+					var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
+
+					var height = 0;
+					if(changes.Count != 0)
 					{
-						IndexerTrace.LocalMainChainIsLate();
-						return;
+						IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
+						if(changes[0].Height > chain.Tip.Height)
+						{
+							IndexerTrace.LocalMainChainIsLate();
+							return;
+						}
+						height = changes[changes.Count - 1].Height + 1;
 					}
-					height = changes[changes.Count - 1].Height - 1;
-				}
 
-				IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
+					IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
 
 
-				string lastPartition = null;
-				TableBatchOperation batch = new TableBatchOperation();
-				for(int i = height ; i <= chain.Tip.Height ; i++)
-				{
-					var block = chain.GetBlock(i);
-					var entry = new ChainChangeEntry()
+					string lastPartition = null;
+					TableBatchOperation batch = new TableBatchOperation();
+					for(int i = height ; i <= chain.Tip.Height ; i++)
 					{
-						BlockId = block.HashBlock,
-						Header = block.Header,
-						Height = block.Height
-					};
-					var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
-					if((partition == lastPartition || lastPartition == null) && batch.Count < 100)
-					{
-						batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+						var block = chain.GetBlock(i);
+						var entry = new ChainChangeEntry()
+						{
+							BlockId = block.HashBlock,
+							Header = block.Header,
+							Height = block.Height
+						};
+						var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
+						if((partition == lastPartition || lastPartition == null) && batch.Count < 100)
+						{
+							batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+						}
+						else
+						{
+							table.ExecuteBatch(batch);
+							batch = new TableBatchOperation();
+							batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+						}
+						lastPartition = partition;
+						IndexerTrace.RemainingBlockChain(i, chain.Tip.Height);
 					}
-					else
+					if(batch.Count > 0)
 					{
 						table.ExecuteBatch(batch);
-						batch = new TableBatchOperation();
-						batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
 					}
-					lastPartition = partition;
-					IndexerTrace.RemainingBlockChain(i, chain.Tip.Height);
 				}
-				if(batch.Count > 0)
+				finally
 				{
-					table.ExecuteBatch(batch);
+					chain.Changes.Dispose();
+					node.Disconnect();
 				}
 			}
 		}

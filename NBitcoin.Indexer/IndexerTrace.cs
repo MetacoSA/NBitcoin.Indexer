@@ -123,6 +123,8 @@ namespace NBitcoin.Indexer
 
 		private static string ToString(ChainedBlock chainedBlock)
 		{
+			if(chainedBlock == null)
+				return "(null)";
 			return ToString(chainedBlock.HashBlock, chainedBlock.Height);
 		}
 

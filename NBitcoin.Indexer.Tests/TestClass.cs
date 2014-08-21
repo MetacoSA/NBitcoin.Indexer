@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using NBitcoin.DataEncoders;
+using NBitcoin.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -65,23 +66,21 @@ namespace NBitcoin.Indexer.Tests
 		{
 			using(var tester = CreateTester())
 			{
-				var store = tester.CreateLocalBlockStore();
-				tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
+				var node = tester.CreateLocalNode();
 				var chain = new Chain(Network.Main);
-
-				BlockGenerator generator = new BlockGenerator(store);
-				generator.Generate();
-				var fork = generator.Generate();
-				var firstTip = generator.Generate();
+				
+				node.Generator.Generate();
+				var fork = node.Generator.Generate();
+				var firstTip = node.Generator.Generate();
 				tester.Indexer.IndexMainChain();
 
-				var result = tester.Client.GetChainChangesUntilFork(chain, true).ToList();
+				var result = tester.Client.GetChainChangesUntilFork(chain.Tip, true).ToList();
 				Assert.Equal(result[0].BlockId, firstTip.GetHash());
 				Assert.Equal(result.Last().BlockId, chain.Tip.HashBlock);
 				Assert.Equal(result.Last().Height, chain.Tip.Height);
 				Assert.Equal(result.Count, 4);
 
-				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+				result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
 				Assert.Equal(result[0].BlockId, firstTip.GetHash());
 				Assert.NotEqual(result.Last().BlockId, chain.Tip.HashBlock);
 				Assert.Equal(result.Count, 3);
@@ -92,21 +91,21 @@ namespace NBitcoin.Indexer.Tests
 
 				Assert.Equal(firstTip.GetHash(), chain.Tip.HashBlock);
 
-				generator.Chain.SetTip(fork.Header);
-				generator.Generate();
-				generator.Generate();
-				var secondTip = generator.Generate();
+				node.Generator.Chain.SetTip(fork.Header);
+				node.Generator.Generate();
+				node.Generator.Generate();
+				var secondTip = node.Generator.Generate();
 
 				tester.Indexer.IndexMainChain();
 				Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
 
-				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+				result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
 				result.UpdateChain(chain);
 				Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
 
-				var ultimateTip = generator.Generate(100);
+				var ultimateTip = node.Generator.Generate(100);
 				tester.Indexer.IndexMainChain();
-				result = tester.Client.GetChainChangesUntilFork(chain, false).ToList();
+				result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
 
 				Assert.Equal(ultimateTip.Header.GetHash(), result[0].BlockId);
 				Assert.Equal(tester.Client.GetBestBlock().BlockId, result[0].BlockId);

@@ -1,5 +1,6 @@
 ﻿using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.Protocol;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,7 +29,7 @@ namespace NBitcoin.Indexer.Tests
 			config.BlockDirectory = "../../Data/blocks";
 			config.TransactionTable = folder;
 			config.Container = folder;
-
+			config.ChainDirectory = folder;
 			_Importer = config.CreateIndexer();
 
 
@@ -53,6 +54,8 @@ namespace NBitcoin.Indexer.Tests
 
 		public void Dispose()
 		{
+			if(_NodeServer != null)
+				_NodeServer.Dispose();
 			if(!Cached)
 			{
 				foreach(var table in _Importer.Configuration.EnumerateTables())
@@ -127,6 +130,16 @@ namespace NBitcoin.Indexer.Tests
 			}
 		}
 
-
+		NodeServer _NodeServer;
+		internal MiniNode CreateLocalNode()
+		{
+			NodeServer nodeServer = new NodeServer(Network.Main, internalPort: (ushort)RandomUtils.GetInt32());
+			nodeServer.Listen();
+			_NodeServer = nodeServer;
+			Indexer.Configuration.Node = "localhost:" + nodeServer.LocalEndpoint.Port;
+			var store = CreateLocalBlockStore();
+			Indexer.Configuration.BlockDirectory = store.Folder.FullName;
+			return new MiniNode(store, nodeServer);
+		}
 	}
 }
