@@ -478,6 +478,7 @@ namespace NBitcoin.Indexer
 				{
 					chain.Changes.Dispose();
 					node.Disconnect();
+					node.NodeServer.Dispose();
 				}
 			}
 		}
