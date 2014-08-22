@@ -141,5 +141,10 @@ namespace NBitcoin.Indexer
 		{
 			_Trace.TraceInformation("Local main chain is up to date " + ToString(block));
 		}
+
+		public static void Information(string message)
+		{
+			_Trace.TraceInformation(message);
+		}
 	}
 }
