@@ -4,6 +4,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -24,7 +25,8 @@ namespace NBitcoin.Indexer
 			var account = GetValue("Azure.AccountName", true);
 			var key = GetValue("Azure.Key", true);
 			config.StorageCredentials = new StorageCredentials(account, key);
-			config.Container = GetValue("Azure.Blob.Container", false);
+			config.StorageNamespace = GetValue("StorageNamespace", false);
+			config.MainDirectory = GetValue("MainDirectory", false);
 			var network = GetValue("Bitcoin.Network", false) ?? "Main";
 			config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
 									Network.Main :
@@ -52,18 +54,11 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
-		private string _Container = "nbitcoinindexer";
-		public string Container
-		{
-			get
-			{
-				return _Container;
-			}
-			set
-			{
-				_Container = value.ToLowerInvariant();
-			}
-		}
+		string _Container = "nbitcoinindexer";
+		string _TransactionTable = "transactions";
+		string _BalanceTable = "balances";
+		string _ChainTable = "chain";
+
 
 		public StorageCredentials StorageCredentials
 		{
@@ -80,20 +75,25 @@ namespace NBitcoin.Indexer
 		}
 		public CloudTable GetTransactionTable()
 		{
-			return CreateTableClient().GetTableReference(TransactionTable);
+			return CreateTableClient().GetTableReference(GetFullName(_TransactionTable));
+		}
+
+		private string GetFullName(string storageObjectName)
+		{
+			return (StorageNamespace + storageObjectName).ToLowerInvariant();
 		}
 		public CloudTable GetBalanceTable()
 		{
-			return CreateTableClient().GetTableReference(BalanceTable);
+			return CreateTableClient().GetTableReference(GetFullName(_BalanceTable));
 		}
 		public CloudTable GetChainTable()
 		{
-			return CreateTableClient().GetTableReference(ChainTable);
+			return CreateTableClient().GetTableReference(GetFullName(_ChainTable));
 		}
 
 		public CloudBlobContainer GetBlocksContainer()
 		{
-			return CreateBlobClient().GetContainerReference(Container);
+			return CreateBlobClient().GetContainerReference(GetFullName(_Container));
 		}
 
 		private Uri MakeUri(string clientType)
@@ -107,43 +107,24 @@ namespace NBitcoin.Indexer
 			return new CloudTableClient(MakeUri("table"), StorageCredentials);
 		}
 
-		string _TransactionTable = "transactions";
-		public string TransactionTable
+
+		public string StorageNamespace
 		{
-			get
-			{
-				return _TransactionTable;
-			}
-			set
-			{
-				_TransactionTable = value.ToLowerInvariant();
-			}
+			get;
+			set;
 		}
 
-		string _BalanceTable = "balances";
-		public string BalanceTable
+		public string MainDirectory
 		{
-			get
-			{
-				return _BalanceTable;
-			}
-			set
-			{
-				_BalanceTable = value.ToLowerInvariant();
-			}
+			get;
+			set;
 		}
-
-		string _ChainTable = "chain";
-		public string ChainTable
+		public string GetFilePath(string name)
 		{
-			get
-			{
-				return _ChainTable;
-			}
-			set
-			{
-				_ChainTable = value.ToLowerInvariant();
-			}
+			var path = name;
+			if(!String.IsNullOrEmpty(MainDirectory))
+				path = Path.Combine(MainDirectory, name);
+			return path;
 		}
 
 		public IEnumerable<CloudTable> EnumerateTables()

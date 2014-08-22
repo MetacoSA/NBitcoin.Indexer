@@ -82,17 +82,11 @@ namespace NBitcoin.Indexer
 
 		public Chain GetLocalChain(string name)
 		{
-			var path = name;
-			if(!String.IsNullOrEmpty(ChainDirectory))
-				path = Path.Combine(ChainDirectory, name);
-			return new Chain(Network, new StreamObjectStream<ChainChange>(File.Open(path + ".dat", FileMode.OpenOrCreate)));
+			var path = GetFilePath(name + ".dat");
+			return new Chain(Network, new StreamObjectStream<ChainChange>(File.Open(path, FileMode.OpenOrCreate)));
 		}
 
-		public string ChainDirectory
-		{
-			get;
-			set;
-		}
+	
 	}
 
 
@@ -409,14 +403,24 @@ namespace NBitcoin.Indexer
 			}
 		}
 
+
+		//public void IndexMainPool()
+		//{
+		//	SetThrottling();
+		//	using(IndexerTrace.NewCorrelation("Index Main Pool").Open())
+		//	{
+		//		var table = Configuration.GetTransactionTable();
+		//		table.CreateIfNotExists();
+		//		var node = Configuration.GetNode();
+
+		//	}
+		//}
+
 		public void IndexMainChain()
 		{
 			SetThrottling();
-			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
-			var stop = new CancellationTokenSource();
-			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 15);
 
-			using(IndexerTrace.NewCorrelation("Import Main chain").Open())
+			using(IndexerTrace.NewCorrelation("Index Main chain").Open())
 			{
 				var table = Configuration.GetChainTable();
 				table.CreateIfNotExists();
@@ -488,6 +492,8 @@ namespace NBitcoin.Indexer
 			}
 		}
 
+		
+
 		private BlockEnumerable Enumerate(string checkpointName = null)
 		{
 			return new BlockEnumerable(this, checkpointName);
@@ -516,9 +522,9 @@ namespace NBitcoin.Indexer
 				{
 					try
 					{
-						var client = Configuration.CreateBlobClient();
+						var container = Configuration.GetBlocksContainer();
+						var client = container.ServiceClient;
 						client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-						var container = client.GetContainerReference(Configuration.Container);
 						var blob = container.GetPageBlobReference(hash);
 						MemoryStream ms = new MemoryStream();
 						block.ReadWrite(ms, true);

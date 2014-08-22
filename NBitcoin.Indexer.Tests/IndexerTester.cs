@@ -27,9 +27,8 @@ namespace NBitcoin.Indexer.Tests
 			var config = IndexerServerConfiguration.FromConfiguration();
 			config.ProgressFile = folder + "/progress";
 			config.BlockDirectory = "../../Data/blocks";
-			config.TransactionTable = folder;
-			config.Container = folder;
-			config.ChainDirectory = folder;
+			config.StorageNamespace = folder;
+			config.MainDirectory = folder;
 			_Importer = config.CreateIndexer();
 
 
@@ -67,8 +66,7 @@ namespace NBitcoin.Indexer.Tests
 						table.Execute(TableOperation.Delete(e));
 					});
 				}
-				var client = _Importer.Configuration.CreateBlobClient();
-				var container = client.GetContainerReference(_Importer.Configuration.Container);
+				var container =  _Importer.Configuration.GetBlocksContainer();
 				var blobs = container.ListBlobs().ToList();
 
 				Parallel.ForEach(blobs, b =>
