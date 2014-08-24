@@ -99,8 +99,8 @@ namespace NBitcoin.Indexer
 							foreach(var block in result[i].BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
 							{
 								result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
-								entities[0].Transaction = result[i].Transaction.ToBytes();
-								if(entities[0].Transaction.Length < 1024 * 64)
+								entities[0].TransactionBytes = result[i].Transaction.ToBytes();
+								if(entities[0].TransactionBytes.Length < 1024 * 64 * 4)
 									table.Execute(TableOperation.Merge(entities[0]));
 								break;
 							}
@@ -233,13 +233,14 @@ namespace NBitcoin.Indexer
 						table.Execute(TableOperation.Merge(indexEntry));
 					}
 				entry.BlockIds = indexEntryGroup
-										.Where(s => s.BlockId != String.Empty)
+										.Where(s => !string.IsNullOrEmpty(s.BlockId))
 										.Select(s => new uint256(s.BlockId)).ToArray();
 				entry.ReceivedTxOuts = indexEntry.GetReceivedTxOut();
 				entry.ReceivedTxInIndex = indexEntry.GetReceivedOutput();
 
 				entry.SpentOutpoints = indexEntry.GetSentOutpoints();
 				entry.SpentTxOuts = indexEntry.GetSentTxOuts();
+				entry.MempoolDate = indexEntryGroup.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
 				entry.BalanceChange = (indexEntry.SentTxOuts == null || indexEntry.ReceivedTxOuts == null) ? null : entry.ReceivedTxOuts.Select(t => t.Value).Sum() - entry.SpentTxOuts.Select(t => t.Value).Sum();
 				result.Add(entry);
 			}
@@ -606,6 +607,12 @@ namespace NBitcoin.Indexer
 			}
 		}
 		public List<int> ReceivedTxInIndex
+		{
+			get;
+			set;
+		}
+
+		public DateTimeOffset? MempoolDate
 		{
 			get;
 			set;

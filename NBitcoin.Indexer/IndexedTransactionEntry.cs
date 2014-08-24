@@ -20,6 +20,7 @@ namespace NBitcoin.Indexer
 			public Entity(Transaction tx)
 			{
 				SetTx(tx);
+				TransactionBytes = tx.ToBytes();
 				RowKey = _txId.ToString() + "-m";
 			}
 
@@ -37,10 +38,70 @@ namespace NBitcoin.Indexer
 				RowKey = _txId.ToString() + "-b" + blockId.ToString();
 			}
 
+			byte[] _Transaction;
+			[IgnoreProperty]
+			public byte[] TransactionBytes
+			{
+				get
+				{
+					if(_Transaction == null)
+						_Transaction = Helper.Concat(Transaction, Transaction2, Transaction3, Transaction4);
+					return _Transaction;
+				}
+				set
+				{
+					_Transaction = value;
+					Helper.Spread(value, 1024 * 63, ref _Transaction1, ref _Transaction2, ref _Transaction3, ref _Transaction4);
+				}
+			}
+
+			byte[] _Transaction1;
 			public byte[] Transaction
 			{
-				get;
-				set;
+				get
+				{
+					return _Transaction1;
+				}
+				set
+				{
+					_Transaction1 = value;
+				}
+			}
+			byte[] _Transaction2;
+			public byte[] Transaction2
+			{
+				get
+				{
+					return _Transaction2;
+				}
+				set
+				{
+					_Transaction2 = value;
+				}
+			}
+			byte[] _Transaction3;
+			public byte[] Transaction3
+			{
+				get
+				{
+					return _Transaction3;
+				}
+				set
+				{
+					_Transaction3 = value;
+				}
+			}
+			byte[] _Transaction4;
+			public byte[] Transaction4
+			{
+				get
+				{
+					return _Transaction4;
+				}
+				set
+				{
+					_Transaction4 = value;
+				}
 			}
 
 			public byte[] SpentOutputs
@@ -88,17 +149,25 @@ namespace NBitcoin.Indexer
 			foreach(var entity in entities)
 			{
 				var parts = entity.RowKey.Split(new string[] { "-b" }, StringSplitOptions.RemoveEmptyEntries);
-				if(parts.Length != 2)
-					throw new FormatException("Invalid TransactionEntity");
-				if(TransactionId == null)
-					TransactionId = new uint256(parts[0]);
-				blockIds.Add(new uint256(parts[1]));
+				if(parts.Length == 2)
+				{
+					if(TransactionId == null)
+						TransactionId = new uint256(parts[0]);
+					blockIds.Add(new uint256(parts[1]));
+				}
+				else
+				{
+					parts = entity.RowKey.Split(new string[] { "-m" }, StringSplitOptions.RemoveEmptyEntries);
+					if(TransactionId == null)
+						TransactionId = new uint256(parts[0]);
+					MempoolDate = entity.Timestamp;
+				}
 			}
 			BlockIds = blockIds.ToArray();
-			var loadedEntity = entities.Where(e => e.Transaction != null).FirstOrDefault();
+			var loadedEntity = entities.Where(e => e.TransactionBytes != null).FirstOrDefault();
 			if(loadedEntity != null)
 			{
-				var bytes = loadedEntity.Transaction;
+				var bytes = loadedEntity.TransactionBytes;
 				Transaction tx = new Transaction();
 				tx.ReadWrite(bytes);
 				Transaction = tx;
@@ -109,6 +178,12 @@ namespace NBitcoin.Indexer
 				}
 			}
 
+		}
+
+		public DateTimeOffset? MempoolDate
+		{
+			get;
+			set;
 		}
 
 		public Money Fees

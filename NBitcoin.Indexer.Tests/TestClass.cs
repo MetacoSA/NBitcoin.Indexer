@@ -62,13 +62,99 @@ namespace NBitcoin.Indexer.Tests
 		}
 
 		[Fact]
+		public void CanIndexMeempool()
+		{
+			using(var tester = CreateTester())
+			{
+				var node = tester.CreateLocalNode();
+				var sender = new Key().PubKey;
+				var receiver = new Key().PubKey;
+
+				var t1 = new Transaction()
+						{
+							Outputs = 
+							{
+								new TxOut("10.0",sender.GetAddress(Network.Main))
+							}
+						};
+				var t2 = new Transaction()
+						{
+							Inputs = 
+							{
+								new TxIn(new OutPoint(t1.GetHash(),0))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,sender)
+								}
+							},
+							Outputs = 
+							{
+								new TxOut("2.0",receiver.GetAddress(Network.Main)),
+								new TxOut("8.0",sender.GetAddress(Network.Main))
+							}
+						};
+
+				node.AddToMempool(t1, t2);
+
+				Assert.Equal(2, tester.Indexer.IndexMempool());
+
+				var tx = tester.Client.GetTransaction(t1.GetHash());
+				Assert.NotNull(tx);
+				Assert.True(tx.MempoolDate != null);
+				Assert.True(tx.BlockIds.Length == 0);
+
+				Assert.Equal(0, tester.Indexer.IndexMempool());
+
+				var t3 = new Transaction()
+						{
+							Inputs = 
+							{
+								new TxIn(new OutPoint(t2.GetHash(),1))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,sender)
+								}
+							},
+							Outputs = 
+							{
+								new TxOut("2.1",receiver.GetAddress(Network.Main)),
+								new TxOut("5.9",sender.GetAddress(Network.Main))
+							}
+						};
+				node.AddToMempool(t3);
+				Assert.Equal(1, tester.Indexer.IndexMempool());
+
+				var entries = tester.Client.GetEntries(sender);
+				AssertContainsMoney("10.0", entries);
+				AssertContainsMoney("-2.0", entries);
+				AssertContainsMoney("-2.1", entries);
+
+				Assert.True(entries.All(e => e.BlockIds.Length == 0));
+
+				var store = tester.CreateLocalBlockStore();
+				store.Append(new Block()
+				{
+					Transactions = new List<Transaction>()
+					{
+						t1,
+						t2,
+						t3
+					}
+				});
+				tester.Indexer.IndexAddresses();
+				entries = tester.Client.GetEntries(sender);
+				Assert.True(entries.All(e => e.BlockIds.Length == 1));
+			}
+		}
+
+		[Fact]
 		public void CanImportMainChain()
 		{
 			using(var tester = CreateTester())
 			{
 				var node = tester.CreateLocalNode();
 				var chain = new Chain(Network.Main);
-				
+
 				node.Generator.Generate();
 				var fork = node.Generator.Generate();
 				var firstTip = node.Generator.Generate();

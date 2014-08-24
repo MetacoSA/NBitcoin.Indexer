@@ -168,44 +168,10 @@ namespace NBitcoin.Indexer
 						var txId = tx.GetHash().ToString();
 						try
 						{
-							Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
-							foreach(var input in tx.Inputs)
-							{
-								if(tx.IsCoinBase)
-									break;
-								var signer = GetSigner(input.ScriptSig);
-								if(signer != null)
-								{
-									AddressEntry.Entity entry = null;
-									if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
-									{
-										entry = new AddressEntry.Entity(txId, signer, blockId);
-										entryByAddress.Add(signer.ToString(), entry);
-									}
-									entry.AddSend(input.PrevOut);
-								}
-							}
-
-							int i = 0;
-							foreach(var output in tx.Outputs)
-							{
-								var receiver = GetReciever(output.ScriptPubKey);
-								if(receiver != null)
-								{
-									AddressEntry.Entity entry = null;
-									if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
-									{
-										entry = new AddressEntry.Entity(txId, receiver, blockId);
-										entryByAddress.Add(receiver.ToString(), entry);
-									}
-									entry.AddReceive(i);
-								}
-								i++;
-							}
+							Dictionary<string, AddressEntry.Entity> entryByAddress = ExtractAddressEntries(blockId, tx, txId);
 
 							foreach(var kv in entryByAddress)
 							{
-								kv.Value.Flush();
 								buckets.Add(kv.Value.PartitionKey, kv.Value);
 								var bucket = buckets[kv.Value.PartitionKey];
 								if(bucket.Count == 100)
@@ -244,6 +210,47 @@ namespace NBitcoin.Indexer
 				Task.WaitAll(tasks);
 				storedBlocks.SaveCheckpoint();
 			}
+		}
+
+		private Dictionary<string, AddressEntry.Entity> ExtractAddressEntries(string blockId, Transaction tx, string txId)
+		{
+			Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
+			foreach(var input in tx.Inputs)
+			{
+				if(tx.IsCoinBase)
+					break;
+				var signer = GetSigner(input.ScriptSig);
+				if(signer != null)
+				{
+					AddressEntry.Entity entry = null;
+					if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
+					{
+						entry = new AddressEntry.Entity(txId, signer, blockId);
+						entryByAddress.Add(signer.ToString(), entry);
+					}
+					entry.AddSend(input.PrevOut);
+				}
+			}
+
+			int i = 0;
+			foreach(var output in tx.Outputs)
+			{
+				var receiver = GetReciever(output.ScriptPubKey);
+				if(receiver != null)
+				{
+					AddressEntry.Entity entry = null;
+					if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
+					{
+						entry = new AddressEntry.Entity(txId, receiver, blockId);
+						entryByAddress.Add(receiver.ToString(), entry);
+					}
+					entry.AddReceive(i);
+				}
+				i++;
+			}
+			foreach(var kv in entryByAddress)
+				kv.Value.Flush();
+			return entryByAddress;
 		}
 
 		private BitcoinAddress GetReciever(Script scriptPubKey)
@@ -441,59 +448,84 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public void IndexMainPool()
+		public int IndexMempool()
 		{
+			int added = 0;
 			SetThrottling();
-			using(IndexerTrace.NewCorrelation("Index Main Pool").Open())
+			using(IndexerTrace.NewCorrelation("Index Mempool").Open())
 			{
 				var table = Configuration.GetTransactionTable();
 				table.CreateIfNotExists();
 				var node = Configuration.GetNode();
-
-				var lastUploadedFile = new FileInfo(Configuration.GetFilePath("MempoolUploaded.txt"));
-				if(!lastUploadedFile.Exists)
-					lastUploadedFile.Create().Close();
-
-				Dictionary<string, MempoolUpload> lastUploadedById = new Dictionary<string, MempoolUpload>();
-				MempoolUpload[] lastUploaded = new MempoolUpload[0];
 				try
 				{
-					lastUploaded = JsonConvert.DeserializeObject<MempoolUpload[]>(File.ReadAllText(lastUploadedFile.FullName))
-									.Where(u => !u.IsExpired)
-									.ToArray();
-					lastUploadedById = lastUploaded
-								.ToDictionary(t => t.TxId);
-				}
-				catch(Exception)
-				{
-				}
 
-				var txIds = node.GetMempool();
-				var txToUpload =
-					txIds
-					.Where(tx => !lastUploadedById.ContainsKey(tx.ToString()))
-					.ToArray();
 
-				var transactions = node.GetTransactions(txToUpload);
-				IndexerTrace.Information("Indexing " + transactions.Length + " transactions");
-				Parallel.ForEach(transactions, new ParallelOptions()
-				{
-					MaxDegreeOfParallelism = this.TaskCount
-				},
-				tx =>
-				{
-					SendToAzure(new[] { new IndexedTransactionEntry.Entity(tx) }, Configuration.GetTransactionTable());
-				});
+					var lastUploadedFile = new FileInfo(Configuration.GetFilePath("MempoolUploaded.txt"));
+					if(!lastUploadedFile.Exists)
+						lastUploadedFile.Create().Close();
 
-				var uploaded = lastUploaded.Concat(transactions.Select(tx => new MempoolUpload()
+					Dictionary<string, MempoolUpload> lastUploadedById = new Dictionary<string, MempoolUpload>();
+					MempoolUpload[] lastUploaded = new MempoolUpload[0];
+					try
 					{
-						Date = DateTimeOffset.UtcNow,
-						TxId = tx.GetHash().ToString()
-					})).ToArray();
+						lastUploaded = JsonConvert.DeserializeObject<MempoolUpload[]>(File.ReadAllText(lastUploadedFile.FullName));
+						if(lastUploaded != null)
+						{
+							lastUploaded = lastUploaded.Where(u => !u.IsExpired)
+										.ToArray();
+							lastUploadedById = lastUploaded
+										.ToDictionary(t => t.TxId);
+						}
+						else
+							lastUploaded = new MempoolUpload[0];
+					}
 
-				File.WriteAllText(lastUploadedFile.FullName, JsonConvert.SerializeObject(uploaded));
-				IndexerTrace.Information("Progression saved to " + lastUploadedFile.FullName);
+					catch(FileNotFoundException)
+					{
+					}
+					catch(FormatException)
+					{
+					}
+
+					var txIds = node.GetMempool();
+					var txToUpload =
+						txIds
+						.Where(tx => !lastUploadedById.ContainsKey(tx.ToString()))
+						.ToArray();
+
+					var transactions = node.GetMempoolTransactions(txToUpload);
+					IndexerTrace.Information("Indexing " + transactions.Length + " transactions");
+					Parallel.ForEach(transactions, new ParallelOptions()
+					{
+						MaxDegreeOfParallelism = this.TaskCount
+					},
+					tx =>
+					{
+						SendToAzure(new[] { new IndexedTransactionEntry.Entity(tx) }, Configuration.GetTransactionTable());
+						foreach(var kv in ExtractAddressEntries(null, tx, tx.GetHash().ToString()))
+						{
+							SendToAzure(new AddressEntry.Entity[] { kv.Value }, Configuration.GetBalanceTable());
+						}
+						Interlocked.Increment(ref added);
+					});
+
+					var uploaded = lastUploaded.Concat(transactions.Select(tx => new MempoolUpload()
+						{
+							Date = DateTimeOffset.UtcNow,
+							TxId = tx.GetHash().ToString()
+						})).ToArray();
+
+					File.WriteAllText(lastUploadedFile.FullName, JsonConvert.SerializeObject(uploaded));
+					IndexerTrace.Information("Progression saved to " + lastUploadedFile.FullName);
+				}
+				finally
+				{
+					node.Disconnect();
+					node.NodeServer.Dispose();
+				}
 			}
+			return added;
 		}
 
 		public void IndexMainChain()

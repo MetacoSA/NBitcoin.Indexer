@@ -62,6 +62,41 @@ namespace NBitcoin.Indexer.Tests
 				}
 				message.Node.SendMessage(getData);
 			}
+
+			var mempool = message.Message.Payload as MempoolPayload;
+			if(mempool != null)
+			{
+				var inv = _Mempool.Select(kv => new InventoryVector()
+									{
+										Type = InventoryType.MSG_TX,
+										Hash = kv.Key
+									}).ToList();
+				var payload = new InvPayload();
+				payload.Inventory.AddRange(inv);
+				message.Node.SendMessage(payload);
+			}
+
+			var gettx = message.Message.Payload as GetDataPayload;
+			if(gettx != null)
+			{
+				foreach(var inv in gettx.Inventory)
+				{
+					if(inv.Type == InventoryType.MSG_TX)
+					{
+						message.Node.SendMessage(new TxPayload(_Mempool[inv.Hash]));
+					}
+				}
+			}
 		}
+
+		public void AddToMempool(params Transaction[] transactions)
+		{
+			foreach(var tx in transactions)
+			{
+				_Mempool.Add(tx.GetHash(), tx);
+			}
+		}
+
+		Dictionary<uint256, Transaction> _Mempool = new Dictionary<uint256, Transaction>();
 	}
 }
