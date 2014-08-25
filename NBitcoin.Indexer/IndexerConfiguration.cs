@@ -54,7 +54,7 @@ namespace NBitcoin.Indexer
 			set;
 		}
 
-		string _Container = "nbitcoinindexer";
+		string _Container = "indexer";
 		string _TransactionTable = "transactions";
 		string _BalanceTable = "balances";
 		string _ChainTable = "chain";
