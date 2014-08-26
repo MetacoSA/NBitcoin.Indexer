@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -245,6 +246,18 @@ namespace NBitcoin.Indexer
 				result.Add(entry);
 			}
 			return result.ToArray();
+		}
+
+		public AddressEntry[][] GetAllEntries(BitcoinAddress[] addresses)
+		{
+			Helper.SetThrottling();
+			AddressEntry[][] result = new AddressEntry[addresses.Length][];
+			Parallel.For(0, addresses.Length,
+			i =>
+				{
+					result[i] = GetEntries(addresses[i]);
+				});
+			return result;
 		}
 
 		private bool LazyLoad(AddressEntry.Entity indexAddress)

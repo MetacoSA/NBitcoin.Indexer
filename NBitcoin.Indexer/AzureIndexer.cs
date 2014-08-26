@@ -684,9 +684,7 @@ namespace NBitcoin.Indexer
 
 		private static void SetThrottling()
 		{
-			ServicePointManager.UseNagleAlgorithm = false;
-			ServicePointManager.Expect100Continue = false;
-			ServicePointManager.DefaultConnectionLimit = 100;
+			Helper.SetThrottling();
 		}
 		public int FromBlk
 		{

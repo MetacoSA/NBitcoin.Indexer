@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -119,6 +120,13 @@ namespace NBitcoin.Indexer
 			byte[] result = new byte[len];
 			Array.Copy(array, index, result, 0, len);
 			return result;
+		}
+
+		internal static void SetThrottling()
+		{
+			ServicePointManager.UseNagleAlgorithm = false;
+			ServicePointManager.Expect100Continue = false;
+			ServicePointManager.DefaultConnectionLimit = 100;
 		}
 	}
 }

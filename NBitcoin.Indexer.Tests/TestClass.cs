@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using NBitcoin.DataEncoders;
 using NBitcoin.Protocol;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -199,6 +200,24 @@ namespace NBitcoin.Indexer.Tests
 				Assert.Equal(ultimateTip.Header.GetHash(), chain.Tip.HashBlock);
 			}
 		}
+
+		//[Fact]
+		//public void CanGetMultipleEntries()
+		//{
+		//	var client = new IndexerClient(new IndexerConfiguration()
+		//	{
+		//		Network = Network.Main,
+				
+		//	});
+
+		//	Stopwatch watch = new Stopwatch();
+		//	watch.Start();
+		//	for(int i = 0 ; i < 10 ; i++)
+		//	{
+		//		var r = client.GetAllEntries(JsonConvert.DeserializeObject<string[]>(File.ReadAllText("C:/Addresses.txt")).Select(n => new BitcoinScriptAddress(n, Network.Main)).ToArray());
+		//	}
+		//	watch.Stop();
+		//}
 
 		public List<ChainChange> SeeChainChanges(Chain chain)
 		{
