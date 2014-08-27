@@ -26,7 +26,6 @@ namespace NBitcoin.Indexer
 			var key = GetValue("Azure.Key", true);
 			config.StorageCredentials = new StorageCredentials(account, key);
 			config.StorageNamespace = GetValue("StorageNamespace", false);
-			config.MainDirectory = GetValue("MainDirectory", false);
 			var network = GetValue("Bitcoin.Network", false) ?? "Main";
 			config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
 									Network.Main :
@@ -112,19 +111,6 @@ namespace NBitcoin.Indexer
 		{
 			get;
 			set;
-		}
-
-		public string MainDirectory
-		{
-			get;
-			set;
-		}
-		public string GetFilePath(string name)
-		{
-			var path = name;
-			if(!String.IsNullOrEmpty(MainDirectory))
-				path = Path.Combine(MainDirectory, name);
-			return path;
 		}
 
 		public IEnumerable<CloudTable> EnumerateTables()

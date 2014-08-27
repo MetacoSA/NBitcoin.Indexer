@@ -28,6 +28,7 @@ namespace NBitcoin.Indexer
 			IndexerServerConfiguration config = new IndexerServerConfiguration();
 			Fill(config);
 			config.BlockDirectory = GetValue("BlockDirectory", true);
+			config.MainDirectory = GetValue("MainDirectory", false);
 			config.Node = GetValue("Node", false);
 			return config;
 		}
@@ -45,7 +46,18 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
-
+		public string MainDirectory
+		{
+			get;
+			set;
+		}
+		public string GetFilePath(string name)
+		{
+			var path = name;
+			if(!String.IsNullOrEmpty(MainDirectory))
+				path = Path.Combine(MainDirectory, name);
+			return path;
+		}
 		public BlockStore CreateStoreBlock()
 		{
 			return new BlockStore(BlockDirectory, Network.Main);
@@ -153,7 +165,7 @@ namespace NBitcoin.Indexer
 			BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
 			var stop = new CancellationTokenSource();
 
-			var tasks = CreateTasks(indexedEntries, (entries) => SendToAzure(entries, Configuration.GetBalanceTable()), stop.Token, 30);
+			var tasks = CreateTasks(indexedEntries, (entries) => Index(entries), stop.Token, 30);
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetBalanceTable().CreateIfNotExists();
@@ -168,7 +180,7 @@ namespace NBitcoin.Indexer
 						var txId = tx.GetHash().ToString();
 						try
 						{
-							Dictionary<string, AddressEntry.Entity> entryByAddress = ExtractAddressEntries(blockId, tx, txId);
+							var entryByAddress = AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
 
 							foreach(var kv in entryByAddress)
 							{
@@ -212,104 +224,30 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		private Dictionary<string, AddressEntry.Entity> ExtractAddressEntries(string blockId, Transaction tx, string txId)
-		{
-			Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
-			foreach(var input in tx.Inputs)
-			{
-				if(tx.IsCoinBase)
-					break;
-				var signer = GetSigner(input.ScriptSig);
-				if(signer != null)
-				{
-					AddressEntry.Entity entry = null;
-					if(!entryByAddress.TryGetValue(signer.ToString(), out entry))
-					{
-						entry = new AddressEntry.Entity(txId, signer, blockId);
-						entryByAddress.Add(signer.ToString(), entry);
-					}
-					entry.AddSend(input.PrevOut);
-				}
-			}
-
-			int i = 0;
-			foreach(var output in tx.Outputs)
-			{
-				var receiver = GetReciever(output.ScriptPubKey);
-				if(receiver != null)
-				{
-					AddressEntry.Entity entry = null;
-					if(!entryByAddress.TryGetValue(receiver.ToString(), out entry))
-					{
-						entry = new AddressEntry.Entity(txId, receiver, blockId);
-						entryByAddress.Add(receiver.ToString(), entry);
-					}
-					entry.AddReceive(i);
-				}
-				i++;
-			}
-			foreach(var kv in entryByAddress)
-				kv.Value.Flush();
-			return entryByAddress;
-		}
-
-		private BitcoinAddress GetReciever(Script scriptPubKey)
-		{
-			var payToHash = payToPubkeyHash.ExtractScriptPubKeyParameters(scriptPubKey);
-			if(payToHash != null)
-			{
-				return new BitcoinAddress(payToHash, Configuration.Network);
-			}
-
-			var payToScript = payToScriptHash.ExtractScriptPubKeyParameters(scriptPubKey);
-			if(payToScript != null)
-			{
-				return new BitcoinScriptAddress(payToScript, Configuration.Network);
-			}
-			return null;
-		}
+		
 
 
-
-
-
-		PayToPubkeyHashTemplate payToPubkeyHash = new PayToPubkeyHashTemplate();
-		PayToScriptHashTemplate payToScriptHash = new PayToScriptHashTemplate();
-		private BitcoinAddress GetSigner(Script scriptSig)
-		{
-			var pubKey = payToPubkeyHash.ExtractScriptSigParameters(scriptSig);
-			if(pubKey != null)
-			{
-				return new BitcoinAddress(pubKey.PublicKey.ID, Configuration.Network);
-			}
-			var p2sh = payToScriptHash.ExtractScriptSigParameters(scriptSig);
-			if(p2sh != null)
-			{
-				return new BitcoinScriptAddress(p2sh.RedeemScript.ID, Configuration.Network);
-			}
-			return null;
-		}
 
 
 		public void IndexTransactions()
 		{
 			SetThrottling();
 
-			BlockingCollection<IndexedTransactionEntry.Entity[]> transactions = new BlockingCollection<IndexedTransactionEntry.Entity[]>(20);
+			BlockingCollection<TransactionEntry.Entity[]> transactions = new BlockingCollection<TransactionEntry.Entity[]>(20);
 
 			var stop = new CancellationTokenSource();
-			var tasks = CreateTasks(transactions, (txs) => SendToAzure(txs, Configuration.GetTransactionTable()), stop.Token, 30);
+			var tasks = CreateTasks(transactions, (txs) => Index(txs), stop.Token, 30);
 
 			using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
 			{
 				Configuration.GetTransactionTable().CreateIfNotExists();
-				var buckets = new MultiValueDictionary<ushort, IndexedTransactionEntry.Entity>();
+				var buckets = new MultiValueDictionary<ushort, TransactionEntry.Entity>();
 				var storedBlocks = Enumerate("tx");
 				foreach(var block in storedBlocks)
 				{
 					foreach(var transaction in block.Item.Transactions)
 					{
-						var indexed = new IndexedTransactionEntry.Entity(transaction, block.Item.Header.GetHash());
+						var indexed = new TransactionEntry.Entity(transaction, block.Item.Header.GetHash());
 						buckets.Add(indexed.Key, indexed);
 						var collection = buckets[indexed.Key];
 						if(collection.Count == 100)
@@ -339,9 +277,9 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		private void PushTransactions(MultiValueDictionary<ushort, IndexedTransactionEntry.Entity> buckets,
-										IEnumerable<IndexedTransactionEntry.Entity> indexedTransactions,
-									BlockingCollection<IndexedTransactionEntry.Entity[]> transactions)
+		private void PushTransactions(MultiValueDictionary<ushort, TransactionEntry.Entity> buckets,
+										IEnumerable<TransactionEntry.Entity> indexedTransactions,
+									BlockingCollection<TransactionEntry.Entity[]> transactions)
 		{
 			var array = indexedTransactions.ToArray();
 			transactions.Add(array);
@@ -350,7 +288,16 @@ namespace NBitcoin.Indexer
 
 		TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-		private void SendToAzure(TableEntity[] entities, CloudTable table)
+
+		public void Index(params AddressEntry.Entity[] entries)
+		{
+			Index(entries, Configuration.GetBalanceTable());
+		}
+		public void Index(params TransactionEntry.Entity[] entities)
+		{
+			Index(entities, Configuration.GetTransactionTable());
+		}
+		private void Index<T>(T[] entities, CloudTable table) where T : TableEntity
 		{
 			if(entities.Length == 0)
 				return;
@@ -390,14 +337,72 @@ namespace NBitcoin.Indexer
 				}
 			}
 		}
+		public void Index(Block block)
+		{
+			var hash = block.GetHash().ToString();
+			using(IndexerTrace.NewCorrelation("Upload of " + hash).Open())
+			{
+				Stopwatch watch = new Stopwatch();
+				watch.Start();
+				bool failedBefore = false;
+				while(true)
+				{
+					try
+					{
+						var container = Configuration.GetBlocksContainer();
+						var client = container.ServiceClient;
+						client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
+						var blob = container.GetPageBlobReference(hash);
+						MemoryStream ms = new MemoryStream();
+						block.ReadWrite(ms, true);
+						var blockBytes = ms.GetBuffer();
 
+						long length = 512 - (ms.Length % 512);
+						if(length == 512)
+							length = 0;
+						Array.Resize(ref blockBytes, (int)(ms.Length + length));
+
+						try
+						{
+							blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
+							{
+								//Will throw if already exist, save 1 call
+								IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
+							}, new BlobRequestOptions()
+							{
+								MaximumExecutionTime = _Timeout,
+								ServerTimeout = _Timeout
+							});
+							watch.Stop();
+							IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
+							break;
+						}
+						catch(StorageException ex)
+						{
+							var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
+							if(!alreadyExist)
+								throw;
+							watch.Stop();
+							IndexerTrace.BlockAlreadyUploaded();
+							break;
+						}
+					}
+					catch(Exception ex)
+					{
+						IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+						failedBefore = true;
+						Thread.Sleep(5000);
+					}
+				}
+			}
+		}
 
 		public void IndexBlocks()
 		{
 			SetThrottling();
-			BlockingCollection<StoredBlock> blocks = new BlockingCollection<StoredBlock>(20);
+			BlockingCollection<Block> blocks = new BlockingCollection<Block>(20);
 			var stop = new CancellationTokenSource();
-			var tasks = CreateTasks(blocks, SendToAzure, stop.Token, 15);
+			var tasks = CreateTasks(blocks, Index, stop.Token, 15);
 
 			using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
 			{
@@ -405,7 +410,7 @@ namespace NBitcoin.Indexer
 				var storedBlocks = Enumerate();
 				foreach(var block in storedBlocks)
 				{
-					blocks.Add(block);
+					blocks.Add(block.Item);
 					if(storedBlocks.NeedSave)
 					{
 						WaitProcessed(blocks);
@@ -502,10 +507,10 @@ namespace NBitcoin.Indexer
 					},
 					tx =>
 					{
-						SendToAzure(new[] { new IndexedTransactionEntry.Entity(tx) }, Configuration.GetTransactionTable());
-						foreach(var kv in ExtractAddressEntries(null, tx, tx.GetHash().ToString()))
+						Index(new TransactionEntry.Entity(tx));
+						foreach(var kv in AddressEntry.Entity.ExtractFromTransaction(tx, tx.GetHash().ToString()))
 						{
-							SendToAzure(new AddressEntry.Entity[] { kv.Value }, Configuration.GetBalanceTable());
+							Index(new AddressEntry.Entity[] { kv.Value });
 						}
 						Interlocked.Increment(ref added);
 					});
@@ -618,67 +623,6 @@ namespace NBitcoin.Indexer
 			while(collection.Count != 0)
 			{
 				Thread.Sleep(1000);
-			}
-		}
-
-		private void SendToAzure(StoredBlock storedBlock)
-		{
-			var block = storedBlock.Item;
-			var hash = block.GetHash().ToString();
-			using(IndexerTrace.NewCorrelation("Upload of " + hash).Open())
-			{
-				Stopwatch watch = new Stopwatch();
-				watch.Start();
-				bool failedBefore = false;
-				while(true)
-				{
-					try
-					{
-						var container = Configuration.GetBlocksContainer();
-						var client = container.ServiceClient;
-						client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-						var blob = container.GetPageBlobReference(hash);
-						MemoryStream ms = new MemoryStream();
-						block.ReadWrite(ms, true);
-						var blockBytes = ms.GetBuffer();
-
-						long length = 512 - (ms.Length % 512);
-						if(length == 512)
-							length = 0;
-						Array.Resize(ref blockBytes, (int)(ms.Length + length));
-
-						try
-						{
-							blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
-							{
-								//Will throw if already exist, save 1 call
-								IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
-							}, new BlobRequestOptions()
-							{
-								MaximumExecutionTime = _Timeout,
-								ServerTimeout = _Timeout
-							});
-							watch.Stop();
-							IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
-							break;
-						}
-						catch(StorageException ex)
-						{
-							var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
-							if(!alreadyExist)
-								throw;
-							watch.Stop();
-							IndexerTrace.BlockAlreadyUploaded();
-							break;
-						}
-					}
-					catch(Exception ex)
-					{
-						IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
-						failedBefore = true;
-						Thread.Sleep(5000);
-					}
-				}
 			}
 		}
 

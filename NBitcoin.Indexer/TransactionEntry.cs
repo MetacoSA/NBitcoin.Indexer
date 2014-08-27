@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	public class IndexedTransactionEntry
+	public class TransactionEntry
 	{
-		internal class Entity : TableEntity
+		public class Entity : TableEntity
 		{
 			public Entity()
 			{
@@ -18,10 +18,8 @@ namespace NBitcoin.Indexer
 			}
 
 			public Entity(Transaction tx)
+				: this(tx, null)
 			{
-				SetTx(tx);
-				TransactionBytes = tx.ToBytes();
-				RowKey = _txId.ToString() + "-m";
 			}
 
 			private void SetTx(Transaction tx)
@@ -35,7 +33,13 @@ namespace NBitcoin.Indexer
 			public Entity(Transaction tx, uint256 blockId)
 			{
 				SetTx(tx);
-				RowKey = _txId.ToString() + "-b" + blockId.ToString();
+				if(blockId != null)
+					RowKey = _txId.ToString() + "-b" + blockId.ToString();
+				else
+				{
+					RowKey = _txId.ToString() + "-m";
+					TransactionBytes = tx.ToBytes();
+				}
 			}
 
 			byte[] _Transaction;
@@ -143,7 +147,7 @@ namespace NBitcoin.Indexer
 			}
 
 		}
-		internal IndexedTransactionEntry(Entity[] entities)
+		internal TransactionEntry(Entity[] entities)
 		{
 			List<uint256> blockIds = new List<uint256>();
 			foreach(var entity in entities)

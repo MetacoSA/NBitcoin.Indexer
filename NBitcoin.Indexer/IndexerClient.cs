@@ -54,11 +54,11 @@ namespace NBitcoin.Indexer
 			}
 		}
 
-		public IndexedTransactionEntry GetTransaction(bool lazyLoadSpentOutput, uint256 txId)
+		public TransactionEntry GetTransaction(bool lazyLoadSpentOutput, uint256 txId)
 		{
 			return GetTransactions(lazyLoadSpentOutput, new uint256[] { txId }).First();
 		}
-		public IndexedTransactionEntry GetTransaction(uint256 txId)
+		public TransactionEntry GetTransaction(uint256 txId)
 		{
 			return GetTransactions(true, new[] { txId }).First();
 		}
@@ -68,19 +68,19 @@ namespace NBitcoin.Indexer
 		/// </summary>
 		/// <param name="txIds"></param>
 		/// <returns>All transactions (with null entries for unfound transactions)</returns>
-		public IndexedTransactionEntry[] GetTransactions(bool lazyLoadSpentOutput, uint256[] txIds)
+		public TransactionEntry[] GetTransactions(bool lazyLoadSpentOutput, uint256[] txIds)
 		{
-			var result = new IndexedTransactionEntry[txIds.Length];
-			var queries = new TableQuery<IndexedTransactionEntry.Entity>[txIds.Length];
+			var result = new TransactionEntry[txIds.Length];
+			var queries = new TableQuery<TransactionEntry.Entity>[txIds.Length];
 			try
 			{
 				Parallel.For(0, txIds.Length, i =>
 				{
 					var table = Configuration.GetTransactionTable();
-					queries[i] = new TableQuery<IndexedTransactionEntry.Entity>()
+					queries[i] = new TableQuery<TransactionEntry.Entity>()
 									.Where(
 											TableQuery.CombineFilters(
-												TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, IndexedTransactionEntry.Entity.GetPartitionKey(txIds[i])),
+												TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, TransactionEntry.Entity.GetPartitionKey(txIds[i])),
 												TableOperators.And,
 												TableQuery.CombineFilters(
 													TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txIds[i].ToString() + "-"),
@@ -94,7 +94,7 @@ namespace NBitcoin.Indexer
 						result[i] = null;
 					else
 					{
-						result[i] = new IndexedTransactionEntry(entities);
+						result[i] = new TransactionEntry(entities);
 						if(result[i].Transaction == null)
 						{
 							foreach(var block in result[i].BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
@@ -254,9 +254,9 @@ namespace NBitcoin.Indexer
 			AddressEntry[][] result = new AddressEntry[addresses.Length][];
 			Parallel.For(0, addresses.Length,
 			i =>
-				{
-					result[i] = GetEntries(addresses[i]);
-				});
+			{
+				result[i] = GetEntries(addresses[i]);
+			});
 			return result;
 		}
 
@@ -318,317 +318,6 @@ namespace NBitcoin.Indexer
 		public AddressEntry[] GetEntries(PubKey pubKey)
 		{
 			return GetEntries(pubKey.GetAddress(Configuration.Network));
-		}
-	}
-
-	public class AddressEntry
-	{
-		internal class Entity : TableEntity
-		{
-			public Entity()
-			{
-
-			}
-			public Entity(string txid, BitcoinAddress address, string blockId)
-			{
-				var wif = address.ToString();
-				PartitionKey = GetPartitionKey(wif);
-				RowKey = wif + "-" + txid + "-" + blockId;
-			}
-
-			public static string GetPartitionKey(string wif)
-			{
-				char[] c = new char[3];
-				c[0] = (int)(wif[wif.Length - 3]) % 2 == 0 ? 'a' : 'b';
-				c[1] = wif[wif.Length - 2];
-				c[2] = wif[wif.Length - 1];
-				return new string(c);
-			}
-
-			MemoryStream receiveStream = new MemoryStream();
-			public void AddReceive(int n)
-			{
-				var nCompact = new CompactVarInt((ulong)n, 4);
-				nCompact.ReadWrite(receiveStream, true);
-			}
-
-			MemoryStream outpointStream = new MemoryStream();
-			public void AddSend(OutPoint outpoint)
-			{
-				outpoint.ReadWrite(outpointStream, true);
-			}
-			public void Flush()
-			{
-				SentOutpoints = Helper.GetBytes(outpointStream);
-				ReceivedOutput = Helper.GetBytes(receiveStream);
-			}
-
-
-
-			public string TransactionId
-			{
-				get
-				{
-					return RowKey.Split('-')[1];
-				}
-			}
-			public string BlockId
-			{
-				get
-				{
-					var splitted = RowKey.Split('-');
-					if(splitted.Length < 3)
-						return "";
-					return RowKey.Split('-')[2];
-				}
-			}
-			public byte[] ReceivedOutput
-			{
-				get;
-				set;
-			}
-
-			public byte[] SentOutpoints
-			{
-				get;
-				set;
-			}
-
-
-			public List<int> GetReceivedOutput()
-			{
-				List<int> indexes = new List<int>();
-				if(ReceivedOutput == null)
-					return indexes;
-				MemoryStream ms = new MemoryStream(ReceivedOutput);
-				ms.Position = 0;
-				while(ms.Position != ms.Length)
-				{
-					CompactVarInt value = new CompactVarInt(4);
-					value.ReadWrite(ms, false);
-					indexes.Add((int)value.ToLong());
-				}
-				return indexes;
-			}
-
-			public List<OutPoint> GetSentOutpoints()
-			{
-				return Helper.DeserializeList<OutPoint>(SentOutpoints);
-			}
-
-
-			internal List<TxOut> GetReceivedTxOut()
-			{
-				return Helper.DeserializeList<TxOut>(ReceivedTxOuts);
-			}
-
-
-			public override string ToString()
-			{
-				return "RowKey : " + RowKey;
-			}
-
-			byte[] _SentTxOuts;
-			[IgnoreProperty]
-			public byte[] SentTxOuts
-			{
-				get
-				{
-					if(_SentTxOuts == null)
-						_SentTxOuts = Helper.Concat(SentTxOuts1, SentTxOuts2, SentTxOuts3, SentTxOuts4);
-					return _SentTxOuts;
-				}
-				set
-				{
-					_SentTxOuts = value;
-					Helper.Spread(value, 1024 * 63, ref _SentTxOuts1, ref _SentTxOuts2, ref _SentTxOuts3, ref _SentTxOuts4);
-				}
-			}
-
-			byte[] _SentTxOuts1;
-			public byte[] SentTxOuts1
-			{
-				get
-				{
-					return _SentTxOuts1;
-				}
-				set
-				{
-					_SentTxOuts1 = value;
-				}
-			}
-			byte[] _SentTxOuts2;
-			public byte[] SentTxOuts2
-			{
-				get
-				{
-					return _SentTxOuts2;
-				}
-				set
-				{
-					_SentTxOuts2 = value;
-				}
-			}
-			byte[] _SentTxOuts3;
-			public byte[] SentTxOuts3
-			{
-				get
-				{
-					return _SentTxOuts3;
-				}
-				set
-				{
-					_SentTxOuts3 = value;
-				}
-			}
-			byte[] _SentTxOuts4;
-			public byte[] SentTxOuts4
-			{
-				get
-				{
-					return _SentTxOuts4;
-				}
-				set
-				{
-					_SentTxOuts4 = value;
-				}
-			}
-
-			byte[] _ReceivedTxOuts;
-
-			[IgnoreProperty]
-			public byte[] ReceivedTxOuts
-			{
-				get
-				{
-					if(_ReceivedTxOuts == null)
-						_ReceivedTxOuts = Helper.Concat(_ReceivedTxOuts1, _ReceivedTxOuts2, _ReceivedTxOuts3, _ReceivedTxOuts4);
-					return _ReceivedTxOuts;
-				}
-				set
-				{
-					_ReceivedTxOuts = value;
-					Helper.Spread(value, 1024 * 63, ref _ReceivedTxOuts1, ref _ReceivedTxOuts2, ref _ReceivedTxOuts3, ref _ReceivedTxOuts4);
-				}
-			}
-
-			byte[] _ReceivedTxOuts1;
-			public byte[] ReceivedTxOuts1
-			{
-				get
-				{
-					return _ReceivedTxOuts1;
-				}
-				set
-				{
-					_ReceivedTxOuts1 = value;
-				}
-			}
-			byte[] _ReceivedTxOuts2;
-			public byte[] ReceivedTxOuts2
-			{
-				get
-				{
-					return _ReceivedTxOuts2;
-				}
-				set
-				{
-					_ReceivedTxOuts2 = value;
-				}
-			}
-			byte[] _ReceivedTxOuts3;
-			public byte[] ReceivedTxOuts3
-			{
-				get
-				{
-					return _ReceivedTxOuts3;
-				}
-				set
-				{
-					_ReceivedTxOuts3 = value;
-				}
-			}
-
-			byte[] _ReceivedTxOuts4;
-			public byte[] ReceivedTxOuts4
-			{
-				get
-				{
-					return _ReceivedTxOuts4;
-				}
-				set
-				{
-					_ReceivedTxOuts4 = value;
-				}
-			}
-			internal List<TxOut> GetSentTxOuts()
-			{
-				return Helper.DeserializeList<TxOut>(SentTxOuts);
-			}
-		}
-		public uint256 TransactionId
-		{
-			get;
-			set;
-		}
-
-		public BitcoinAddress Address
-		{
-			get;
-			set;
-		}
-
-		public List<OutPoint> SpentOutpoints
-		{
-			get;
-			set;
-		}
-
-		public uint256[] BlockIds
-		{
-			get;
-			set;
-		}
-
-		public Money BalanceChange
-		{
-			get;
-			set;
-		}
-
-		public List<TxOut> ReceivedTxOuts
-		{
-			get;
-			set;
-		}
-		public List<TxOut> SpentTxOuts
-		{
-			get;
-			set;
-		}
-
-		public override string ToString()
-		{
-			return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
-		}
-
-		public IEnumerable<OutPoint> ReceivedOutpoints
-		{
-			get
-			{
-				return ReceivedTxInIndex.Select(i => new OutPoint(TransactionId, i));
-			}
-		}
-		public List<int> ReceivedTxInIndex
-		{
-			get;
-			set;
-		}
-
-		public DateTimeOffset? MempoolDate
-		{
-			get;
-			set;
 		}
 	}
 }

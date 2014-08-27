@@ -86,12 +86,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AddressEntry.cs" />
     <Compile Include="AzureIndexer.cs" />
     <Compile Include="ChainChangeEntry.cs" />
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="Helper.cs" />
-    <Compile Include="IndexedAddressEntry.cs" />
-    <Compile Include="IndexedTransactionEntry.cs" />
+    <Compile Include="TransactionEntry.cs" />
     <Compile Include="IndexerClient.cs" />
     <Compile Include="IndexerConfiguration.cs" />
     <Compile Include="IndexerTrace.cs" />
