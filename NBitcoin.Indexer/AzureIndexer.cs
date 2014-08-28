@@ -72,19 +72,7 @@ namespace NBitcoin.Indexer
 		{
 			if(String.IsNullOrEmpty(Node))
 				throw new ConfigurationErrorsException("Node setting is not configured");
-
-			var splitted = Node.Split(':');
-			var port = splitted.Length == 1 ? Network.DefaultPort : int.Parse(splitted[1]);
-			IPAddress address = null;
-			try
-			{
-				address = IPAddress.Parse(splitted[0]);
-			}
-			catch(FormatException)
-			{
-				address = Dns.GetHostEntry(splitted[0]).AddressList[0];
-			}
-			return new NodeServer(Network).GetNodeByEndpoint(new IPEndPoint(address, port));
+			return new NodeServer(Network).GetNodeByEndpoint(Node);
 		}
 
 		public string Node
