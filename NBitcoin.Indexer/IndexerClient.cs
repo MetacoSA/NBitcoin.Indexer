@@ -218,31 +218,21 @@ namespace NBitcoin.Indexer
 												)
 							));
 
-			var indexedEntriesGroups = table
+			var entitiesByTransactionId = table
 									.ExecuteQuery(query)
 									.GroupBy(e => e.TransactionId);
 			List<AddressEntry> result = new List<AddressEntry>();
-			foreach(var indexEntryGroup in indexedEntriesGroups)
+			foreach(var entities in entitiesByTransactionId)
 			{
-				var indexEntry = indexEntryGroup.First();
-				var entry = new AddressEntry();
-				entry.Address = address;
-				entry.TransactionId = new uint256(indexEntry.TransactionId);
-				if(indexEntry.ReceivedTxOuts == null)
-					if(LazyLoad(indexEntry))
+				var entity = entities.Where(e=>e.Loaded).FirstOrDefault();
+				if(entity == null)
+					entity = entities.First();
+				if(!entity.Loaded)
+					if(LoadAddressEntity(entity))
 					{
-						table.Execute(TableOperation.Merge(indexEntry));
+						table.Execute(TableOperation.Merge(entity));
 					}
-				entry.BlockIds = indexEntryGroup
-										.Where(s => !string.IsNullOrEmpty(s.BlockId))
-										.Select(s => new uint256(s.BlockId)).ToArray();
-				entry.ReceivedTxOuts = indexEntry.GetReceivedTxOut();
-				entry.ReceivedTxInIndex = indexEntry.GetReceivedOutput();
-
-				entry.SpentOutpoints = indexEntry.GetSentOutpoints();
-				entry.SpentTxOuts = indexEntry.GetSentTxOuts();
-				entry.MempoolDate = indexEntryGroup.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
-				entry.BalanceChange = (indexEntry.SentTxOuts == null || indexEntry.ReceivedTxOuts == null) ? null : entry.ReceivedTxOuts.Select(t => t.Value).Sum() - entry.SpentTxOuts.Select(t => t.Value).Sum();
+				var entry = new AddressEntry(entity, entities.ToArray());
 				result.Add(entry);
 			}
 			return result.ToArray();
@@ -260,7 +250,7 @@ namespace NBitcoin.Indexer
 			return result;
 		}
 
-		private bool LazyLoad(AddressEntry.Entity indexAddress)
+		public bool LoadAddressEntity(AddressEntry.Entity indexAddress)
 		{
 			var txId = new uint256(indexAddress.TransactionId);
 			var indexedTx = GetTransaction(txId);

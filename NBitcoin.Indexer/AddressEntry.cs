@@ -14,6 +14,22 @@ namespace NBitcoin.Indexer
 {
 	public class AddressEntry
 	{
+		
+		public AddressEntry(Entity loadedEntity, params Entity[] otherEntities)
+		{
+			Address = Network.CreateFromBase58Data<BitcoinAddress>(loadedEntity.Address);
+			TransactionId = new uint256(loadedEntity.TransactionId);
+			BlockIds = otherEntities
+									.Where(s => !string.IsNullOrEmpty(s.BlockId))
+									.Select(s => new uint256(s.BlockId)).ToArray();
+			ReceivedTxOuts = loadedEntity.GetReceivedTxOut();
+			ReceivedTxInIndex = loadedEntity.GetReceivedOutput();
+
+			SpentOutpoints = loadedEntity.GetSentOutpoints();
+			SpentTxOuts = loadedEntity.GetSentTxOuts();
+			MempoolDate = otherEntities.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
+			BalanceChange = (loadedEntity.SentTxOuts == null || loadedEntity.ReceivedTxOuts == null) ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - SpentTxOuts.Select(t => t.Value).Sum();
+		}
 		public class Entity : TableEntity
 		{
 			public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, string txId)
@@ -137,6 +153,13 @@ namespace NBitcoin.Indexer
 			}
 
 
+			public string Address
+			{
+				get
+				{
+					return RowKey.Split('-')[0];
+				}
+			}
 
 			public string TransactionId
 			{
@@ -268,6 +291,15 @@ namespace NBitcoin.Indexer
 			}
 
 			byte[] _ReceivedTxOuts;
+
+			[IgnoreProperty]
+			public bool Loaded
+			{
+				get
+				{
+					return ReceivedTxOuts != null;
+				}
+			}
 
 			[IgnoreProperty]
 			public byte[] ReceivedTxOuts
