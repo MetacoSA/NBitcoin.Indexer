@@ -254,7 +254,7 @@ namespace NBitcoin.Indexer
 		{
 			return LoadAddressEntity(indexAddress, null);
 		}
-		public bool LoadAddressEntity(AddressEntry.Entity indexAddress, Dictionary<uint256, Transaction> transactionsCache)
+		public bool LoadAddressEntity(AddressEntry.Entity indexAddress, IDictionary<uint256, Transaction> transactionsCache)
 		{
 			if(transactionsCache == null)
 				transactionsCache = new Dictionary<uint256, Transaction>();

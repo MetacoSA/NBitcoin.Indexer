@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-	internal class Helper
+	internal static class Helper
 	{
 		internal static List<T> DeserializeList<T>(byte[] bytes) where T : IBitcoinSerializable, new()
 		{
@@ -127,6 +127,28 @@ namespace NBitcoin.Indexer
 			ServicePointManager.UseNagleAlgorithm = false;
 			ServicePointManager.Expect100Continue = false;
 			ServicePointManager.DefaultConnectionLimit = 100;
+		}
+
+		public static void AddOrReplace<TKey, TValue>(this IDictionary<TKey, TValue> dico, TKey key, TValue value)
+		{
+			if(dico.ContainsKey(key))
+			{
+				dico.Remove(key);
+				dico.Add(key, value);
+			}
+			else
+			{
+				dico.Add(key, value);
+			}
+		}
+		public static bool TryAdd<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key, TValue value)
+		{
+			if(!dictionary.ContainsKey(key))
+			{
+				dictionary.Add(key, value);
+				return true;
+			}
+			return false;
 		}
 	}
 }
