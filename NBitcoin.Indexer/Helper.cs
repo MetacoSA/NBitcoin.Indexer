@@ -129,18 +129,6 @@ namespace NBitcoin.Indexer
 			ServicePointManager.DefaultConnectionLimit = 100;
 		}
 
-		public static void AddOrReplace<TKey, TValue>(this IDictionary<TKey, TValue> dico, TKey key, TValue value)
-		{
-			if(dico.ContainsKey(key))
-			{
-				dico.Remove(key);
-				dico.Add(key, value);
-			}
-			else
-			{
-				dico.Add(key, value);
-			}
-		}
 		public static bool TryAdd<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key, TValue value)
 		{
 			if(!dictionary.ContainsKey(key))
