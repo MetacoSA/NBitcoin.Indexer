@@ -252,21 +252,33 @@ namespace NBitcoin.Indexer
 
 		public bool LoadAddressEntity(AddressEntry.Entity indexAddress)
 		{
+			return LoadAddressEntity(indexAddress, null);
+		}
+		public bool LoadAddressEntity(AddressEntry.Entity indexAddress, Dictionary<uint256, Transaction> transactionsCache)
+		{
+			if(transactionsCache == null)
+				transactionsCache = new Dictionary<uint256, Transaction>();
 			var txId = new uint256(indexAddress.TransactionId);
-			var indexedTx = GetTransaction(txId);
-			if(indexedTx == null)
+
+			Transaction tx = null;
+			if(!transactionsCache.TryGetValue(txId, out tx))
+			{
+				var indexed = GetTransaction(txId);
+				if(indexed != null)
+					tx = indexed.Transaction;
+			}
+			if(tx == null)
 				return false;
 
 			Money total = Money.Zero;
 
 			var received = indexAddress.GetReceivedOutput();
 			indexAddress.ReceivedTxOuts =
-							Helper.SerializeList(indexedTx.Transaction.Outputs.Where((o, i) => received.Contains(i))
+							Helper.SerializeList(tx.Outputs.Where((o, i) => received.Contains(i))
 							.ToList());
 
 
-			Dictionary<uint256, Transaction> transactionsCache = new Dictionary<uint256, Transaction>();
-			transactionsCache.Add(indexedTx.Transaction.GetHash(), indexedTx.Transaction);
+			transactionsCache.AddOrReplace(txId, tx);
 
 			List<TxOut> sentTxOut = new List<TxOut>();
 			var sentOutputs = indexAddress.GetSentOutpoints();
@@ -280,7 +292,7 @@ namespace NBitcoin.Indexer
 					if(sourceIndexedTx != null)
 					{
 						sourceTransaction = sourceIndexedTx.Transaction;
-						transactionsCache.Add(sent.Hash, sourceTransaction);
+						transactionsCache.AddOrReplace(sent.Hash, sourceTransaction);
 					}
 				}
 				if(sourceTransaction == null || sourceTransaction.Outputs.Count <= sent.N)
