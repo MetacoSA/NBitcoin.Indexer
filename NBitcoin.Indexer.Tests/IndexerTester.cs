@@ -133,7 +133,7 @@ namespace NBitcoin.Indexer.Tests
 			NodeServer nodeServer = new NodeServer(Network.Main, internalPort: (ushort)RandomUtils.GetInt32());
 			nodeServer.Listen();
 			_NodeServer = nodeServer;
-			Indexer.Configuration.Node = "localhost:" + nodeServer.LocalEndpoint.Port;
+			Indexer.Configuration.Node = "127.0.0.1:" + nodeServer.LocalEndpoint.Port;
 			var store = CreateLocalBlockStore();
 			Indexer.Configuration.BlockDirectory = store.Folder.FullName;
 			return new MiniNode(store, nodeServer);
