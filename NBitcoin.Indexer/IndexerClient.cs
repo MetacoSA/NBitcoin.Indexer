@@ -204,6 +204,9 @@ namespace NBitcoin.Indexer
 
 		public AddressEntry[] GetEntries(BitcoinAddress address)
 		{
+            var originalNetwork = address.Network;
+            if (address.Network != Network.Main)
+                address = Network.Main.CreateBitcoinAddress(address.ID);
 			var addressStr = address.ToString();
 			var table = Configuration.GetBalanceTable();
 			var query = new TableQuery<AddressEntry.Entity>()
@@ -233,6 +236,8 @@ namespace NBitcoin.Indexer
 						table.Execute(TableOperation.Merge(entity));
 					}
 				var entry = new AddressEntry(entity, entities.ToArray());
+                if (entry.Address.Network != originalNetwork)
+                    entry.Address = originalNetwork.CreateBitcoinAddress(address.ID);
 				result.Add(entry);
 			}
 			return result.ToArray();
