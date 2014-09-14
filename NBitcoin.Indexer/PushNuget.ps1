@@ -1,3 +1,4 @@
+impvs
 del *.nupkg 
 nuGet pack NBitcoin.Indexer.csproj -Build -Properties Configuration=Release -includereferencedprojects
 forfiles /m *.nupkg /c "cmd /c NuGet.exe push @FILE"
@@ -5,3 +6,6 @@ forfiles /m *.nupkg /c "cmd /c NuGet.exe push @FILE"
 $ver = $Matches.Item(0)
 git tag -a "v$ver" -m "$ver"
 git push --tags
+msbuild.exe ../Build/Build.csproj /p:Configuration=Release
+msbuild.exe ../NBitcoin.Indexer.Console/NBitcoin.Indexer.Console.csproj /p:Configuration=Release
+msbuild.exe ../Build/DeployClient.proj
