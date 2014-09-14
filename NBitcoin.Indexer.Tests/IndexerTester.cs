@@ -25,7 +25,6 @@ namespace NBitcoin.Indexer.Tests
 		{
 			TestUtils.EnsureNew(folder);
 			var config = IndexerServerConfiguration.FromConfiguration();
-			config.ProgressFile = folder + "/progress";
 			config.BlockDirectory = "../../Data/blocks";
 			config.StorageNamespace = folder;
 			config.MainDirectory = folder;

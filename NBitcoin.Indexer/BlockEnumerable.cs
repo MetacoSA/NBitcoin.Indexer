@@ -24,13 +24,12 @@ namespace NBitcoin.Indexer
 		{
 			this._Importer = importer;
 			if(checkpointName == null)
-				_ProgressFile = Configuration.ProgressFile;
+                _ProgressFile = "progress.dat";
 			else
 			{
-				var originalName = Path.GetFileName(Configuration.ProgressFile);
-				_ProgressFile = checkpointName + "-" + originalName;
-				_ProgressFile = Path.Combine(Path.GetDirectoryName(Configuration.ProgressFile), _ProgressFile);
+                _ProgressFile = checkpointName + "-progress.dat";
 			}
+            _ProgressFile = Configuration.GetFilePath(_ProgressFile);
 
 			var startPosition = GetCheckpoint();
 			var endPosition = new DiskBlockPos((uint)(importer.FromBlk + importer.BlkCount), 0);
@@ -45,7 +44,7 @@ namespace NBitcoin.Indexer
 
 			IndexerTrace.StartAtPosition(startPosition);
 			_Range = new DiskBlockPosRange(startPosition, endPosition);
-			_Store = Configuration.CreateStoreBlock();
+			_Store = Configuration.CreateBlockStore();
 		}
 
 		private string _ProgressFile;
@@ -107,9 +106,16 @@ namespace NBitcoin.Indexer
 			_LastSaved = DateTime.Now;
 
 			var lastLoggedProgress = default(DateTime);
-
+            bool skipFirst = GetCheckpoint() != new DiskBlockPos(0, 0);
+            bool first = true;
 			foreach(var block in _Store.Enumerate(_Range))
 			{
+                if (first)
+                {
+                    first = false;
+                    if (skipFirst)
+                        continue;
+                }
 				_Progress.Processing(block);
 				yield return block;
 				if(DateTime.Now - lastLoggedProgress > _LogInterval)
