@@ -233,6 +233,7 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
+                var node = tester.CreateLocalNode();
                 var store = tester.CreateLocalBlockStore();
                 var sender = new Key().PubKey;
                 var receiver = new Key().PubKey;
@@ -255,7 +256,6 @@ namespace NBitcoin.Indexer.Tests
 					}
                 };
                 store.Append(b1);
-
                 var b2 = new Block()
                 {
                     Header =
@@ -339,6 +339,11 @@ namespace NBitcoin.Indexer.Tests
                 store.Append(b3);
 
                 tester.Indexer.IndexBlocks();
+
+                foreach (var block in store.Enumerate(true,0))
+                {
+                    node.Generator.Chain.SetTip(block.Item.Header);
+                }
                 tester.Indexer.IndexMainChain();
                 tester.Indexer.IndexTransactions();
                 tester.Indexer.IndexBalances();
@@ -347,7 +352,7 @@ namespace NBitcoin.Indexer.Tests
                 AssertContainsMoney("2.1", entries);
                 Chain chain = new Chain(Network.Main);
                 tester.Client
-                    .GetChainChangesUntilFork(chain.Tip,false)
+                    .GetChainChangesUntilFork(chain.Tip, false)
                     .UpdateChain(chain);
                 entries.Select(e => e.FetchConfirmedBlock(chain)).ToArray();
 
