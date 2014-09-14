@@ -144,7 +144,7 @@ namespace NBitcoin.Indexer.Tests
 						t3
 					}
                 });
-                tester.Indexer.IndexAddresses();
+                tester.Indexer.IndexBalances();
                 entries = tester.Client.GetEntries(sender);
                 Assert.True(entries.All(e => e.BlockIds.Length == 1));
             }
@@ -229,7 +229,7 @@ namespace NBitcoin.Indexer.Tests
 
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
         [Fact]
-        public void CanUploadAddressesToAzure()
+        public void CanUploadBalancesToAzure()
         {
             using (var tester = CreateTester())
             {
@@ -290,7 +290,7 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Indexer.IndexBlocks();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexAddresses();
+                tester.Indexer.IndexBalances();
 
                 var entries = tester.Client.GetEntries(sender);
                 Assert.Equal(2, entries.Length);
@@ -339,11 +339,17 @@ namespace NBitcoin.Indexer.Tests
                 store.Append(b3);
 
                 tester.Indexer.IndexBlocks();
+                tester.Indexer.IndexMainChain();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexAddresses();
+                tester.Indexer.IndexBalances();
 
                 entries = tester.Client.GetEntries(receiver);
                 AssertContainsMoney("2.1", entries);
+                Chain chain = new Chain(Network.Main);
+                tester.Client
+                    .GetChainChangesUntilFork(chain.Tip,false)
+                    .UpdateChain(chain);
+                entries.Select(e => e.FetchConfirmedBlock(chain)).ToArray();
 
                 entries = tester.Client.GetEntries(sender);
                 AssertContainsMoney(null, entries);
@@ -378,7 +384,7 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Indexer.IndexBlocks();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexAddresses();
+                tester.Indexer.IndexBalances();
 
                 var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
                 Assert.Null(tx.SpentTxOuts);

@@ -140,7 +140,7 @@ namespace NBitcoin.Indexer
             return tasks;
         }
 
-        public void IndexAddresses()
+        public void IndexBalances()
         {
             SetThrottling();
             BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
@@ -519,8 +519,7 @@ namespace NBitcoin.Indexer
 
             using (IndexerTrace.NewCorrelation("Index Main chain").Open())
             {
-                var table = Configuration.GetChainTable();
-                table.CreateIfNotExists();
+                Configuration.GetChainTable().CreateIfNotExists();
                 using (var node = Configuration.ConnectToNode())
                 {
                     var chain = Configuration.GetLocalChain("ImportMainChain");
@@ -549,43 +548,62 @@ namespace NBitcoin.Indexer
                         }
 
                         IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
-
-
-                        string lastPartition = null;
-                        TableBatchOperation batch = new TableBatchOperation();
-                        for (int i = height ; i <= chain.Tip.Height ; i++)
-                        {
-                            var block = chain.GetBlock(i);
-                            var entry = new ChainChangeEntry()
-                            {
-                                BlockId = block.HashBlock,
-                                Header = block.Header,
-                                Height = block.Height
-                            };
-                            var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
-                            if ((partition == lastPartition || lastPartition == null) && batch.Count < 100)
-                            {
-                                batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
-                            }
-                            else
-                            {
-                                table.ExecuteBatch(batch);
-                                batch = new TableBatchOperation();
-                                batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
-                            }
-                            lastPartition = partition;
-                            IndexerTrace.RemainingBlockChain(i, chain.Tip.Height);
-                        }
-                        if (batch.Count > 0)
-                        {
-                            table.ExecuteBatch(batch);
-                        }
+                        Index(chain, height);
                     }
                     finally
                     {
                         chain.Changes.Dispose();
                     }
                 }
+            }
+        }
+
+        public void Index(Chain chain, int startHeight)
+        {
+            List<ChainChangeEntry> entries = new List<ChainChangeEntry>();
+            for (int i = startHeight ; i <= chain.Tip.Height ; i++)
+            {
+                var block = chain.GetBlock(i);
+                var entry = new ChainChangeEntry()
+                {
+                    BlockId = block.HashBlock,
+                    Header = block.Header,
+                    Height = block.Height
+                };
+                entries.Add(entry);
+
+            }
+
+            Index(entries.ToArray());
+
+        }
+
+        public void Index(params ChainChangeEntry[] chainChanges)
+        {
+            CloudTable table = Configuration.GetChainTable();
+            string lastPartition = null;
+            TableBatchOperation batch = new TableBatchOperation();
+            ChainChangeEntry last = chainChanges.LastOrDefault();
+            for (int i = 0 ; i < chainChanges.Length ; i++)
+            {
+                var entry = chainChanges[i];
+                var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
+                if ((partition == lastPartition || lastPartition == null) && batch.Count < 100)
+                {
+                    batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+                }
+                else
+                {
+                    table.ExecuteBatch(batch);
+                    batch = new TableBatchOperation();
+                    batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+                }
+                lastPartition = partition;
+                IndexerTrace.RemainingBlockChain(entry.Height, last.Height);
+            }
+            if (batch.Count > 0)
+            {
+                table.ExecuteBatch(batch);
             }
         }
 
