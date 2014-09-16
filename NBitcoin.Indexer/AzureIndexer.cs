@@ -147,7 +147,7 @@ namespace NBitcoin.Indexer
             var stop = new CancellationTokenSource();
 
             var tasks = CreateTasks(indexedEntries, (entries) => Index(entries), stop.Token, 30);
-            using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
+            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
             {
                 Configuration.GetBalanceTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, AddressEntry.Entity>();
