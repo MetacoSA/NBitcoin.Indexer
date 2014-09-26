@@ -22,6 +22,7 @@ namespace NBitcoin.Indexer
 		public BlockEnumerable(AzureIndexer importer,
 							   string checkpointName = null)
 		{
+            CheckpointInterval = TimeSpan.FromMinutes(10.0);
 			this._Importer = importer;
 			if(checkpointName == null)
                 _ProgressFile = "progress.dat";
@@ -52,7 +53,7 @@ namespace NBitcoin.Indexer
 		private AzureIndexer _Importer;
 		private DiskBlockPosRange _Range;
 		private BlockStore _Store;
-		private TimeSpan saveInterval = TimeSpan.FromMinutes(5.0);
+
 		private TimeSpan _LogInterval = TimeSpan.FromSeconds(5.0);
 		private DateTime _LastSaved;
 		public ProgressTracker Progress
@@ -93,7 +94,7 @@ namespace NBitcoin.Indexer
 		{
 			get
 			{
-				return (DateTime.Now - _LastSaved) > saveInterval && !_Importer.NoSave;
+				return (DateTime.Now - _LastSaved) > CheckpointInterval && !_Importer.NoSave;
 			}
 		}
 
@@ -136,5 +137,11 @@ namespace NBitcoin.Indexer
 		}
 
 		#endregion
-	}
+
+        public TimeSpan CheckpointInterval
+        {
+            get;
+            set;
+        }
+    }
 }

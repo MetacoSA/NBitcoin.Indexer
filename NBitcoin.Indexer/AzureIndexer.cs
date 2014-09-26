@@ -81,8 +81,6 @@ namespace NBitcoin.Indexer
             var path = GetFilePath(name + ".dat");
             return new Chain(Network, new StreamObjectStream<ChainChange>(File.Open(path, FileMode.OpenOrCreate)));
         }
-
-
     }
 
 
@@ -113,6 +111,7 @@ namespace NBitcoin.Indexer
         {
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
+            CheckpointInterval = TimeSpan.FromMinutes(10.0);
             _Configuration = configuration;
             TaskCount = -1;
             FromBlk = 0;
@@ -611,9 +610,17 @@ namespace NBitcoin.Indexer
 
         private BlockEnumerable Enumerate(string checkpointName = null)
         {
-            return new BlockEnumerable(this, checkpointName);
+            return new BlockEnumerable(this, checkpointName)
+            {
+                CheckpointInterval = CheckpointInterval
+            };
         }
 
+        public TimeSpan CheckpointInterval
+        {
+            get;
+            set;
+        }
 
 
         private void WaitProcessed<T>(BlockingCollection<T> collection)

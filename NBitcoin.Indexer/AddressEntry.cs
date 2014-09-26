@@ -72,7 +72,7 @@ namespace NBitcoin.Indexer
                 {
                     if (tx.IsCoinBase)
                         break;
-                    var signer = GetSigner(input.ScriptSig);
+                    var signer = input.ScriptSig.GetSignerAddress(Network.Main);
                     if (signer != null)
                     {
                         AddressEntry.Entity entry = null;
@@ -88,7 +88,7 @@ namespace NBitcoin.Indexer
                 int i = 0;
                 foreach (var output in tx.Outputs)
                 {
-                    var receiver = GetReciever(output.ScriptPubKey);
+                    var receiver = output.ScriptPubKey.GetDestinationAddress(Network.Main);
                     if (receiver != null)
                     {
                         AddressEntry.Entity entry = null;
@@ -104,43 +104,6 @@ namespace NBitcoin.Indexer
                 foreach (var kv in entryByAddress)
                     kv.Value.Flush();
                 return entryByAddress;
-            }
-
-            private static BitcoinAddress GetReciever(Script scriptPubKey)
-            {
-                var payToHash = payToPubkeyHash.ExtractScriptPubKeyParameters(scriptPubKey);
-                if (payToHash != null)
-                {
-                    return new BitcoinAddress(payToHash, Network.Main);
-                }
-
-                var payToScript = payToScriptHash.ExtractScriptPubKeyParameters(scriptPubKey);
-                if (payToScript != null)
-                {
-                    return new BitcoinScriptAddress(payToScript, Network.Main);
-                }
-                return null;
-            }
-
-
-
-
-
-            static PayToPubkeyHashTemplate payToPubkeyHash = new PayToPubkeyHashTemplate();
-            static PayToScriptHashTemplate payToScriptHash = new PayToScriptHashTemplate();
-            private static BitcoinAddress GetSigner(Script scriptSig)
-            {
-                var pubKey = payToPubkeyHash.ExtractScriptSigParameters(scriptSig);
-                if (pubKey != null)
-                {
-                    return new BitcoinAddress(pubKey.PublicKey.ID, Network.Main);
-                }
-                var p2sh = payToScriptHash.ExtractScriptSigParameters(scriptSig);
-                if (p2sh != null)
-                {
-                    return new BitcoinScriptAddress(p2sh.RedeemScript.ID, Network.Main);
-                }
-                return null;
             }
 
             public Entity()
