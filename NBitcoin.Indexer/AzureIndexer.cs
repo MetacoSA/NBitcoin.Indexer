@@ -118,34 +118,23 @@ namespace NBitcoin.Indexer
             BlkCount = 9999999;
         }
 
-        public Task[] CreateTasks<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, CancellationToken cancel, int defaultTaskCount)
+        public TaskPool<TItem> CreateTaskPool<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, int defaultTaskCount)
         {
-
-            var tasks =
-                Enumerable.Range(0, TaskCount == -1 ? defaultTaskCount : TaskCount).Select(_ => Task.Factory.StartNew(() =>
+            var pool = new TaskPool<TItem>(collection, action, defaultTaskCount)
             {
-                try
-                {
-                    foreach (var item in collection.GetConsumingEnumerable(cancel))
-                    {
-                        action(item);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                }
-            }, TaskCreationOptions.LongRunning)).ToArray();
-            IndexerTrace.TaskCount(tasks.Length);
-            return tasks;
+                TaskCount = TaskCount
+            };
+            pool.Start();
+            IndexerTrace.TaskCount(pool.Tasks.Length);
+            return pool;
         }
 
         public void IndexBalances()
         {
             SetThrottling();
             BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
-            var stop = new CancellationTokenSource();
 
-            var tasks = CreateTasks(indexedEntries, (entries) => Index(entries), stop.Token, 30);
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries), 30);
             using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
             {
                 Configuration.GetBalanceTable().CreateIfNotExists();
@@ -180,8 +169,9 @@ namespace NBitcoin.Indexer
                                     indexedEntries.Add(kv.ToArray());
                                 }
                                 buckets.Clear();
-                                WaitProcessed(indexedEntries);
+                                tasks.Stop();
                                 storedBlocks.SaveCheckpoint();
+                                tasks.Start();
                             }
                         }
                         catch (Exception ex)
@@ -197,9 +187,7 @@ namespace NBitcoin.Indexer
                     indexedEntries.Add(kv.ToArray());
                 }
                 buckets.Clear();
-                WaitProcessed(indexedEntries);
-                stop.Cancel();
-                Task.WaitAll(tasks);
+                tasks.Stop();
                 storedBlocks.SaveCheckpoint();
             }
         }
@@ -216,8 +204,7 @@ namespace NBitcoin.Indexer
 
             BlockingCollection<TransactionEntry.Entity[]> transactions = new BlockingCollection<TransactionEntry.Entity[]>(20);
 
-            var stop = new CancellationTokenSource();
-            var tasks = CreateTasks(transactions, (txs) => Index(txs), stop.Token, 30);
+            var tasks = CreateTaskPool(transactions, (txs) => Index(txs), 30);
 
             using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
             {
@@ -242,8 +229,9 @@ namespace NBitcoin.Indexer
                             {
                                 PushTransactions(buckets, kv, transactions);
                             }
-                            WaitProcessed(transactions);
+                            tasks.Stop();
                             storedBlocks.SaveCheckpoint();
+                            tasks.Start();
                         }
                     }
                 }
@@ -252,9 +240,7 @@ namespace NBitcoin.Indexer
                 {
                     PushTransactions(buckets, kv, transactions);
                 }
-                WaitProcessed(transactions);
-                stop.Cancel();
-                Task.WaitAll(tasks);
+                tasks.Stop();
                 storedBlocks.SaveCheckpoint();
             }
             return txCount;
@@ -385,8 +371,7 @@ namespace NBitcoin.Indexer
             long blkCount = 0;
             SetThrottling();
             BlockingCollection<Block> blocks = new BlockingCollection<Block>(20);
-            var stop = new CancellationTokenSource();
-            var tasks = CreateTasks(blocks, Index, stop.Token, 15);
+            var tasks = CreateTaskPool(blocks, Index, 15);
 
             using (IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
             {
@@ -398,13 +383,12 @@ namespace NBitcoin.Indexer
                     blocks.Add(block.Item);
                     if (storedBlocks.NeedSave)
                     {
-                        WaitProcessed(blocks);
+                        tasks.Stop();
                         storedBlocks.SaveCheckpoint();
+                        tasks.Start();
                     }
                 }
-                WaitProcessed(blocks);
-                stop.Cancel();
-                Task.WaitAll(tasks);
+                tasks.Stop();
                 storedBlocks.SaveCheckpoint();
             }
             return blkCount;
@@ -622,14 +606,6 @@ namespace NBitcoin.Indexer
             set;
         }
 
-
-        private void WaitProcessed<T>(BlockingCollection<T> collection)
-        {
-            while (collection.Count != 0)
-            {
-                Thread.Sleep(1000);
-            }
-        }
 
         private static void SetThrottling()
         {

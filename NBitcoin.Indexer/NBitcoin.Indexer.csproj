@@ -88,6 +88,7 @@
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="MultiValueDictionary.cs" />
+    <Compile Include="TaskPool.cs" />
     <Compile Include="TransactionEntry.cs" />
     <Compile Include="IndexerClient.cs" />
     <Compile Include="IndexerConfiguration.cs" />
