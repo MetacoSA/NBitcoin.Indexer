@@ -178,7 +178,7 @@ namespace NBitcoin.Indexer
 
 				if(loadedEntity.SpentOutputs != null)
 				{
-					SpentTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.SpentOutputs).ToArray();
+					PreviousTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.SpentOutputs).ToArray();
 				}
 			}
 
@@ -194,9 +194,9 @@ namespace NBitcoin.Indexer
 		{
 			get
 			{
-				if(SpentTxOuts == null || Transaction == null)
+				if(PreviousTxOuts == null || Transaction == null)
 					return null;
-				return SpentTxOuts.Select(o => o.Value).Sum() - Transaction.TotalOut;
+				return PreviousTxOuts.Select(o => o.Value).Sum() - Transaction.TotalOut;
 			}
 		}
 		public uint256[] BlockIds
@@ -215,7 +215,7 @@ namespace NBitcoin.Indexer
 			internal set;
 		}
 
-		public TxOut[] SpentTxOuts
+		public TxOut[] PreviousTxOuts
 		{
 			get;
 			set;

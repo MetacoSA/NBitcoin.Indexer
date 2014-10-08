@@ -68,7 +68,7 @@ namespace NBitcoin.Indexer
 		/// </summary>
 		/// <param name="txIds"></param>
 		/// <returns>All transactions (with null entries for unfound transactions)</returns>
-		public TransactionEntry[] GetTransactions(bool lazyLoadSpentOutput, uint256[] txIds)
+		public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, uint256[] txIds)
 		{
 			var result = new TransactionEntry[txIds.Length];
 			var queries = new TableQuery<TransactionEntry.Entity>[txIds.Length];
@@ -107,7 +107,7 @@ namespace NBitcoin.Indexer
 							}
 						}
 
-						var needTxOut = result[i].SpentTxOuts == null && lazyLoadSpentOutput && result[i].Transaction != null;
+						var needTxOut = result[i].PreviousTxOuts == null && lazyLoadPreviousOutput && result[i].Transaction != null;
 						if(needTxOut)
 						{
 							var tasks =
@@ -129,7 +129,7 @@ namespace NBitcoin.Indexer
 							if(tasks.All(t => t.Result != null))
 							{
 								var outputs = tasks.Select(t => t.Result).ToArray();
-								result[i].SpentTxOuts = outputs;
+								result[i].PreviousTxOuts = outputs;
 								entities[0].SpentOutputs = Helper.SerializeList(outputs);
 								if(entities[0].SpentOutputs != null)
 									table.Execute(TableOperation.Merge(entities[0]));
@@ -138,7 +138,7 @@ namespace NBitcoin.Indexer
 							{
 								if(result[i].Transaction.IsCoinBase)
 								{
-									result[i].SpentTxOuts = new TxOut[0];
+									result[i].PreviousTxOuts = new TxOut[0];
 									entities[0].SpentOutputs = Helper.SerializeList(new TxOut[0]);
 									if(entities[0].SpentOutputs != null)
 										table.Execute(TableOperation.Merge(entities[0]));
@@ -285,29 +285,29 @@ namespace NBitcoin.Indexer
 
 			transactionsCache.AddOrReplace(txId, tx);
 
-			List<TxOut> sentTxOut = new List<TxOut>();
-			var sentOutputs = indexAddress.GetSentOutpoints();
+			List<TxOut> prevTxOut = new List<TxOut>();
+			var prevOutpoints = indexAddress.GetPreviousOutpoints();
 
-			foreach(var sent in sentOutputs)
+			foreach(var prev in prevOutpoints)
 			{
 				Transaction sourceTransaction = null;
-				if(!transactionsCache.TryGetValue(sent.Hash, out sourceTransaction))
+				if(!transactionsCache.TryGetValue(prev.Hash, out sourceTransaction))
 				{
-					var sourceIndexedTx = GetTransactions(false, new uint256[] { sent.Hash }).FirstOrDefault();
+					var sourceIndexedTx = GetTransactions(false, new uint256[] { prev.Hash }).FirstOrDefault();
 					if(sourceIndexedTx != null)
 					{
 						sourceTransaction = sourceIndexedTx.Transaction;
-						transactionsCache.AddOrReplace(sent.Hash, sourceTransaction);
+						transactionsCache.AddOrReplace(prev.Hash, sourceTransaction);
 					}
 				}
-				if(sourceTransaction == null || sourceTransaction.Outputs.Count <= sent.N)
+				if(sourceTransaction == null || sourceTransaction.Outputs.Count <= prev.N)
 				{
 					return false;
 				}
-				sentTxOut.Add(sourceTransaction.Outputs[(int)sent.N]);
+				prevTxOut.Add(sourceTransaction.Outputs[(int)prev.N]);
 			}
 
-			indexAddress.SentTxOuts = Helper.SerializeList(sentTxOut);
+			indexAddress.PreviousTxOuts = Helper.SerializeList(prevTxOut);
 			return true;
 		}
 		public AddressEntry[] GetEntries(KeyId keyId)

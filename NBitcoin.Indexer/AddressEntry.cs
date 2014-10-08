@@ -54,10 +54,10 @@ namespace NBitcoin.Indexer
             ReceivedTxOuts = loadedEntity.GetReceivedTxOut();
             ReceivedTxInIndex = loadedEntity.GetReceivedOutput();
 
-            SpentOutpoints = loadedEntity.GetSentOutpoints();
-            SpentTxOuts = loadedEntity.GetSentTxOuts();
+            PreviousOutpoints = loadedEntity.GetPreviousOutpoints();
+            PreviousTxOuts = loadedEntity.GetPreviousTxOuts();
             MempoolDate = otherEntities.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
-            BalanceChange = (loadedEntity.SentTxOuts == null || loadedEntity.ReceivedTxOuts == null) ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - SpentTxOuts.Select(t => t.Value).Sum();
+            BalanceChange = (loadedEntity.PreviousTxOuts == null || loadedEntity.ReceivedTxOuts == null) ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - PreviousTxOuts.Select(t => t.Value).Sum();
         }
         public class Entity : TableEntity
         {
@@ -199,7 +199,7 @@ namespace NBitcoin.Indexer
                 return indexes;
             }
 
-            public List<OutPoint> GetSentOutpoints()
+            public List<OutPoint> GetPreviousOutpoints()
             {
                 return Helper.DeserializeList<OutPoint>(SentOutpoints);
             }
@@ -216,19 +216,19 @@ namespace NBitcoin.Indexer
                 return "RowKey : " + RowKey;
             }
 
-            byte[] _SentTxOuts;
+            byte[] _PreviousTxOuts;
             [IgnoreProperty]
-            public byte[] SentTxOuts
+            public byte[] PreviousTxOuts
             {
                 get
                 {
-                    if (_SentTxOuts == null)
-                        _SentTxOuts = Helper.Concat(SentTxOuts1, SentTxOuts2, SentTxOuts3, SentTxOuts4);
-                    return _SentTxOuts;
+                    if (_PreviousTxOuts == null)
+                        _PreviousTxOuts = Helper.Concat(SentTxOuts1, SentTxOuts2, SentTxOuts3, SentTxOuts4);
+                    return _PreviousTxOuts;
                 }
                 set
                 {
-                    _SentTxOuts = value;
+                    _PreviousTxOuts = value;
                     Helper.Spread(value, 1024 * 63, ref _SentTxOuts1, ref _SentTxOuts2, ref _SentTxOuts3, ref _SentTxOuts4);
                 }
             }
@@ -358,9 +358,9 @@ namespace NBitcoin.Indexer
                     _ReceivedTxOuts4 = value;
                 }
             }
-            internal List<TxOut> GetSentTxOuts()
+            internal List<TxOut> GetPreviousTxOuts()
             {
-                return Helper.DeserializeList<TxOut>(SentTxOuts);
+                return Helper.DeserializeList<TxOut>(PreviousTxOuts);
             }
         }
         public uint256 TransactionId
@@ -375,7 +375,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public List<OutPoint> SpentOutpoints
+        public List<OutPoint> PreviousOutpoints
         {
             get;
             set;
@@ -398,7 +398,7 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-        public List<TxOut> SpentTxOuts
+        public List<TxOut> PreviousTxOuts
         {
             get;
             set;
