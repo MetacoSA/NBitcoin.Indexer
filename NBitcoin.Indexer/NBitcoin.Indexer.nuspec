@@ -11,6 +11,7 @@
 		<summary></summary>
 		<projectUrl>https://github.com/NicolasDorier/NBitcoin.Indexer</projectUrl>
 		<copyright>Copyright 2014</copyright>
+		<tags>bitcoin</tags>
 	</metadata>
 	<files></files>
 </package>
