@@ -72,7 +72,7 @@ namespace NBitcoin.Indexer
                 {
                     if (tx.IsCoinBase)
                         break;
-                    var signer = input.ScriptSig.GetSignerAddress(Network.Main);
+                    var signer = input.ScriptSig.GetSignerAddress(AzureIndexer.InternalNetwork);
                     if (signer != null)
                     {
                         AddressEntry.Entity entry = null;
@@ -88,7 +88,7 @@ namespace NBitcoin.Indexer
                 int i = 0;
                 foreach (var output in tx.Outputs)
                 {
-                    var receiver = output.ScriptPubKey.GetDestinationAddress(Network.Main);
+                    var receiver = output.ScriptPubKey.GetDestinationAddress(AzureIndexer.InternalNetwork);
                     if (receiver != null)
                     {
                         AddressEntry.Entity entry = null;

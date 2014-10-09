@@ -205,8 +205,8 @@ namespace NBitcoin.Indexer
 		public AddressEntry[] GetEntries(BitcoinAddress address)
 		{
             var originalNetwork = address.Network;
-            if (address.Network != Network.Main)
-                address = Network.Main.CreateBitcoinAddress(address.ID);
+            if (address.Network != AzureIndexer.InternalNetwork)
+                address = AzureIndexer.InternalNetwork.CreateBitcoinAddress(address.ID);
 			var addressStr = address.ToString();
 			var table = Configuration.GetBalanceTable();
 			var query = new TableQuery<AddressEntry.Entity>()

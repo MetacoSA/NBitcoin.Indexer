@@ -55,7 +55,7 @@ namespace NBitcoin.Indexer
         }
         public BlockStore CreateBlockStore()
         {
-            return new BlockStore(BlockDirectory, Network.Main);
+            return new BlockStore(BlockDirectory, Network);
         }
 
         public AzureIndexer CreateIndexer()
@@ -256,6 +256,7 @@ namespace NBitcoin.Indexer
         }
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
+        public readonly static Network InternalNetwork = Network.Main;
 
 
         public void Index(params AddressEntry.Entity[] entries)

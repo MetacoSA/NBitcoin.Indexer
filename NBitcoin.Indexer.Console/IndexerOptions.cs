@@ -28,7 +28,10 @@ namespace NBitcoin.Indexer.Console
         public string GetUsage()
         {
             if (_Usage == null)
+            {
                 _Usage = HelpText.AutoBuild(this, (HelpText current) => HelpText.DefaultParsingErrorsHandler(this, current));
+                _Usage = _Usage.Replace("NBitcoin.Indexer 1.0.0.0", "NBitcoin.Indexer " + typeof(IndexerClient).Assembly.GetName().Version);
+            }
             return _Usage;
             //
         }

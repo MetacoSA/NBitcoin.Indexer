@@ -25,6 +25,9 @@ namespace NBitcoin.Indexer
 
         public void Start()
         {
+            if (_Tasks != null)
+                throw new InvalidOperationException("Already started");
+            _Source = new CancellationTokenSource();
             _Tasks =
                 Enumerable.Range(0, TaskCount == -1 ? defaultTaskCount : TaskCount).Select(_ => Task.Factory.StartNew(() =>
                 {
