@@ -3,7 +3,7 @@
 	<metadata>
 		<id>NBitcoin.Indexer</id>
 		<version>$version$</version>
-		<title>NBitcoin</title>
+		<title>NBitcoin.Indexer</title>
 		<authors>Nicolas Dorier</authors>
 		<owners>$author$</owners>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
