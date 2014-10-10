@@ -65,8 +65,18 @@ namespace NBitcoin.Indexer
             {
                 return ExtractFromTransaction(null, tx, txId);
             }
+            public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
+            {
+                return ExtractFromTransaction(null, tx, txId);
+            }
+            public static Dictionary<string, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
+            {
+                return ExtractFromTransaction(blockId == null ? null : blockId.ToString(), tx, txId == null ? null : txId.ToString());
+            }
             public static Dictionary<string, Entity> ExtractFromTransaction(string blockId, Transaction tx, string txId)
             {
+                if (txId == null)
+                    txId = tx.GetHash().ToString();
                 Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
                 foreach (var input in tx.Inputs)
                 {
