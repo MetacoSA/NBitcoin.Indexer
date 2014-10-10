@@ -20,6 +20,14 @@ namespace NBitcoin.Indexer
 			return config;
 		}
 
+        public void EnsureSetup()
+        {
+            GetBalanceTable().CreateIfNotExists();
+            GetBlocksContainer().CreateIfNotExists();
+            GetChainTable().CreateIfNotExists();
+            GetTransactionTable().CreateIfNotExists();
+        }
+
 		protected static void Fill(IndexerConfiguration config)
 		{
 			var account = GetValue("Azure.AccountName", true);
