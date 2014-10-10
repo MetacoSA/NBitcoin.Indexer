@@ -150,10 +150,79 @@ namespace NBitcoin.Indexer
             }
             void Flush()
             {
-                SentOutpoints = Helper.GetBytes(outpointStream);
-                ReceivedOutput = Helper.GetBytes(receiveStream);
+                AllSentOutpoints = Helper.GetBytes(outpointStream, false);
+                AllReceivedOutput = Helper.GetBytes(receiveStream, false);
             }
 
+
+            byte[] _AllReceivedOutput;
+            [IgnoreProperty]
+            public byte[] AllReceivedOutput
+            {
+                get
+                {
+                    if (_AllReceivedOutput == null)
+                        _AllReceivedOutput = Helper.Concat(ReceivedOutput, ReceivedOutput1, ReceivedOutput2, ReceivedOutput3);
+                    return _AllReceivedOutput;
+                }
+                set
+                {
+                    _AllReceivedOutput = value;
+                    Helper.Spread(value, 1024 * 63, ref _ReceivedOutput, ref _ReceivedOutput1, ref _ReceivedOutput2, ref _ReceivedOutput3);
+                }
+            }
+
+            byte[] _ReceivedOutput;
+            public byte[] ReceivedOutput
+            {
+                get
+                {
+                    return _ReceivedOutput;
+                }
+                set
+                {
+                    _ReceivedOutput = value;
+                }
+            }
+
+            byte[] _ReceivedOutput1;
+            public byte[] ReceivedOutput1
+            {
+                get
+                {
+                    return _ReceivedOutput1;
+                }
+                set
+                {
+                    _ReceivedOutput1 = value;
+                }
+            }
+
+            byte[] _ReceivedOutput2;
+            public byte[] ReceivedOutput2
+            {
+                get
+                {
+                    return _ReceivedOutput2;
+                }
+                set
+                {
+                    _ReceivedOutput2 = value;
+                }
+            }
+
+            byte[] _ReceivedOutput3;
+            public byte[] ReceivedOutput3
+            {
+                get
+                {
+                    return _ReceivedOutput3;
+                }
+                set
+                {
+                    _ReceivedOutput3 = value;
+                }
+            }
 
             public string Address
             {
@@ -180,25 +249,82 @@ namespace NBitcoin.Indexer
                     return RowKey.Split('-')[2];
                 }
             }
-            public byte[] ReceivedOutput
+
+            byte[] _AllSentOutpoints;
+            [IgnoreProperty]
+            public byte[] AllSentOutpoints
             {
-                get;
-                set;
+                get
+                {
+                    if (_AllSentOutpoints == null)
+                        _AllSentOutpoints = Helper.Concat(_SentOutpoints, _SentOutpoints1, _SentOutpoints2, _SentOutpoints3);
+                    return _AllSentOutpoints;
+                }
+                set
+                {
+                    _AllSentOutpoints = value;
+                    Helper.Spread(value, 1024 * 63, ref _SentOutpoints, ref _SentOutpoints1, ref _SentOutpoints2, ref _SentOutpoints3);
+                }
             }
 
-            public byte[] SentOutpoints
+            byte[] _SentOutpoints;
+            public byte[] SentOutpointss
             {
-                get;
-                set;
+                get
+                {
+                    return _SentOutpoints;
+                }
+                set
+                {
+                    _SentOutpoints = value;
+                }
             }
 
+            byte[] _SentOutpoints1;
+            public byte[] SentOutpoints1
+            {
+                get
+                {
+                    return _SentOutpoints1;
+                }
+                set
+                {
+                    _SentOutpoints1 = value;
+                }
+            }
+
+            byte[] _SentOutpoints2;
+            public byte[] SentOutpoints2
+            {
+                get
+                {
+                    return _SentOutpoints2;
+                }
+                set
+                {
+                    _SentOutpoints2 = value;
+                }
+            }
+
+            byte[] _SentOutpoints3;
+            public byte[] SentOutpoints3
+            {
+                get
+                {
+                    return _SentOutpoints3;
+                }
+                set
+                {
+                    _SentOutpoints3 = value;
+                }
+            }
 
             public List<int> GetReceivedOutput()
             {
                 List<int> indexes = new List<int>();
-                if (ReceivedOutput == null)
+                if (AllReceivedOutput == null)
                     return indexes;
-                MemoryStream ms = new MemoryStream(ReceivedOutput);
+                MemoryStream ms = new MemoryStream(AllReceivedOutput);
                 ms.Position = 0;
                 while (ms.Position != ms.Length)
                 {
@@ -211,7 +337,7 @@ namespace NBitcoin.Indexer
 
             public List<OutPoint> GetPreviousOutpoints()
             {
-                return Helper.DeserializeList<OutPoint>(SentOutpoints);
+                return Helper.DeserializeList<OutPoint>(AllSentOutpoints);
             }
 
 

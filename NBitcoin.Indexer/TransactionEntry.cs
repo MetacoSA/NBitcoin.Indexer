@@ -108,11 +108,73 @@ namespace NBitcoin.Indexer
 				}
 			}
 
-			public byte[] SpentOutputs
-			{
-				get;
-				set;
-			}
+            byte[] _AllSpentOutputs;
+            [IgnoreProperty]
+            public byte[] AllSpentOutputs
+            {
+                get
+                {
+                    if (_AllSpentOutputs == null)
+                        _AllSpentOutputs = Helper.Concat(_SpentOutputs, _SpentOutputs1, _SpentOutputs2, _SpentOutputs3);
+                    return _AllSpentOutputs;
+                }
+                set
+                {
+                    _AllSpentOutputs = value;
+                    Helper.Spread(value, 1024 * 63, ref _SpentOutputs, ref _SpentOutputs1, ref _SpentOutputs2, ref _SpentOutputs3);
+                }
+            }
+
+            byte[] _SpentOutputs;
+            public byte[] SpentOutputs
+            {
+                get
+                {
+                    return _SpentOutputs;
+                }
+                set
+                {
+                    _SpentOutputs = value;
+                }
+            }
+            byte[] _SpentOutputs1;
+            public byte[] SpentOutputs1
+            {
+                get
+                {
+                    return _SpentOutputs1;
+                }
+                set
+                {
+                    _SpentOutputs1 = value;
+                }
+            }
+            byte[] _SpentOutputs2;
+            public byte[] SpentOutputs2
+            {
+                get
+                {
+                    return _SpentOutputs2;
+                }
+                set
+                {
+                    _SpentOutputs2 = value;
+                }
+            }
+
+            byte[] _SpentOutputs3;
+            public byte[] SpentOutputs3
+            {
+                get
+                {
+                    return _SpentOutputs3;
+                }
+                set
+                {
+                    _SpentOutputs3 = value;
+                }
+            }
+			
 
 			uint256 _txId;
 			ushort? _Key;
@@ -145,8 +207,7 @@ namespace NBitcoin.Indexer
 			{
 				return PartitionKey + " " + RowKey;
 			}
-
-		}
+        }
 		internal TransactionEntry(Entity[] entities)
 		{
 			List<uint256> blockIds = new List<uint256>();
@@ -176,9 +237,9 @@ namespace NBitcoin.Indexer
 				tx.ReadWrite(bytes);
 				Transaction = tx;
 
-				if(loadedEntity.SpentOutputs != null)
+				if(loadedEntity.AllSpentOutputs != null)
 				{
-					PreviousTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.SpentOutputs).ToArray();
+					PreviousTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.AllSpentOutputs).ToArray();
 				}
 			}
 

@@ -20,6 +20,13 @@ namespace NBitcoin.Indexer.Tests
     public class TestClass
     {
         [Fact]
+        public void DoesNotCrashExtractingAddressFromBigTransaction()
+        {
+            var tx = new Transaction(Encoders.Hex.DecodeData(File.ReadAllText("Data/BigTransaction.txt")));
+            var txId = tx.GetHash();
+            var result = AddressEntry.Entity.ExtractFromTransaction(tx, txId);
+        }
+        [Fact]
         public void CanUploadBlobDirectoryToAzure()
         {
             using (var tester = CreateTester())
@@ -340,7 +347,7 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Indexer.IndexBlocks();
 
-                foreach (var block in store.Enumerate(true,0))
+                foreach (var block in store.Enumerate(true, 0))
                 {
                     node.Generator.Chain.SetTip(block.Item.Header);
                 }
