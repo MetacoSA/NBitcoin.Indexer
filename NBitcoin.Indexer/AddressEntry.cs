@@ -268,7 +268,7 @@ namespace NBitcoin.Indexer
             }
 
             byte[] _SentOutpoints;
-            public byte[] SentOutpointss
+            public byte[] SentOutpoints
             {
                 get
                 {
