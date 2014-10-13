@@ -108,6 +108,9 @@
     <None Include="Data\blocks\blk00009.dat" />
     <None Include="Data\blocks\blk00010.dat" />
     <None Include="Data\blocks\blk00011.dat" />
+    <None Include="Data\openasset-known-tx.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="LocalSettings.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <SubType>Designer</SubType>

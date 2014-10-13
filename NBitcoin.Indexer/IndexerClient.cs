@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.OpenAsset;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -63,12 +64,22 @@ namespace NBitcoin.Indexer
             return GetTransactions(true, new[] { txId }).First();
         }
 
+        public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, uint256[] txIds)
+        {
+            return GetTransactions(lazyLoadPreviousOutput, false, txIds);
+        }
+
+        public TransactionEntry GetTransaction(bool lazyLoadPreviousOutput, bool fetchColor, uint256 txId)
+        {
+            return GetTransactions(lazyLoadPreviousOutput, fetchColor, new[] { txId }).First();
+        }
+
         /// <summary>
         /// Get transactions in Azure Table
         /// </summary>
         /// <param name="txIds"></param>
         /// <returns>All transactions (with null entries for unfound transactions)</returns>
-        public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, uint256[] txIds)
+        public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, bool fetchColor, uint256[] txIds)
         {
             var result = new TransactionEntry[txIds.Length];
             var queries = new TableQuery<TransactionEntry.Entity>[txIds.Length];
@@ -102,8 +113,22 @@ namespace NBitcoin.Indexer
                                 result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
                                 entities[0].TransactionBytes = result[i].Transaction.ToBytes();
                                 if (entities[0].TransactionBytes.Length < 1024 * 64 * 4)
+                                {
+                                    entities[0].ETag = "*";
                                     table.Execute(TableOperation.Merge(entities[0]));
+                                }
                                 break;
+                            }
+                        }
+
+                        if (fetchColor && result[i].ColoredTransaction == null)
+                        {
+                            result[i].ColoredTransaction = ColoredTransaction.FetchColors(txIds[i], result[i].Transaction, new IndexerColoredTransactionRepository(Configuration.AsServer()));
+                            entities[0].ColoredTransactions = result[i].ColoredTransaction.ToBytes();
+                            if (entities[0].ColoredTransactions.Length < 1024 * 64 * 4)
+                            {
+                                entities[0].ETag = "*";
+                                table.Execute(TableOperation.Merge(entities[0]));
                             }
                         }
 
@@ -132,7 +157,10 @@ namespace NBitcoin.Indexer
                                 result[i].PreviousTxOuts = outputs;
                                 entities[0].AllSpentOutputs = Helper.SerializeList(outputs, false);
                                 if (entities[0].AllSpentOutputs != null)
+                                {
+                                    entities[0].ETag = "*";
                                     table.Execute(TableOperation.Merge(entities[0]));
+                                }
                             }
                             else
                             {
@@ -141,8 +169,12 @@ namespace NBitcoin.Indexer
                                     result[i].PreviousTxOuts = new TxOut[0];
                                     entities[0].AllSpentOutputs = Helper.SerializeList(new TxOut[0], false);
                                     if (entities[0].AllSpentOutputs != null)
+                                    {
+                                        entities[0].ETag = "*";
                                         table.Execute(TableOperation.Merge(entities[0]));
+                                    }
                                 }
+
                             }
 
                         }
@@ -307,7 +339,7 @@ namespace NBitcoin.Indexer
                 prevTxOut.Add(sourceTransaction.Outputs[(int)prev.N]);
             }
 
-            indexAddress.PreviousTxOuts = Helper.SerializeList(prevTxOut,false);
+            indexAddress.PreviousTxOuts = Helper.SerializeList(prevTxOut, false);
             return true;
         }
         public AddressEntry[] GetEntries(KeyId keyId)
@@ -326,5 +358,6 @@ namespace NBitcoin.Indexer
         {
             return GetEntries(pubKey.GetAddress(Configuration.Network));
         }
+
     }
 }

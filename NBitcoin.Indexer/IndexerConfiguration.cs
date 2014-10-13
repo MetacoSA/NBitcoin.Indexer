@@ -127,5 +127,15 @@ namespace NBitcoin.Indexer
 			yield return GetBalanceTable();
 			yield return GetChainTable();
 		}
-	}
+
+        internal IndexerServerConfiguration AsServer()
+        {
+            return new IndexerServerConfiguration()
+            {
+                StorageCredentials = StorageCredentials,
+                StorageNamespace = StorageNamespace,
+                Network = Network                
+            };
+        }
+    }
 }

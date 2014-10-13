@@ -2,14 +2,17 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using NBitcoin.DataEncoders;
+using NBitcoin.OpenAsset;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -452,9 +455,122 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+        [Fact]
+        public void CanGetColoredTransaction()
+        {
+            using (var tester = CreateTester())
+            {
+                var blockStore = tester.CreateLocalBlockStore();
+                tester.Indexer.Configuration.BlockDirectory = blockStore.Folder.FullName;
+                var ccTester = new ColoredCoinTester("CanColorizeTransferTransaction");
+                blockStore.Append(CreateBlock(ccTester));
+                tester.Indexer.IndexBlocks();
+                tester.Indexer.IndexTransactions();
+                var txRepo = new IndexerTransactionRepository(tester.Indexer.Configuration);
+                var indexedTx = txRepo.Get(ccTester.TestedTxId);
+                Assert.NotNull(indexedTx);
+                Assert.Null(txRepo.Get(tester.UnknownTransactionId));
+
+                var ccTxRepo = new IndexerColoredTransactionRepository(tester.Indexer.Configuration);
+                var colored = ccTxRepo.Get(ccTester.TestedTxId);
+                Assert.Null(colored);
+
+                colored = ColoredTransaction.FetchColors(ccTester.TestedTxId, ccTxRepo);
+                Assert.NotNull(colored);
+
+                colored = ccTxRepo.Get(ccTester.TestedTxId);
+                Assert.NotNull(colored);
+            }
+        }
+
+        private Block CreateBlock(ColoredCoinTester ccTester)
+        {
+            var block = new Block();
+            block.Transactions.AddRange(ccTester.Transactions);
+            return block;
+        }
+
+
+
         private IndexerTester CreateTester([CallerMemberName]string folder = null)
         {
             return new IndexerTester(folder);
+        }
+    }
+
+    class ColoredCoinTester
+    {
+        public ColoredCoinTester([CallerMemberName]string test = null)
+        {
+            var testcase = JsonConvert.DeserializeObject<TestCase[]>(File.ReadAllText("Data/openasset-known-tx.json"))
+                .First(t => t.test == test);
+            NoSqlTransactionRepository repository = new NoSqlTransactionRepository();
+            foreach (var tx in testcase.txs)
+            {
+                var txObj = new Transaction(tx);
+                Transactions.Add(txObj);
+                repository.Put(txObj.GetHash(), txObj);
+            }
+            TestedTxId = new uint256(testcase.testedtx);
+            Repository = new NoSqlColoredTransactionRepository(repository, new InMemoryNoSqlRepository());
+        }
+
+
+        public IColoredTransactionRepository Repository
+        {
+            get;
+            set;
+        }
+
+        public uint256 TestedTxId
+        {
+            get;
+            set;
+        }
+
+        public string AutoDownloadMissingTransaction(Action act)
+        {
+            StringBuilder builder = new StringBuilder();
+            while (true)
+            {
+                try
+                {
+                    act();
+                    break;
+                }
+                catch (TransactionNotFoundException ex)
+                {
+                    WebClient client = new WebClient();
+                    var result = client.DownloadString("http://btc.blockr.io/api/v1/tx/raw/" + ex.TxId);
+                    var json = JObject.Parse(result);
+                    var tx = new Transaction(json["data"]["tx"]["hex"].ToString());
+
+                    builder.AppendLine("\"" + json["data"]["tx"]["hex"].ToString() + "\",\r\n");
+                    Repository.Transactions.Put(tx.GetHash(), tx);
+                }
+            }
+            return builder.ToString();
+        }
+
+        public List<Transaction> Transactions = new List<Transaction>();
+    }
+
+    class TestCase
+    {
+        public string test
+        {
+            get;
+            set;
+        }
+        public string testedtx
+        {
+            get;
+            set;
+        }
+        public string[] txs
+        {
+            get;
+            set;
         }
     }
 }

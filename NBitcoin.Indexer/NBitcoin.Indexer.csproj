@@ -87,6 +87,8 @@
     <Compile Include="ChainChangeEntry.cs" />
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="Helper.cs" />
+    <Compile Include="IndexerColoredTransactionRepository.cs" />
+    <Compile Include="IndexerTransactionRepository.cs" />
     <Compile Include="MultiValueDictionary.cs" />
     <Compile Include="TaskPool.cs" />
     <Compile Include="TransactionEntry.cs" />
