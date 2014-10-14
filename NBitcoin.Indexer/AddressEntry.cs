@@ -51,13 +51,30 @@ namespace NBitcoin.Indexer
             BlockIds = otherEntities
                                     .Where(s => !string.IsNullOrEmpty(s.BlockId))
                                     .Select(s => new uint256(s.BlockId)).ToArray();
-            ReceivedTxOuts = loadedEntity.GetReceivedTxOut();
-            ReceivedTxInIndex = loadedEntity.GetReceivedOutput();
+            var thisTxOuts = ReceivedTxOuts = loadedEntity.GetReceivedTxOut();
+            var thisTxOutsIndices = loadedEntity.GetReceivedOutput();
+            for (int i = 0 ; i < thisTxOuts.Count ; i++)
+            {
+                ReceivedCoins.Add(new Spendable(new OutPoint(TransactionId, thisTxOutsIndices[i]), thisTxOuts[i]));
+            }
 
-            PreviousOutpoints = loadedEntity.GetPreviousOutpoints();
-            PreviousTxOuts = loadedEntity.GetPreviousTxOuts();
+
+            var prevOutpoints = loadedEntity.GetPreviousOutpoints();
+            var prevTxOuts = loadedEntity.GetPreviousTxOuts();
+            if (loadedEntity.PreviousTxOuts == null)
+            {
+                SpentCoins = null;
+            }
+            else
+            {
+                for (int i = 0 ; i < prevOutpoints.Count ; i++)
+                {
+                    SpentCoins.Add(new Spendable(prevOutpoints[i], prevTxOuts[i]));
+                }
+            }
+
             MempoolDate = otherEntities.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
-            BalanceChange = (loadedEntity.PreviousTxOuts == null || loadedEntity.ReceivedTxOuts == null) ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - PreviousTxOuts.Select(t => t.Value).Sum();
+            BalanceChange = SpentCoins == null ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - SpentCoins.Select(t => t.TxOut.Value).Sum();
         }
         public class Entity : TableEntity
         {
@@ -511,11 +528,38 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public List<OutPoint> PreviousOutpoints
+        List<Spendable> _ReceivedCoins = new List<Spendable>();
+        public List<Spendable> ReceivedCoins
+        {
+            get
+            {
+                return _ReceivedCoins;
+            }
+            set
+            {
+                _ReceivedCoins = value;
+            }
+        }
+
+        List<Spendable> _SpentCoins = new List<Spendable>();
+        public List<Spendable> SpentCoins
+        {
+            get
+            {
+                return _SpentCoins;
+            }
+            set
+            {
+                _SpentCoins = value;
+            }
+        }
+        public List<int> TxOutIndices
         {
             get;
             set;
         }
+
+
 
         public uint256[] BlockIds
         {
@@ -534,28 +578,9 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-        public List<TxOut> PreviousTxOuts
-        {
-            get;
-            set;
-        }
-
         public override string ToString()
         {
             return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
-        }
-
-        public IEnumerable<OutPoint> ReceivedOutpoints
-        {
-            get
-            {
-                return ReceivedTxInIndex.Select(i => new OutPoint(TransactionId, i));
-            }
-        }
-        public List<int> ReceivedTxInIndex
-        {
-            get;
-            set;
         }
 
         public DateTimeOffset? MempoolDate

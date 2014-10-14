@@ -305,14 +305,14 @@ namespace NBitcoin.Indexer.Tests
                 var entries = tester.Client.GetEntries(sender);
                 Assert.Equal(2, entries.Length);
                 var entry = AssertContainsMoney("10.0", entries);
-                Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedOutpoints));
+                Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedCoins.Select(c => c.OutPoint)));
                 Assert.Equal(entry.BlockIds[0], b1.GetHash());
 
                 entry = AssertContainsMoney("-2.0", entries);
-                Assert.NotNull(entry.PreviousOutpoints);
-                Assert.Equal(1, entry.PreviousOutpoints.Count);
-                Assert.Equal(b1.Transactions[0].GetHash(), entry.PreviousOutpoints[0].Hash);
-                Assert.Equal(0, (int)entry.PreviousOutpoints[0].N);
+                Assert.NotNull(entry.SpentCoins);
+                Assert.Equal(1, entry.SpentCoins.Count);
+                Assert.Equal(b1.Transactions[0].GetHash(), entry.SpentCoins[0].OutPoint.Hash);
+                Assert.Equal(0, (int)entry.SpentCoins[0].OutPoint.N);
 
                 entries = tester.Client.GetEntries(receiver);
                 Assert.Equal(1, entries.Length);
