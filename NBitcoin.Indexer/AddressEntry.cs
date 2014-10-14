@@ -59,17 +59,14 @@ namespace NBitcoin.Indexer
             }
 
 
-            var prevOutpoints = loadedEntity.GetPreviousOutpoints();
+            SpentOutpoints = loadedEntity.GetPreviousOutpoints();
             var prevTxOuts = loadedEntity.GetPreviousTxOuts();
-            if (loadedEntity.PreviousTxOuts == null)
+            if (loadedEntity.PreviousTxOuts != null)
             {
-                SpentCoins = null;
-            }
-            else
-            {
-                for (int i = 0 ; i < prevOutpoints.Count ; i++)
+                SpentCoins = new List<Spendable>();
+                for (int i = 0 ; i < SpentOutpoints.Count ; i++)
                 {
-                    SpentCoins.Add(new Spendable(prevOutpoints[i], prevTxOuts[i]));
+                    SpentCoins.Add(new Spendable(SpentOutpoints[i], prevTxOuts[i]));
                 }
             }
 
@@ -541,7 +538,31 @@ namespace NBitcoin.Indexer
             }
         }
 
-        List<Spendable> _SpentCoins = new List<Spendable>();
+        List<OutPoint> _SpentOutpoints = new List<OutPoint>();
+
+        /// <summary>
+        /// List of spent outpoints
+        /// </summary>
+        public List<OutPoint> SpentOutpoints
+        {
+            get
+            {
+                return _SpentOutpoints;
+            }
+            set
+            {
+                _SpentOutpoints = value;
+            }
+        }
+
+
+        List<Spendable> _SpentCoins;
+
+        /// <summary>
+        /// List of spent coins
+        /// Can be null if the indexer have not yet indexed parent transactions
+        /// Use SpentOutpoints if you only need outpoints
+        /// </summary>
         public List<Spendable> SpentCoins
         {
             get
