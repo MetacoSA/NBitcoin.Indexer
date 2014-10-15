@@ -143,10 +143,10 @@ namespace NBitcoin.Indexer
                 var storedBlocks = Enumerate("balances");
                 foreach (var block in storedBlocks)
                 {
-                    var blockId = block.Item.Header.GetHash().ToString();
+                    var blockId = block.Item.Header.GetHash();
                     foreach (var tx in block.Item.Transactions)
                     {
-                        var txId = tx.GetHash().ToString();
+                        var txId = tx.GetHash();
                         try
                         {
                             var entryByAddress = AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
@@ -261,13 +261,13 @@ namespace NBitcoin.Indexer
 
         public void Index(params AddressEntry.Entity[] entries)
         {
-            Index(entries, Configuration.GetBalanceTable());
+            Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetBalanceTable());
         }
         public void Index(params TransactionEntry.Entity[] entities)
         {
             Index(entities, Configuration.GetTransactionTable());
         }
-        private void Index<T>(T[] entities, CloudTable table) where T : TableEntity
+        private void Index(ITableEntity[] entities, CloudTable table)
         {
             if (entities.Length == 0)
                 return;
@@ -476,7 +476,7 @@ namespace NBitcoin.Indexer
                     tx =>
                     {
                         Index(new TransactionEntry.Entity(tx));
-                        foreach (var kv in AddressEntry.Entity.ExtractFromTransaction(tx, tx.GetHash().ToString()))
+                        foreach (var kv in AddressEntry.Entity.ExtractFromTransaction(tx, tx.GetHash()))
                         {
                             Index(new AddressEntry.Entity[] { kv.Value });
                         }

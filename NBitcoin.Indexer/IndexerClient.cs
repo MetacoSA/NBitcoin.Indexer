@@ -155,7 +155,7 @@ namespace NBitcoin.Indexer
                             {
                                 var outputs = tasks.Select(t => t.Result).ToArray();
                                 result[i].PreviousTxOuts = outputs;
-                                entities[0].AllSpentOutputs = Helper.SerializeList(outputs, false);
+                                entities[0].AllSpentOutputs = Helper.SerializeList(outputs);
                                 if (entities[0].AllSpentOutputs != null)
                                 {
                                     entities[0].ETag = "*";
@@ -167,7 +167,7 @@ namespace NBitcoin.Indexer
                                 if (result[i].Transaction.IsCoinBase)
                                 {
                                     result[i].PreviousTxOuts = new TxOut[0];
-                                    entities[0].AllSpentOutputs = Helper.SerializeList(new TxOut[0], false);
+                                    entities[0].AllSpentOutputs = Helper.SerializeList(new TxOut[0]);
                                     if (entities[0].AllSpentOutputs != null)
                                     {
                                         entities[0].ETag = "*";
@@ -241,7 +241,7 @@ namespace NBitcoin.Indexer
                 address = AzureIndexer.InternalNetwork.CreateBitcoinAddress(address.ID);
             var addressStr = address.ToString();
             var table = Configuration.GetBalanceTable();
-            var query = new TableQuery<AddressEntry.Entity>()
+            var query = new TableQuery()
                             .Where(
                             TableQuery.CombineFilters(
                                                 TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, AddressEntry.Entity.GetPartitionKey(addressStr)),
@@ -255,19 +255,20 @@ namespace NBitcoin.Indexer
 
             var entitiesByTransactionId = table
                                     .ExecuteQuery(query)
+                                    .Select(e=>new AddressEntry.Entity(e))
                                     .GroupBy(e => e.TransactionId);
             List<AddressEntry> result = new List<AddressEntry>();
             foreach (var entities in entitiesByTransactionId)
             {
-                var entity = entities.Where(e => e.Loaded).FirstOrDefault();
+                var entity = entities.Where(e => e.IsLoaded).FirstOrDefault();
                 if (entity == null)
                     entity = entities.First();
-                if (!entity.Loaded)
+                if (!entity.IsLoaded)
                     if (LoadAddressEntity(entity))
                     {
-                        table.Execute(TableOperation.Merge(entity));
+                        table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
                     }
-                var entry = new AddressEntry(entity, entities.ToArray());
+                var entry = new AddressEntry(entities.ToArray());
                 if (entry.Address.Network != originalNetwork)
                     entry.Address = originalNetwork.CreateBitcoinAddress(address.ID);
                 result.Add(entry);
@@ -309,18 +310,13 @@ namespace NBitcoin.Indexer
 
             Money total = Money.Zero;
 
-            var received = indexAddress.GetReceivedOutput();
-            indexAddress.ReceivedTxOuts =
-                            Helper.SerializeList(tx.Outputs.Where((o, i) => received.Contains(i))
-                            .ToList(), false);
+            if (indexAddress.ReceivedTxOuts.Count == 0)
+                indexAddress.ReceivedTxOuts.AddRange(tx.Outputs.Where((o, i) => indexAddress.ReceivedTxOutIndices.Contains((uint)i)).ToList());
 
 
             transactionsCache.AddOrReplace(txId, tx);
 
-            List<TxOut> prevTxOut = new List<TxOut>();
-            var prevOutpoints = indexAddress.GetPreviousOutpoints();
-
-            foreach (var prev in prevOutpoints)
+            foreach (var prev in indexAddress.SpentOutpoints)
             {
                 Transaction sourceTransaction = null;
                 if (!transactionsCache.TryGetValue(prev.Hash, out sourceTransaction))
@@ -336,10 +332,9 @@ namespace NBitcoin.Indexer
                 {
                     return false;
                 }
-                prevTxOut.Add(sourceTransaction.Outputs[(int)prev.N]);
+                indexAddress.SpentTxOuts.Add(sourceTransaction.Outputs[(int)prev.N]);
             }
 
-            indexAddress.PreviousTxOuts = Helper.SerializeList(prevTxOut, false);
             return true;
         }
         public AddressEntry[] GetEntries(KeyId keyId)

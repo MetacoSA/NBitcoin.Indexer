@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.WindowsAzure.Storage.Table;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,24 +27,22 @@ namespace NBitcoin.Indexer
             return outpoints;
         }
 
-        public static byte[] SerializeList<T>(IEnumerable<T> items, bool verifyColumnLimit) where T : IBitcoinSerializable
+        public static byte[] SerializeList<T>(IEnumerable<T> items) where T : IBitcoinSerializable
         {
             MemoryStream ms = new MemoryStream();
             foreach (var item in items)
             {
                 item.ReadWrite(ms, true);
             }
-            return Helper.GetBytes(ms, verifyColumnLimit) ?? new byte[0];
+            return Helper.GetBytes(ms) ?? new byte[0];
         }
 
-        public static byte[] GetBytes(MemoryStream stream, bool verifyColumnLimit)
+        public static byte[] GetBytes(MemoryStream stream)
         {
             if (stream.Length == 0)
                 return null;
             var buffer = stream.GetBuffer();
             Array.Resize(ref buffer, (int)stream.Length);
-            if (verifyColumnLimit && buffer.Length > 1024 * 64)
-                throw new ArgumentOutOfRangeException("stream", "Value too big to enter in an Azure Table Column");
             return buffer;
         }
 
@@ -137,6 +136,52 @@ namespace NBitcoin.Indexer
                 return true;
             }
             return false;
+        }
+
+        const int ColumnMaxSize = 63 * 1024;
+        internal static void SetEntityProperty(DynamicTableEntity entity, string property, byte[] data)
+        {
+            if (data == null || data.Length == 0)
+                return;
+
+            var remaining = data.Length;
+            var offset = 0;
+            int i = 0;
+            while (remaining != 0)
+            {
+                var chunkSize = Math.Min(ColumnMaxSize, remaining);
+                remaining -= chunkSize;
+                
+                byte[] chunk = new byte[chunkSize];
+                Array.Copy(data, offset, chunk, 0, chunkSize);
+                offset += chunkSize;
+                entity.Properties.AddOrReplace(property + i, new EntityProperty(chunk));
+                i++;
+            }
+        }
+
+        internal static byte[] GetEntityProperty(DynamicTableEntity entity, string property)
+        {
+            List<byte[]> chunks = new List<byte[]>();
+            int i = 0;
+            while (true)
+            {
+                if (!entity.Properties.ContainsKey(property + i))
+                    break;
+                var chunk = entity.Properties[property + i].BinaryValue;
+                if (chunk == null || chunk.Length == 0)
+                    break;
+                chunks.Add(chunk);
+                i++;
+            }
+            byte[] data = new byte[chunks.Sum(o => o.Length)];
+            int offset = 0;
+            foreach (var chunk in chunks)
+            {
+                Array.Copy(chunk, 0, data, offset, chunk.Length);
+                offset += chunk.Length;
+            }
+            return data;
         }
     }
 }

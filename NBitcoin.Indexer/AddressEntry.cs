@@ -44,40 +44,54 @@ namespace NBitcoin.Indexer
             ConfirmedBlock = BlockIds.Select(id => chain.GetBlock(id)).FirstOrDefault(b => b != null);
             return this;
         }
-        public AddressEntry(Entity loadedEntity, params Entity[] otherEntities)
+        public AddressEntry(params Entity[] entities)
         {
-            Address = Network.CreateFromBase58Data<BitcoinAddress>(loadedEntity.Address);
+            if (entities == null)
+                throw new ArgumentNullException("entities");
+            if (entities.Length == 0)
+                throw new ArgumentException("At least one entity should be provided", "entities");
+
+            var loadedEntity = entities.FirstOrDefault(e => e.IsLoaded);
+            if (loadedEntity == null)
+                loadedEntity = entities[0];
+
+            Address = loadedEntity.Address;
             TransactionId = new uint256(loadedEntity.TransactionId);
-            BlockIds = otherEntities
-                                    .Where(s => !string.IsNullOrEmpty(s.BlockId))
-                                    .Select(s => new uint256(s.BlockId)).ToArray();
-            var thisTxOuts = ReceivedTxOuts = loadedEntity.GetReceivedTxOut();
-            var thisTxOutsIndices = loadedEntity.GetReceivedOutput();
-            for (int i = 0 ; i < thisTxOuts.Count ; i++)
+            BlockIds = entities
+                                    .Where(s => s.BlockId != null)
+                                    .Select(s => new uint256(s.BlockId))
+                                    .ToArray();
+            SpentOutpoints = loadedEntity.SpentOutpoints;
+            ReceivedTxOutIndices = loadedEntity.ReceivedTxOutIndices;
+            if (loadedEntity.IsLoaded)
             {
-                ReceivedCoins.Add(new Spendable(new OutPoint(TransactionId, thisTxOutsIndices[i]), thisTxOuts[i]));
-            }
-
-
-            SpentOutpoints = loadedEntity.GetPreviousOutpoints();
-            var prevTxOuts = loadedEntity.GetPreviousTxOuts();
-            if (loadedEntity.PreviousTxOuts != null)
-            {
+                ReceivedCoins = new List<Spendable>();
+                for (int i = 0 ; i < loadedEntity.ReceivedTxOutIndices.Count ; i++)
+                {
+                    ReceivedCoins.Add(new Spendable(new OutPoint(TransactionId, loadedEntity.ReceivedTxOutIndices[i]), loadedEntity.ReceivedTxOuts[i]));
+                }
                 SpentCoins = new List<Spendable>();
                 for (int i = 0 ; i < SpentOutpoints.Count ; i++)
                 {
-                    SpentCoins.Add(new Spendable(SpentOutpoints[i], prevTxOuts[i]));
+                    SpentCoins.Add(new Spendable(SpentOutpoints[i], loadedEntity.SpentTxOuts[i]));
                 }
+                BalanceChange = ReceivedCoins.Select(t => t.TxOut.Value).Sum() - SpentCoins.Select(t => t.TxOut.Value).Sum();
             }
-
-            MempoolDate = otherEntities.Where(e => string.IsNullOrEmpty(e.BlockId)).Select(e => e.Timestamp).FirstOrDefault();
-            BalanceChange = SpentCoins == null ? null : ReceivedTxOuts.Select(t => t.Value).Sum() - SpentCoins.Select(t => t.TxOut.Value).Sum();
+            MempoolDate = entities.Where(e => e.BlockId == null).Select(e => e.Timestamp).FirstOrDefault();
         }
-        public class Entity : TableEntity
+        public class Entity
         {
-            public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, string txId)
+            class IntCompactVarInt : CompactVarInt
             {
-                return ExtractFromTransaction(null, tx, txId);
+                public IntCompactVarInt(uint value)
+                    : base(value, 4)
+                {
+                }
+                public IntCompactVarInt()
+                    : base(4)
+                {
+
+                }
             }
             public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
             {
@@ -85,12 +99,8 @@ namespace NBitcoin.Indexer
             }
             public static Dictionary<string, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
             {
-                return ExtractFromTransaction(blockId == null ? null : blockId.ToString(), tx, txId == null ? null : txId.ToString());
-            }
-            public static Dictionary<string, Entity> ExtractFromTransaction(string blockId, Transaction tx, string txId)
-            {
                 if (txId == null)
-                    txId = tx.GetHash().ToString();
+                    txId = tx.GetHash();
                 Dictionary<string, AddressEntry.Entity> entryByAddress = new Dictionary<string, AddressEntry.Entity>();
                 foreach (var input in tx.Inputs)
                 {
@@ -105,11 +115,11 @@ namespace NBitcoin.Indexer
                             entry = new AddressEntry.Entity(txId, signer, blockId);
                             entryByAddress.Add(signer.ToString(), entry);
                         }
-                        entry.AddSend(input.PrevOut);
+                        entry.SpentOutpoints.Add(input.PrevOut);
                     }
                 }
 
-                int i = 0;
+                uint i = 0;
                 foreach (var output in tx.Outputs)
                 {
                     var receiver = output.ScriptPubKey.GetDestinationAddress(AzureIndexer.InternalNetwork);
@@ -121,12 +131,10 @@ namespace NBitcoin.Indexer
                             entry = new AddressEntry.Entity(txId, receiver, blockId);
                             entryByAddress.Add(receiver.ToString(), entry);
                         }
-                        entry.AddReceive(i);
+                        entry.ReceivedTxOutIndices.Add(i);
                     }
                     i++;
                 }
-                foreach (var kv in entryByAddress)
-                    kv.Value.Flush();
                 return entryByAddress;
             }
 
@@ -134,12 +142,76 @@ namespace NBitcoin.Indexer
             {
 
             }
-            public Entity(string txid, BitcoinAddress address, string blockId)
+
+            public Entity(DynamicTableEntity entity)
             {
-                var wif = address.ToString();
-                PartitionKey = GetPartitionKey(wif);
-                RowKey = wif + "-" + txid + "-" + blockId;
+                var splitted = entity.RowKey.Split('-');
+                Address = BitcoinAddress.Create(splitted[0], AzureIndexer.InternalNetwork);
+                TransactionId = new uint256(splitted[1]);
+                if (splitted.Length >= 3)
+                    BlockId = new uint256(splitted[2]);
+                Timestamp = entity.Timestamp;
+                //_PartitionKey = entity.PartitionKey;
+
+                _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
+                _SpentTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "b"));
+                _ReceivedTxOutIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "c"))
+                                        .Select(o => (uint)o.ToLong())
+                                        .ToList();
+                _ReceivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
             }
+
+            public DynamicTableEntity CreateTableEntity()
+            {
+                DynamicTableEntity entity = new DynamicTableEntity();
+                entity.ETag = "*";
+                entity.PartitionKey = PartitionKey;
+                entity.RowKey = Address.ToString() + "-" + TransactionId.ToString() + "-" + BlockId.ToString();
+                Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
+                Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentTxOuts));
+                Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedTxOutIndices.Select(e => new IntCompactVarInt(e))));
+                Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedTxOuts));
+                return entity;
+            }
+
+            string _PartitionKey;
+            public string PartitionKey
+            {
+                get
+                {
+                    if (_PartitionKey == null && Address != null)
+                    {
+                        var wif = Address.ToString();
+                        _PartitionKey = GetPartitionKey(wif);
+                    }
+                    return _PartitionKey;
+                }
+            }
+
+            public Entity(uint256 txid, BitcoinAddress address, uint256 blockId)
+            {
+                Address = address;
+                TransactionId = txid;
+                BlockId = blockId;
+            }
+
+            public uint256 TransactionId
+            {
+                get;
+                set;
+            }
+            public uint256 BlockId
+            {
+                get;
+                set;
+            }
+            public BitcoinAddress Address
+            {
+                get;
+                set;
+            }
+
+
 
             public static string GetPartitionKey(string wif)
             {
@@ -150,367 +222,57 @@ namespace NBitcoin.Indexer
                 return new string(c);
             }
 
-            MemoryStream receiveStream = new MemoryStream();
-            void AddReceive(int n)
-            {
-                var nCompact = new CompactVarInt((ulong)n, 4);
-                nCompact.ReadWrite(receiveStream, true);
-            }
-
-            MemoryStream outpointStream = new MemoryStream();
-            void AddSend(OutPoint outpoint)
-            {
-                outpoint.ReadWrite(outpointStream, true);
-            }
-            void Flush()
-            {
-                AllSentOutpoints = Helper.GetBytes(outpointStream, false);
-                AllReceivedOutput = Helper.GetBytes(receiveStream, false);
-            }
-
-
-            byte[] _AllReceivedOutput;
-            [IgnoreProperty]
-            public byte[] AllReceivedOutput
+            private readonly List<uint> _ReceivedTxOutIndices = new List<uint>();
+            public List<uint> ReceivedTxOutIndices
             {
                 get
                 {
-                    if (_AllReceivedOutput == null)
-                        _AllReceivedOutput = Helper.Concat(ReceivedOutput, ReceivedOutput1, ReceivedOutput2, ReceivedOutput3);
-                    return _AllReceivedOutput;
-                }
-                set
-                {
-                    _AllReceivedOutput = value;
-                    Helper.Spread(value, 1024 * 63, ref _ReceivedOutput, ref _ReceivedOutput1, ref _ReceivedOutput2, ref _ReceivedOutput3);
+                    return _ReceivedTxOutIndices;
                 }
             }
 
-            byte[] _ReceivedOutput;
-            public byte[] ReceivedOutput
+            private readonly List<TxOut> _SpentTxOuts = new List<TxOut>();
+            public List<TxOut> SpentTxOuts
             {
                 get
                 {
-                    return _ReceivedOutput;
-                }
-                set
-                {
-                    _ReceivedOutput = value;
+                    return _SpentTxOuts;
                 }
             }
 
-            byte[] _ReceivedOutput1;
-            public byte[] ReceivedOutput1
+            private readonly List<OutPoint> _SpentOutpoints = new List<OutPoint>();
+            public List<OutPoint> SpentOutpoints
             {
                 get
                 {
-                    return _ReceivedOutput1;
-                }
-                set
-                {
-                    _ReceivedOutput1 = value;
+                    return _SpentOutpoints;
                 }
             }
-
-            byte[] _ReceivedOutput2;
-            public byte[] ReceivedOutput2
+            private readonly List<TxOut> _ReceivedTxOuts = new List<TxOut>();
+            public List<TxOut> ReceivedTxOuts
             {
                 get
                 {
-                    return _ReceivedOutput2;
-                }
-                set
-                {
-                    _ReceivedOutput2 = value;
-                }
-            }
-
-            byte[] _ReceivedOutput3;
-            public byte[] ReceivedOutput3
-            {
-                get
-                {
-                    return _ReceivedOutput3;
-                }
-                set
-                {
-                    _ReceivedOutput3 = value;
-                }
-            }
-
-            public string Address
-            {
-                get
-                {
-                    return RowKey.Split('-')[0];
-                }
-            }
-
-            public string TransactionId
-            {
-                get
-                {
-                    return RowKey.Split('-')[1];
-                }
-            }
-            public string BlockId
-            {
-                get
-                {
-                    var splitted = RowKey.Split('-');
-                    if (splitted.Length < 3)
-                        return "";
-                    return RowKey.Split('-')[2];
-                }
-            }
-
-            byte[] _AllSentOutpoints;
-            [IgnoreProperty]
-            public byte[] AllSentOutpoints
-            {
-                get
-                {
-                    if (_AllSentOutpoints == null)
-                        _AllSentOutpoints = Helper.Concat(_SentOutpoints, _SentOutpoints1, _SentOutpoints2, _SentOutpoints3);
-                    return _AllSentOutpoints;
-                }
-                set
-                {
-                    _AllSentOutpoints = value;
-                    Helper.Spread(value, 1024 * 63, ref _SentOutpoints, ref _SentOutpoints1, ref _SentOutpoints2, ref _SentOutpoints3);
-                }
-            }
-
-            byte[] _SentOutpoints;
-            public byte[] SentOutpoints
-            {
-                get
-                {
-                    return _SentOutpoints;
-                }
-                set
-                {
-                    _SentOutpoints = value;
-                }
-            }
-
-            byte[] _SentOutpoints1;
-            public byte[] SentOutpoints1
-            {
-                get
-                {
-                    return _SentOutpoints1;
-                }
-                set
-                {
-                    _SentOutpoints1 = value;
-                }
-            }
-
-            byte[] _SentOutpoints2;
-            public byte[] SentOutpoints2
-            {
-                get
-                {
-                    return _SentOutpoints2;
-                }
-                set
-                {
-                    _SentOutpoints2 = value;
-                }
-            }
-
-            byte[] _SentOutpoints3;
-            public byte[] SentOutpoints3
-            {
-                get
-                {
-                    return _SentOutpoints3;
-                }
-                set
-                {
-                    _SentOutpoints3 = value;
-                }
-            }
-
-            public List<int> GetReceivedOutput()
-            {
-                List<int> indexes = new List<int>();
-                if (AllReceivedOutput == null)
-                    return indexes;
-                MemoryStream ms = new MemoryStream(AllReceivedOutput);
-                ms.Position = 0;
-                while (ms.Position != ms.Length)
-                {
-                    CompactVarInt value = new CompactVarInt(4);
-                    value.ReadWrite(ms, false);
-                    indexes.Add((int)value.ToLong());
-                }
-                return indexes;
-            }
-
-            public List<OutPoint> GetPreviousOutpoints()
-            {
-                return Helper.DeserializeList<OutPoint>(AllSentOutpoints);
-            }
-
-
-            internal List<TxOut> GetReceivedTxOut()
-            {
-                return Helper.DeserializeList<TxOut>(ReceivedTxOuts);
-            }
-
-
-            public override string ToString()
-            {
-                return "RowKey : " + RowKey;
-            }
-
-            byte[] _PreviousTxOuts;
-            [IgnoreProperty]
-            public byte[] PreviousTxOuts
-            {
-                get
-                {
-                    if (_PreviousTxOuts == null)
-                        _PreviousTxOuts = Helper.Concat(SentTxOuts1, SentTxOuts2, SentTxOuts3, SentTxOuts4);
-                    return _PreviousTxOuts;
-                }
-                set
-                {
-                    _PreviousTxOuts = value;
-                    Helper.Spread(value, 1024 * 63, ref _SentTxOuts1, ref _SentTxOuts2, ref _SentTxOuts3, ref _SentTxOuts4);
-                }
-            }
-
-            byte[] _SentTxOuts1;
-            public byte[] SentTxOuts1
-            {
-                get
-                {
-                    return _SentTxOuts1;
-                }
-                set
-                {
-                    _SentTxOuts1 = value;
-                }
-            }
-            byte[] _SentTxOuts2;
-            public byte[] SentTxOuts2
-            {
-                get
-                {
-                    return _SentTxOuts2;
-                }
-                set
-                {
-                    _SentTxOuts2 = value;
-                }
-            }
-            byte[] _SentTxOuts3;
-            public byte[] SentTxOuts3
-            {
-                get
-                {
-                    return _SentTxOuts3;
-                }
-                set
-                {
-                    _SentTxOuts3 = value;
-                }
-            }
-            byte[] _SentTxOuts4;
-            public byte[] SentTxOuts4
-            {
-                get
-                {
-                    return _SentTxOuts4;
-                }
-                set
-                {
-                    _SentTxOuts4 = value;
-                }
-            }
-
-            byte[] _ReceivedTxOuts;
-
-            [IgnoreProperty]
-            public bool Loaded
-            {
-                get
-                {
-                    return ReceivedTxOuts != null;
-                }
-            }
-
-            [IgnoreProperty]
-            public byte[] ReceivedTxOuts
-            {
-                get
-                {
-                    if (_ReceivedTxOuts == null)
-                        _ReceivedTxOuts = Helper.Concat(_ReceivedTxOuts1, _ReceivedTxOuts2, _ReceivedTxOuts3, _ReceivedTxOuts4);
                     return _ReceivedTxOuts;
                 }
-                set
+            }
+            public override string ToString()
+            {
+                return "RowKey : " + Address;
+            }
+
+            public bool IsLoaded
+            {
+                get
                 {
-                    _ReceivedTxOuts = value;
-                    Helper.Spread(value, 1024 * 63, ref _ReceivedTxOuts1, ref _ReceivedTxOuts2, ref _ReceivedTxOuts3, ref _ReceivedTxOuts4);
+                    return SpentOutpoints.Count == SpentTxOuts.Count && ReceivedTxOuts.Count == ReceivedTxOutIndices.Count;
                 }
             }
 
-            byte[] _ReceivedTxOuts1;
-            public byte[] ReceivedTxOuts1
+            public DateTimeOffset? Timestamp
             {
-                get
-                {
-                    return _ReceivedTxOuts1;
-                }
-                set
-                {
-                    _ReceivedTxOuts1 = value;
-                }
-            }
-            byte[] _ReceivedTxOuts2;
-            public byte[] ReceivedTxOuts2
-            {
-                get
-                {
-                    return _ReceivedTxOuts2;
-                }
-                set
-                {
-                    _ReceivedTxOuts2 = value;
-                }
-            }
-            byte[] _ReceivedTxOuts3;
-            public byte[] ReceivedTxOuts3
-            {
-                get
-                {
-                    return _ReceivedTxOuts3;
-                }
-                set
-                {
-                    _ReceivedTxOuts3 = value;
-                }
-            }
-
-            byte[] _ReceivedTxOuts4;
-            public byte[] ReceivedTxOuts4
-            {
-                get
-                {
-                    return _ReceivedTxOuts4;
-                }
-                set
-                {
-                    _ReceivedTxOuts4 = value;
-                }
-            }
-            internal List<TxOut> GetPreviousTxOuts()
-            {
-                return Helper.DeserializeList<TxOut>(PreviousTxOuts);
+                get;
+                set;
             }
         }
         public uint256 TransactionId
@@ -525,7 +287,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        List<Spendable> _ReceivedCoins = new List<Spendable>();
+        List<Spendable> _ReceivedCoins;
         public List<Spendable> ReceivedCoins
         {
             get
@@ -594,17 +356,18 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public List<TxOut> ReceivedTxOuts
-        {
-            get;
-            set;
-        }
         public override string ToString()
         {
             return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
         }
 
         public DateTimeOffset? MempoolDate
+        {
+            get;
+            set;
+        }
+
+        public List<uint> ReceivedTxOutIndices
         {
             get;
             set;

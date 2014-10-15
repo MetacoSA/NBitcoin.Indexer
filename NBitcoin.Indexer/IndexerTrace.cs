@@ -46,7 +46,7 @@ namespace NBitcoin.Indexer
 		}
 
 
-		internal static void ErrorWhileImportingEntitiesToAzure(TableEntity[] entities, Exception ex)
+		internal static void ErrorWhileImportingEntitiesToAzure(ITableEntity[] entities, Exception ex)
 		{
 			StringBuilder builder = new StringBuilder();
 			int i = 0;
@@ -85,7 +85,7 @@ namespace NBitcoin.Indexer
 			_Trace.TraceInformation("MB to process : " + inMb.ToString("0.00"));
 		}
 
-		internal static void ErrorWhileImportingBalancesToAzure(Exception ex, string txid)
+		internal static void ErrorWhileImportingBalancesToAzure(Exception ex, uint256 txid)
 		{
 			_Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing balances on " + txid + " \r\n" + Utils.ExceptionToString(ex));
 		}
