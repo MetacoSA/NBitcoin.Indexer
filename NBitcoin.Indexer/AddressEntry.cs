@@ -82,7 +82,7 @@ namespace NBitcoin.Indexer
         }
         public class Entity
         {
-            class IntCompactVarInt : CompactVarInt
+            internal class IntCompactVarInt : CompactVarInt
             {
                 public IntCompactVarInt(uint value)
                     : base(value, 4)
@@ -155,7 +155,7 @@ namespace NBitcoin.Indexer
                 var splitted = entity.RowKey.Split('-');
                 Id = DecodeId(splitted[0]);
                 TransactionId = new uint256(splitted[1]);
-                if (splitted.Length >= 3)
+                if (splitted.Length >= 3 && splitted[2] != string.Empty)
                     BlockId = new uint256(splitted[2]);
                 Timestamp = entity.Timestamp;
                 _PartitionKey = entity.PartitionKey;
@@ -190,7 +190,7 @@ namespace NBitcoin.Indexer
                 DynamicTableEntity entity = new DynamicTableEntity();
                 entity.ETag = "*";
                 entity.PartitionKey = PartitionKey;
-                entity.RowKey = IdString + "-" + TransactionId.ToString() + "-" + BlockId.ToString();
+                entity.RowKey = IdString + "-" + TransactionId + "-" + BlockId;
                 Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
                 Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentTxOuts));
                 Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedTxOutIndices.Select(e => new IntCompactVarInt(e))));
@@ -205,7 +205,8 @@ namespace NBitcoin.Indexer
                 {
                     if (_PartitionKey == null && Id != null)
                     {
-                        _PartitionKey = GetPartitionKey(IdString);
+                        var bytes = Id.ToBytes(true);
+                        _PartitionKey = Helper.GetPartitionKey(12, bytes, bytes.Length - 4, 3);
                     }
                     return _PartitionKey;
                 }
@@ -222,11 +223,6 @@ namespace NBitcoin.Indexer
                     }
                     return _IdString;
                 }
-            }
-
-            public static string GetPartitionKey(TxDestination id)
-            {
-                return GetPartitionKey(EncodeId(id));
             }
 
             public Entity(uint256 txid, TxDestination id, uint256 blockId)
@@ -248,14 +244,6 @@ namespace NBitcoin.Indexer
             }
 
 
-            public static string GetPartitionKey(string wif)
-            {
-                char[] c = new char[3];
-                c[0] = (int)(wif[wif.Length - 3]) % 2 == 0 ? 'a' : 'b';
-                c[1] = wif[wif.Length - 2];
-                c[2] = wif[wif.Length - 1];
-                return new string(c);
-            }
 
             private readonly List<uint> _ReceivedTxOutIndices = new List<uint>();
             public List<uint> ReceivedTxOutIndices
@@ -310,7 +298,7 @@ namespace NBitcoin.Indexer
                 set;
             }
 
-            
+
         }
         public uint256 TransactionId
         {

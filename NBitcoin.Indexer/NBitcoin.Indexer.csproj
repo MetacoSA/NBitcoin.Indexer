@@ -53,11 +53,11 @@
     </Reference>
     <Reference Include="Mono.Nat, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\NBitcoin.1.0.5.6\lib\net45\Mono.Nat.dll</HintPath>
+      <HintPath>..\packages\NBitcoin.1.0.5.7\lib\net45\Mono.Nat.dll</HintPath>
     </Reference>
-    <Reference Include="NBitcoin, Version=1.0.5.6, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="NBitcoin, Version=1.0.5.7, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\NBitcoin.1.0.5.6\lib\net45\NBitcoin.dll</HintPath>
+      <HintPath>..\packages\NBitcoin.1.0.5.7\lib\net45\NBitcoin.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

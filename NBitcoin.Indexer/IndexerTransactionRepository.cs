@@ -34,7 +34,7 @@ namespace NBitcoin.Indexer
 
         public void Put(uint256 txId, Transaction tx)
         {
-            _Configuration.CreateIndexer().Index(new TransactionEntry.Entity(tx));
+            _Configuration.CreateIndexer().Index(new TransactionEntry.Entity(txId, tx, null));
         }
 
         #endregion

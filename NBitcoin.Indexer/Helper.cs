@@ -45,82 +45,6 @@ namespace NBitcoin.Indexer
             Array.Resize(ref buffer, (int)stream.Length);
             return buffer;
         }
-
-        internal static byte[] Concat(params byte[][] arrays)
-        {
-            if (arrays.All(a => a == null))
-                return null;
-            if (arrays.Length == 1)
-                return arrays[0];
-
-            var lentgh = arrays.Where(a => a != null).Sum(a => a.Length);
-            byte[] result = new byte[lentgh];
-            var index = 0;
-            foreach (var array in arrays.Where(a => a != null))
-            {
-                Array.Copy(array, 0, result, index, array.Length);
-                index += array.Length;
-            }
-            return result;
-        }
-
-        internal static void Spread(byte[] value, int maxLength, ref byte[] a1, ref byte[] a2, ref byte[] a3, ref byte[] a4)
-        {
-            int index = 0;
-            int array = 0;
-            if (value == null)
-            {
-                a1 = null;
-                a2 = null;
-                a3 = null;
-                a4 = null;
-                return;
-            }
-            if (value.Length < maxLength)
-            {
-                a1 = value;
-                a2 = null;
-                a3 = null;
-                a4 = null;
-                return;
-            }
-            while (value.Length - index != 0 && array <= 3)
-            {
-                var toCopy = Math.Min(value.Length - index, maxLength);
-                if (array == 0)
-                    a1 = CreateArray(value, index, toCopy);
-                if (array == 1)
-                    a2 = CreateArray(value, index, toCopy);
-                if (array == 2)
-                    a3 = CreateArray(value, index, toCopy);
-                if (array == 3)
-                    a4 = CreateArray(value, index, toCopy);
-
-                array++;
-                index += toCopy;
-            }
-            while (array <= 3)
-            {
-                if (array == 0)
-                    a1 = null;
-                if (array == 1)
-                    a2 = null;
-                if (array == 2)
-                    a3 = null;
-                if (array == 3)
-                    a4 = null;
-
-                array++;
-            }
-        }
-
-        private static byte[] CreateArray(byte[] array, int index, int len)
-        {
-            byte[] result = new byte[len];
-            Array.Copy(array, index, result, 0, len);
-            return result;
-        }
-
         internal static void SetThrottling()
         {
             ServicePointManager.UseNagleAlgorithm = false;
@@ -138,7 +62,7 @@ namespace NBitcoin.Indexer
             return false;
         }
 
-        const int ColumnMaxSize = 63 * 1024;
+        const int ColumnMaxSize = 63000;
         internal static void SetEntityProperty(DynamicTableEntity entity, string property, byte[] data)
         {
             if (data == null || data.Length == 0)
@@ -151,7 +75,7 @@ namespace NBitcoin.Indexer
             {
                 var chunkSize = Math.Min(ColumnMaxSize, remaining);
                 remaining -= chunkSize;
-                
+
                 byte[] chunk = new byte[chunkSize];
                 Array.Copy(data, offset, chunk, 0, chunkSize);
                 offset += chunkSize;
@@ -182,6 +106,22 @@ namespace NBitcoin.Indexer
                 offset += chunk.Length;
             }
             return data;
+        }
+
+        internal static string GetPartitionKey(int bits, byte[] bytes, int startIndex, int length)
+        {
+            ulong result = 0;
+            int remainingBits = bits;
+            for (int i = 0 ; i < length ; i++)
+            {
+                var taken = Math.Min(8, remainingBits);
+                ulong inc = (bytes[startIndex + i] & ~(0xFFUL >> taken)) << (i * 8);
+                result = result + inc;
+                remainingBits -= taken;
+                if (remainingBits == 0)
+                    break;
+            }
+            return result.ToString("X2");
         }
     }
 }

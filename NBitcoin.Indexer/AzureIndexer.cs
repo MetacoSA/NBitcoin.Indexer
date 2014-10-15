@@ -209,16 +209,16 @@ namespace NBitcoin.Indexer
             using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
             {
                 Configuration.GetTransactionTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<ushort, TransactionEntry.Entity>();
+                var buckets = new MultiValueDictionary<string, TransactionEntry.Entity>();
                 var storedBlocks = Enumerate("tx");
                 foreach (var block in storedBlocks)
                 {
                     foreach (var transaction in block.Item.Transactions)
                     {
                         txCount++;
-                        var indexed = new TransactionEntry.Entity(transaction, block.Item.Header.GetHash());
-                        buckets.Add(indexed.Key, indexed);
-                        var collection = buckets[indexed.Key];
+                        var indexed = new TransactionEntry.Entity(null, transaction, block.Item.Header.GetHash());
+                        buckets.Add(indexed.PartitionKey, indexed);
+                        var collection = buckets[indexed.PartitionKey];
                         if (collection.Count == 100)
                         {
                             PushTransactions(buckets, collection, transactions);
@@ -246,13 +246,13 @@ namespace NBitcoin.Indexer
             return txCount;
         }
 
-        private void PushTransactions(MultiValueDictionary<ushort, TransactionEntry.Entity> buckets,
+        private void PushTransactions(MultiValueDictionary<string, TransactionEntry.Entity> buckets,
                                         IEnumerable<TransactionEntry.Entity> indexedTransactions,
                                     BlockingCollection<TransactionEntry.Entity[]> transactions)
         {
             var array = indexedTransactions.ToArray();
             transactions.Add(array);
-            buckets.Remove(array[0].Key);
+            buckets.Remove(array[0].PartitionKey);
         }
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
@@ -264,7 +264,7 @@ namespace NBitcoin.Indexer
         }
         public void Index(params TransactionEntry.Entity[] entities)
         {
-            Index(entities, Configuration.GetTransactionTable());
+            Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
         }
         private void Index(ITableEntity[] entities, CloudTable table)
         {
@@ -474,8 +474,9 @@ namespace NBitcoin.Indexer
                     },
                     tx =>
                     {
-                        Index(new TransactionEntry.Entity(tx));
-                        foreach (var kv in AddressEntry.Entity.ExtractFromTransaction(tx, tx.GetHash()))
+                        var txid = tx.GetHash();
+                        Index(new TransactionEntry.Entity(txid, tx, null));
+                        foreach (var kv in AddressEntry.Entity.ExtractFromTransaction(tx, txid))
                         {
                             Index(new AddressEntry.Entity[] { kv.Value });
                         }

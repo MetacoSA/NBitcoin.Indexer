@@ -11,262 +11,207 @@ namespace NBitcoin.Indexer
 {
     public class TransactionEntry
     {
-        public class Entity : TableEntity
+
+        public class Entity
         {
-            public Entity()
+            public enum TransactionEntryType
             {
-
+                Mempool,
+                ConfirmedTransaction,
+                Colored
             }
-
-            public Entity(Transaction tx)
-                : this(tx, null)
+            public Entity(uint256 txId, Transaction tx, uint256 blockId)
             {
-            }
-
-            private void SetTx(Transaction tx)
-            {
-                var transaction = tx.ToBytes();
-                _txId = Hashes.Hash256(transaction);
-                //if(transaction.Length < 1024 * 64)
-                //	Transaction = transaction;
-                Key = GetPartitionKeyUShort(_txId);
-            }
-            public Entity(Transaction tx, uint256 blockId)
-            {
-                SetTx(tx);
-                if (blockId != null)
-                    RowKey = _txId.ToString() + "-b" + blockId.ToString();
+                if (txId == null)
+                    txId = tx.GetHash();
+                TxId = txId;
+                Transaction = tx;
+                BlockId = blockId;
+                if (blockId == null)
+                    Type = TransactionEntryType.Mempool;
                 else
+                    Type = TransactionEntryType.ConfirmedTransaction;
+            }
+
+            public Entity(uint256 txId)
+            {
+                if (txId == null)
+                    throw new ArgumentNullException("txId");
+                TxId = txId;
+            }
+
+            public Entity(DynamicTableEntity entity)
+            {
+                var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.None);
+                _PartitionKey = entity.PartitionKey;
+                Timestamp = entity.Timestamp;
+                TxId = new uint256(splitted[0]);
+                Type = GetType(splitted[1]);
+                if (splitted.Length >= 3 && splitted[2] != string.Empty)
+                    BlockId = new uint256(splitted[2]);
+                var bytes = Helper.GetEntityProperty(entity, "a");
+                if (bytes != null && bytes.Length != 0)
                 {
-                    RowKey = _txId.ToString() + "-m";
-                    TransactionBytes = tx.ToBytes();
+                    Transaction = new Transaction();
+                    Transaction.ReadWrite(bytes);
+                }
+                bytes = Helper.GetEntityProperty(entity, "b");
+                if (bytes != null && bytes.Length != 0)
+                {
+                    ColoredTransaction = new ColoredTransaction();
+                    ColoredTransaction.ReadWrite(bytes);
+                }
+                _PreviousTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "c"));
+            }
+
+            public DynamicTableEntity CreateTableEntity()
+            {
+                var entity = new DynamicTableEntity();
+                entity.ETag = "*";
+                entity.PartitionKey = PartitionKey;
+                entity.RowKey = TxId + "-" + TypeLetter + "-" + BlockId;
+                if (Transaction != null)
+                    Helper.SetEntityProperty(entity, "a", Transaction.ToBytes());
+                if (ColoredTransaction != null)
+                    Helper.SetEntityProperty(entity, "b", ColoredTransaction.ToBytes());
+                Helper.SetEntityProperty(entity, "c", Helper.SerializeList(PreviousTxOuts));
+                return entity;
+            }
+
+            public string TypeLetter
+            {
+                get
+                {
+                    return Type == TransactionEntryType.Colored ? "c" :
+                        Type == TransactionEntryType.ConfirmedTransaction ? "b" :
+                        Type == TransactionEntryType.Mempool ? "m" : "?";
+                }
+            }
+            public TransactionEntryType GetType(string letter)
+            {
+                switch (letter[0])
+                {
+                    case 'c':
+                        return TransactionEntryType.Colored;
+                    case 'b':
+                        return TransactionEntryType.ConfirmedTransaction;
+                    case 'm':
+                        return TransactionEntryType.Mempool;
+                    default:
+                        return TransactionEntryType.Mempool;
                 }
             }
 
-            public Entity(uint256 txId, ColoredTransaction colored)
-            {
-                _txId = txId;
-                Key = GetPartitionKeyUShort(txId);
-                RowKey = txId.ToString() + "-c";
-                ColoredTransactions = colored.ToBytes();
-            }
-
-            byte[] _Transaction;
-            [IgnoreProperty]
-            public byte[] TransactionBytes
+            string _PartitionKey;
+            public string PartitionKey
             {
                 get
                 {
-                    if (_Transaction == null)
-                        _Transaction = Helper.Concat(Transaction, Transaction2, Transaction3, Transaction4);
-                    return _Transaction;
-                }
-                set
-                {
-                    _Transaction = value;
-                    Helper.Spread(value, 1024 * 63, ref _Transaction1, ref _Transaction2, ref _Transaction3, ref _Transaction4);
+                    if (_PartitionKey == null && TxId != null)
+                    {
+                        _PartitionKey = Helper.GetPartitionKey(11, new[] { TxId.GetByte(0), TxId.GetByte(1) }, 0, 2);
+                    }
+                    return _PartitionKey;
                 }
             }
 
-            byte[] _Transaction1;
-            public byte[] Transaction
-            {
-                get
-                {
-                    return _Transaction1;
-                }
-                set
-                {
-                    _Transaction1 = value;
-                }
-            }
-            byte[] _Transaction2;
-            public byte[] Transaction2
-            {
-                get
-                {
-                    return _Transaction2;
-                }
-                set
-                {
-                    _Transaction2 = value;
-                }
-            }
-            byte[] _Transaction3;
-            public byte[] Transaction3
-            {
-                get
-                {
-                    return _Transaction3;
-                }
-                set
-                {
-                    _Transaction3 = value;
-                }
-            }
-            byte[] _Transaction4;
-            public byte[] Transaction4
-            {
-                get
-                {
-                    return _Transaction4;
-                }
-                set
-                {
-                    _Transaction4 = value;
-                }
-            }
-
-            byte[] _AllSpentOutputs;
-            [IgnoreProperty]
-            public byte[] AllSpentOutputs
-            {
-                get
-                {
-                    if (_AllSpentOutputs == null)
-                        _AllSpentOutputs = Helper.Concat(_SpentOutputs, _SpentOutputs1, _SpentOutputs2, _SpentOutputs3);
-                    return _AllSpentOutputs;
-                }
-                set
-                {
-                    _AllSpentOutputs = value;
-                    Helper.Spread(value, 1024 * 63, ref _SpentOutputs, ref _SpentOutputs1, ref _SpentOutputs2, ref _SpentOutputs3);
-                }
-            }
-
-            byte[] _SpentOutputs;
-            public byte[] SpentOutputs
-            {
-                get
-                {
-                    return _SpentOutputs;
-                }
-                set
-                {
-                    _SpentOutputs = value;
-                }
-            }
-            byte[] _SpentOutputs1;
-            public byte[] SpentOutputs1
-            {
-                get
-                {
-                    return _SpentOutputs1;
-                }
-                set
-                {
-                    _SpentOutputs1 = value;
-                }
-            }
-            byte[] _SpentOutputs2;
-            public byte[] SpentOutputs2
-            {
-                get
-                {
-                    return _SpentOutputs2;
-                }
-                set
-                {
-                    _SpentOutputs2 = value;
-                }
-            }
-
-            byte[] _SpentOutputs3;
-            public byte[] SpentOutputs3
-            {
-                get
-                {
-                    return _SpentOutputs3;
-                }
-                set
-                {
-                    _SpentOutputs3 = value;
-                }
-            }
-
-
-            uint256 _txId;
-            ushort? _Key;
-            [IgnoreProperty]
-            public ushort Key
-            {
-                get
-                {
-                    if (_Key == null)
-                        _Key = ushort.Parse(PartitionKey, System.Globalization.NumberStyles.HexNumber);
-                    return _Key.Value;
-                }
-                set
-                {
-                    PartitionKey = value.ToString("X2");
-                    _Key = value;
-                }
-            }
-
-            public byte[] ColoredTransactions
+            public DateTimeOffset? Timestamp
             {
                 get;
                 set;
             }
-            public static string GetPartitionKey(uint256 txid)
+
+            public Entity(uint256 txId, ColoredTransaction colored)
             {
-                var id = GetPartitionKeyUShort(txid);
-                return id.ToString("X2");
+                if (txId == null)
+                    throw new ArgumentNullException("txId");
+                TxId = txId;
+                ColoredTransaction = colored;
+                Type = TransactionEntryType.Colored;
             }
 
-            private static ushort GetPartitionKeyUShort(uint256 txid)
+
+            public bool IsLoaded
             {
-                return (ushort)((txid.GetByte(0) & 0xE0) + (txid.GetByte(1) << 8));
+                get
+                {
+                    return Transaction != null &&
+                        (Transaction.IsCoinBase || (PreviousTxOuts.Count == Transaction.Inputs.Count));
+                }
             }
-            public override string ToString()
+
+            public uint256 BlockId
             {
-                return PartitionKey + " " + RowKey;
+                get;
+                set;
+            }
+
+
+            public uint256 TxId
+            {
+                get;
+                set;
+            }
+
+            public ColoredTransaction ColoredTransaction
+            {
+                get;
+                set;
+            }
+
+
+            public Transaction Transaction
+            {
+                get;
+                set;
+            }
+
+
+            readonly List<TxOut> _PreviousTxOuts = new List<TxOut>();
+            public List<TxOut> PreviousTxOuts
+            {
+                get
+                {
+                    return _PreviousTxOuts;
+                }
+            }
+
+
+            public TransactionEntryType Type
+            {
+                get;
+                set;
             }
         }
         internal TransactionEntry(Entity[] entities)
         {
-            List<uint256> blockIds = new List<uint256>();
-            foreach (var entity in entities)
-            {
-                var parts = entity.RowKey.Split(new string[] { "-b" }, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2)
-                {
-                    if (TransactionId == null)
-                        TransactionId = new uint256(parts[0]);
-                    blockIds.Add(new uint256(parts[1]));
-                }
-                else if (entity.RowKey.EndsWith("-m"))
-                {
-                    parts = entity.RowKey.Split(new string[] { "-m" }, StringSplitOptions.RemoveEmptyEntries);
-                    if (TransactionId == null)
-                        TransactionId = new uint256(parts[0]);
-                    MempoolDate = entity.Timestamp;
-                }
-                else if (entity.RowKey.EndsWith("-c"))
-                {
+            TransactionId = entities[0].TxId;
+            BlockIds = entities.Select(e => e.BlockId).Where(b => b != null).ToArray();
+            MempoolDate = entities.Where(e => e.Type == Entity.TransactionEntryType.Mempool)
+                                  .Select(e => e.Timestamp)
+                                  .Min();
 
-                }
-            }
-            BlockIds = blockIds.ToArray();
-            var loadedEntity = entities.Where(e => e.TransactionBytes != null).FirstOrDefault();
+            var loadedEntity = entities.FirstOrDefault(e => e.Transaction != null && e.IsLoaded);
+            if (loadedEntity == null)
+                loadedEntity = entities.FirstOrDefault(e => e.Transaction != null);
             if (loadedEntity != null)
             {
-                var bytes = loadedEntity.TransactionBytes;
-                Transaction tx = new Transaction();
-                tx.ReadWrite(bytes);
-                Transaction = tx;
+                Transaction = loadedEntity.Transaction;
 
-                if (loadedEntity.AllSpentOutputs != null)
+                if (loadedEntity.IsLoaded && !loadedEntity.Transaction.IsCoinBase)
                 {
-                    PreviousTxOuts = Helper.DeserializeList<TxOut>(loadedEntity.AllSpentOutputs).ToArray();
+                    SpentCoins = new List<Spendable>();
+                    for (int i = 0 ; i < Transaction.Inputs.Count ; i++)
+                    {
+                        SpentCoins.Add(new Spendable(Transaction.Inputs[i].PrevOut, loadedEntity.PreviousTxOuts[i]));
+                    }
                 }
             }
 
-            var coloredLoadedEntity = entities.FirstOrDefault(e => e.ColoredTransactions != null);
+            var coloredLoadedEntity = entities.FirstOrDefault(e => e.ColoredTransaction != null);
             if (coloredLoadedEntity != null)
             {
-                ColoredTransaction = new ColoredTransaction();
-                ColoredTransaction.FromBytes(coloredLoadedEntity.ColoredTransactions);
+                ColoredTransaction = coloredLoadedEntity.ColoredTransaction;
             }
         }
 
@@ -286,9 +231,9 @@ namespace NBitcoin.Indexer
         {
             get
             {
-                if (PreviousTxOuts == null || Transaction == null)
+                if (SpentCoins == null || Transaction == null)
                     return null;
-                return PreviousTxOuts.Select(o => o.Value).Sum() - Transaction.TotalOut;
+                return SpentCoins.Select(o => o.TxOut.Value).Sum() - Transaction.TotalOut;
             }
         }
         public uint256[] BlockIds
@@ -307,7 +252,7 @@ namespace NBitcoin.Indexer
             internal set;
         }
 
-        public TxOut[] PreviousTxOuts
+        public List<Spendable> SpentCoins
         {
             get;
             set;

@@ -1,6 +1,7 @@
 ﻿using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
 using NBitcoin.OpenAsset;
 using NBitcoin.Protocol;
@@ -23,11 +24,26 @@ namespace NBitcoin.Indexer.Tests
     public class TestClass
     {
         [Fact]
+        public void CanSpreadBytes()
+        {
+            var bytes =
+                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new AddressEntry.Entity.IntCompactVarInt((uint)e)).ToArray());
+
+            DynamicTableEntity entity = new DynamicTableEntity();
+            Helper.SetEntityProperty(entity, "a", bytes);
+            var actualBytes = Helper.GetEntityProperty(entity, "a");
+            Assert.True(actualBytes.SequenceEqual(bytes));
+        }
+        [Fact]
         public void DoesNotCrashExtractingAddressFromBigTransaction()
         {
             var tx = new Transaction(Encoders.Hex.DecodeData(File.ReadAllText("Data/BigTransaction.txt")));
             var txId = tx.GetHash();
             var result = AddressEntry.Entity.ExtractFromTransaction(tx, txId);
+            foreach (var e in result)
+            {
+                var entity = e.Value.CreateTableEntity();
+            }
         }
         [Fact]
         public void CanUploadBlobDirectoryToAzure()
@@ -55,24 +71,6 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
-        [Fact]
-        public void CanSpreadBytes()
-        {
-            var actual = Helper.Concat(new byte[] { 1, 2, 3 }, new byte[] { 4, 5, 6 }, null, null);
-            var expected = new byte[] { 1, 2, 3, 4, 5, 6 };
-            Assert.True(actual.SequenceEqual(expected));
-
-            byte[] a = null;
-            byte[] b = null;
-            byte[] c = null;
-            byte[] d = null;
-
-            Helper.Spread(new byte[] { 1, 2, 3, 4, 5, 6, 7 }, 3, ref a, ref b, ref c, ref d);
-            Assert.True(a.SequenceEqual(new byte[] { 1, 2, 3 }));
-            Assert.True(b.SequenceEqual(new byte[] { 4, 5, 6 }));
-            Assert.True(c.SequenceEqual(new byte[] { 7 }));
-            Assert.Null(d);
-        }
 
         [Fact]
         public void CanIndexMeempool()
@@ -235,6 +233,16 @@ namespace NBitcoin.Indexer.Tests
         {
             chain.Changes.Rewind();
             return chain.Changes.Enumerate().ToList();
+        }
+
+        [Fact]
+        public void CanGeneratePartitionKey()
+        {
+            HashSet<string> results = new HashSet<string>();
+            while (results.Count != 4096)
+            {
+                results.Add(Helper.GetPartitionKey(12, RandomUtils.GetBytes(3), 0, 3));
+            }
         }
 
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
@@ -402,13 +410,13 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.IndexBalances();
 
                 var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
-                Assert.Null(tx.PreviousTxOuts);
+                Assert.Null(tx.SpentCoins);
 
                 tx = tester.Client.GetTransaction(true, b4.Transactions[0].GetHash());
-                Assert.NotNull(tx.PreviousTxOuts);
+                Assert.NotNull(tx.SpentCoins);
                 Assert.Equal(Money.Parse("0.60"), tx.Fees);
 
-                Assert.True(tx.PreviousTxOuts[0].ToBytes().SequenceEqual(b3.Transactions[0].Outputs[0].ToBytes()));
+                Assert.True(tx.SpentCoins[0].TxOut.ToBytes().SequenceEqual(b3.Transactions[0].Outputs[0].ToBytes()));
                 tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
                 Assert.NotNull(tx);
             }

@@ -82,16 +82,17 @@ namespace NBitcoin.Indexer
         public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, bool fetchColor, uint256[] txIds)
         {
             var result = new TransactionEntry[txIds.Length];
-            var queries = new TableQuery<TransactionEntry.Entity>[txIds.Length];
+            var queries = new TableQuery[txIds.Length];
             try
             {
                 Parallel.For(0, txIds.Length, i =>
                 {
                     var table = Configuration.GetTransactionTable();
-                    queries[i] = new TableQuery<TransactionEntry.Entity>()
+                    var searchedEntity = new TransactionEntry.Entity(txIds[i]);
+                    queries[i] = new TableQuery()
                                     .Where(
                                             TableQuery.CombineFilters(
-                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, TransactionEntry.Entity.GetPartitionKey(txIds[i])),
+                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey),
                                                 TableOperators.And,
                                                 TableQuery.CombineFilters(
                                                     TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txIds[i].ToString() + "-"),
@@ -100,7 +101,8 @@ namespace NBitcoin.Indexer
                                                 )
                                           ));
 
-                    var entities = table.ExecuteQuery(queries[i]).ToArray();
+                    var entities = table.ExecuteQuery(queries[i])
+                                       .Select(e => new TransactionEntry.Entity(e)).ToArray();
                     if (entities.Length == 0)
                         result[i] = null;
                     else
@@ -111,11 +113,10 @@ namespace NBitcoin.Indexer
                             foreach (var block in result[i].BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
                             {
                                 result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
-                                entities[0].TransactionBytes = result[i].Transaction.ToBytes();
-                                if (entities[0].TransactionBytes.Length < 1024 * 64 * 4)
+                                entities[0].Transaction = result[i].Transaction;
+                                if (entities[0].Transaction != null)
                                 {
-                                    entities[0].ETag = "*";
-                                    table.Execute(TableOperation.Merge(entities[0]));
+                                    table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
                                 }
                                 break;
                             }
@@ -124,15 +125,14 @@ namespace NBitcoin.Indexer
                         if (fetchColor && result[i].ColoredTransaction == null)
                         {
                             result[i].ColoredTransaction = ColoredTransaction.FetchColors(txIds[i], result[i].Transaction, new IndexerColoredTransactionRepository(Configuration.AsServer()));
-                            entities[0].ColoredTransactions = result[i].ColoredTransaction.ToBytes();
-                            if (entities[0].ColoredTransactions.Length < 1024 * 64 * 4)
+                            entities[0].ColoredTransaction = result[i].ColoredTransaction;
+                            if (entities[0].ColoredTransaction != null)
                             {
-                                entities[0].ETag = "*";
-                                table.Execute(TableOperation.Merge(entities[0]));
+                                table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
                             }
                         }
 
-                        var needTxOut = result[i].PreviousTxOuts == null && lazyLoadPreviousOutput && result[i].Transaction != null;
+                        var needTxOut = result[i].SpentCoins == null && lazyLoadPreviousOutput && result[i].Transaction != null;
                         if (needTxOut)
                         {
                             var tasks =
@@ -140,13 +140,13 @@ namespace NBitcoin.Indexer
                                      .Inputs
                                      .Select(txin => Task.Run(() =>
                                      {
-                                         var fromTx = GetTransactions(false, new uint256[] { txin.PrevOut.Hash }).FirstOrDefault();
-                                         if (fromTx == null)
+                                         var parentTx = GetTransactions(false, new uint256[] { txin.PrevOut.Hash }).FirstOrDefault();
+                                         if (parentTx == null)
                                          {
                                              IndexerTrace.MissingTransactionFromDatabase(txin.PrevOut.Hash);
                                              return null;
                                          }
-                                         return fromTx.Transaction.Outputs[(int)txin.PrevOut.N];
+                                         return parentTx.Transaction.Outputs[(int)txin.PrevOut.N];
                                      }))
                                      .ToArray();
 
@@ -154,29 +154,14 @@ namespace NBitcoin.Indexer
                             if (tasks.All(t => t.Result != null))
                             {
                                 var outputs = tasks.Select(t => t.Result).ToArray();
-                                result[i].PreviousTxOuts = outputs;
-                                entities[0].AllSpentOutputs = Helper.SerializeList(outputs);
-                                if (entities[0].AllSpentOutputs != null)
+                                result[i].SpentCoins = outputs.Select((o, n) => new Spendable(result[i].Transaction.Inputs[n].PrevOut, o)).ToList();
+                                entities[0].PreviousTxOuts.Clear();
+                                entities[0].PreviousTxOuts.AddRange(outputs);
+                                if (entities[0].IsLoaded)
                                 {
-                                    entities[0].ETag = "*";
-                                    table.Execute(TableOperation.Merge(entities[0]));
+                                    table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
                                 }
                             }
-                            else
-                            {
-                                if (result[i].Transaction.IsCoinBase)
-                                {
-                                    result[i].PreviousTxOuts = new TxOut[0];
-                                    entities[0].AllSpentOutputs = Helper.SerializeList(new TxOut[0]);
-                                    if (entities[0].AllSpentOutputs != null)
-                                    {
-                                        entities[0].ETag = "*";
-                                        table.Execute(TableOperation.Merge(entities[0]));
-                                    }
-                                }
-
-                            }
-
                         }
 
                         if (result[i].Transaction == null)
