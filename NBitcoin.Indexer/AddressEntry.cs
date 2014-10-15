@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.DataEncoders;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -55,7 +56,7 @@ namespace NBitcoin.Indexer
             if (loadedEntity == null)
                 loadedEntity = entities[0];
 
-            Address = loadedEntity.Address;
+            Id = loadedEntity.Id;
             TransactionId = new uint256(loadedEntity.TransactionId);
             BlockIds = entities
                                     .Where(s => s.BlockId != null)
@@ -106,7 +107,7 @@ namespace NBitcoin.Indexer
                 {
                     if (tx.IsCoinBase)
                         break;
-                    var signer = input.ScriptSig.GetSignerAddress(AzureIndexer.InternalNetwork);
+                    var signer = input.ScriptSig.GetSigner();
                     if (signer != null)
                     {
                         AddressEntry.Entity entry = null;
@@ -122,7 +123,7 @@ namespace NBitcoin.Indexer
                 uint i = 0;
                 foreach (var output in tx.Outputs)
                 {
-                    var receiver = output.ScriptPubKey.GetDestinationAddress(AzureIndexer.InternalNetwork);
+                    var receiver = output.ScriptPubKey.GetDestination();
                     if (receiver != null)
                     {
                         AddressEntry.Entity entry = null;
@@ -143,15 +144,21 @@ namespace NBitcoin.Indexer
 
             }
 
+            public TxDestination Id
+            {
+                get;
+                set;
+            }
+
             public Entity(DynamicTableEntity entity)
             {
                 var splitted = entity.RowKey.Split('-');
-                Address = BitcoinAddress.Create(splitted[0], AzureIndexer.InternalNetwork);
+                Id = DecodeId(splitted[0]);
                 TransactionId = new uint256(splitted[1]);
                 if (splitted.Length >= 3)
                     BlockId = new uint256(splitted[2]);
                 Timestamp = entity.Timestamp;
-                //_PartitionKey = entity.PartitionKey;
+                _PartitionKey = entity.PartitionKey;
 
                 _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
                 _SpentTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "b"));
@@ -161,12 +168,29 @@ namespace NBitcoin.Indexer
                 _ReceivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
             }
 
+            private TxDestination DecodeId(string id)
+            {
+                if (id.StartsWith("a"))
+                    return new KeyId(id.Substring(1));
+                if (id.StartsWith("b"))
+                    return new ScriptId(id.Substring(1));
+                throw new NotSupportedException("Unknow Id type");
+            }
+            private static string EncodeId(TxDestination id)
+            {
+                if (id is KeyId)
+                    return "a" + id.ToString();
+                if (id is ScriptId)
+                    return "b" + id.ToString();
+                throw new NotSupportedException("Unknow Id type");
+            }
+
             public DynamicTableEntity CreateTableEntity()
             {
                 DynamicTableEntity entity = new DynamicTableEntity();
                 entity.ETag = "*";
                 entity.PartitionKey = PartitionKey;
-                entity.RowKey = Address.ToString() + "-" + TransactionId.ToString() + "-" + BlockId.ToString();
+                entity.RowKey = IdString + "-" + TransactionId.ToString() + "-" + BlockId.ToString();
                 Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
                 Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentTxOuts));
                 Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedTxOutIndices.Select(e => new IntCompactVarInt(e))));
@@ -179,18 +203,35 @@ namespace NBitcoin.Indexer
             {
                 get
                 {
-                    if (_PartitionKey == null && Address != null)
+                    if (_PartitionKey == null && Id != null)
                     {
-                        var wif = Address.ToString();
-                        _PartitionKey = GetPartitionKey(wif);
+                        _PartitionKey = GetPartitionKey(IdString);
                     }
                     return _PartitionKey;
                 }
             }
 
-            public Entity(uint256 txid, BitcoinAddress address, uint256 blockId)
+            string _IdString;
+            public string IdString
             {
-                Address = address;
+                get
+                {
+                    if (_IdString == null && Id != null)
+                    {
+                        _IdString = EncodeId(Id);
+                    }
+                    return _IdString;
+                }
+            }
+
+            public static string GetPartitionKey(TxDestination id)
+            {
+                return GetPartitionKey(EncodeId(id));
+            }
+
+            public Entity(uint256 txid, TxDestination id, uint256 blockId)
+            {
+                Id = id;
                 TransactionId = txid;
                 BlockId = blockId;
             }
@@ -205,12 +246,6 @@ namespace NBitcoin.Indexer
                 get;
                 set;
             }
-            public BitcoinAddress Address
-            {
-                get;
-                set;
-            }
-
 
 
             public static string GetPartitionKey(string wif)
@@ -258,7 +293,7 @@ namespace NBitcoin.Indexer
             }
             public override string ToString()
             {
-                return "RowKey : " + Address;
+                return "RowKey : " + Id;
             }
 
             public bool IsLoaded
@@ -274,6 +309,8 @@ namespace NBitcoin.Indexer
                 get;
                 set;
             }
+
+            
         }
         public uint256 TransactionId
         {
@@ -281,7 +318,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public BitcoinAddress Address
+        public TxDestination Id
         {
             get;
             set;
@@ -358,7 +395,7 @@ namespace NBitcoin.Indexer
 
         public override string ToString()
         {
-            return Address + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
+            return Id + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
         }
 
         public DateTimeOffset? MempoolDate

@@ -256,7 +256,6 @@ namespace NBitcoin.Indexer
         }
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
-        public readonly static Network InternalNetwork = Network.Main;
 
 
         public void Index(params AddressEntry.Entity[] entries)

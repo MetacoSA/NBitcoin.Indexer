@@ -51,6 +51,7 @@ namespace NBitcoin.Indexer
             if (_Tasks != null)
             {
                 WaitProcessed(collection);
+                Thread.Sleep(100);
                 _Source.Cancel();
                 Task.WaitAll(_Tasks);
                 _Tasks = null;

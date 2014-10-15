@@ -232,30 +232,31 @@ namespace NBitcoin.Indexer
                 }
             }
         }
-
-
         public AddressEntry[] GetEntries(BitcoinAddress address)
         {
-            var originalNetwork = address.Network;
-            if (address.Network != AzureIndexer.InternalNetwork)
-                address = AzureIndexer.InternalNetwork.CreateBitcoinAddress(address.ID);
-            var addressStr = address.ToString();
+            return GetEntries(address.ID);
+        }
+
+
+        public AddressEntry[] GetEntries(TxDestination id)
+        {
+            var queryEntity = new AddressEntry.Entity(null, id, null);
             var table = Configuration.GetBalanceTable();
             var query = new TableQuery()
                             .Where(
                             TableQuery.CombineFilters(
-                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, AddressEntry.Entity.GetPartitionKey(addressStr)),
+                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, queryEntity.PartitionKey),
                                                 TableOperators.And,
                                                 TableQuery.CombineFilters(
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, addressStr + "-"),
+                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, queryEntity.IdString + "-"),
                                                     TableOperators.And,
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, addressStr + "|")
+                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, queryEntity.IdString + "|")
                                                 )
                             ));
 
             var entitiesByTransactionId = table
                                     .ExecuteQuery(query)
-                                    .Select(e=>new AddressEntry.Entity(e))
+                                    .Select(e => new AddressEntry.Entity(e))
                                     .GroupBy(e => e.TransactionId);
             List<AddressEntry> result = new List<AddressEntry>();
             foreach (var entities in entitiesByTransactionId)
@@ -269,8 +270,6 @@ namespace NBitcoin.Indexer
                         table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
                     }
                 var entry = new AddressEntry(entities.ToArray());
-                if (entry.Address.Network != originalNetwork)
-                    entry.Address = originalNetwork.CreateBitcoinAddress(address.ID);
                 result.Add(entry);
             }
             return result.ToArray();
