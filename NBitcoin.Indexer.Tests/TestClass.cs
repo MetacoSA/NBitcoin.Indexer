@@ -254,7 +254,7 @@ namespace NBitcoin.Indexer.Tests
                 var store = tester.CreateLocalBlockStore();
                 tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
                 var addr1 = new Key().PubKey;
-                var addrother = new Key().PubKey.GetAddress(Network.Main);
+                var addrother = new Key().PubKey;
                 var b1 = new Block()
                 {
                     Header =
@@ -269,7 +269,7 @@ namespace NBitcoin.Indexer.Tests
 							Outputs = 
 							{
 								new TxOut("10.0",addr1.ID),
-                                new TxOut("2.0",addrother),
+                                new TxOut("2.0",addrother.ID),
 							}
 						}
 					}
@@ -288,11 +288,11 @@ namespace NBitcoin.Indexer.Tests
                 var balance = tester.Client.GetWalletEntries("MyWallet");
                 var entry = AssertContainsMoney("10.0", balance);
 
-                var addr2 = new Key().PubKey.GetAddress(Network.Main);
-                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2));
+                var addr2 = new Key().PubKey;
+                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.ID));
                 rules = tester.Client.GetWalletRules("MyWallet");
                 Assert.Equal(2, rules.Length);
-                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2));
+                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.ID));
                 Assert.Equal(2, rules.Length);
 
                 var b2 = new Block()
@@ -317,8 +317,8 @@ namespace NBitcoin.Indexer.Tests
 							Outputs = 
 							{
 								new TxOut("1.0",addr1.ID),
-                                new TxOut("2.0",addr2),
-                                new TxOut("4.0",addrother),
+                                new TxOut("2.0",addr2.ID),
+                                new TxOut("4.0",addrother.ID),
 							}
 						}
 					}
@@ -331,6 +331,51 @@ namespace NBitcoin.Indexer.Tests
 
                 balance = tester.Client.GetWalletEntries("MyWallet");
                 entry = AssertContainsMoney("-7.0", balance);
+
+                var b3 = new Block()
+                {
+                    Header =
+                    {
+                        Nonce = RandomUtils.GetUInt32(),
+                        HashPrevBlock = Network.Main.GetGenesis().GetHash()
+                    },
+                    Transactions =
+					{
+						new Transaction()
+						{
+                            Inputs = 
+                            {
+                               new TxIn(new OutPoint(b2.Transactions[0].GetHash(),0))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,addr1)
+								},
+                                new TxIn(new OutPoint(b2.Transactions[0].GetHash(),1))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,addr2)
+								},
+                                new TxIn(new OutPoint(b2.Transactions[0].GetHash(),2))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,addrother)
+								}
+                            },
+							Outputs = 
+							{
+								new TxOut("0.10",addr1.ID),
+                                new TxOut("0.22",addr2.ID),
+                                new TxOut("1.0",addrother.ID),
+							}
+						}
+					}
+                };
+                store.Append(b3);
+
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexWallets();
+                balance = tester.Client.GetWalletEntries("MyWallet");
+                entry = AssertContainsMoney("-2.68", balance);
             }
         }
 
