@@ -29,6 +29,8 @@ namespace NBitcoin.Indexer
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
+            AddWalletRuleTypeConverter<AddressRule>();
+
         }
 
 
@@ -226,35 +228,67 @@ namespace NBitcoin.Indexer
         public AddressEntry[] GetEntries(TxDestination id)
         {
             var queryEntity = new AddressEntry.Entity(null, id, null);
-            var table = Configuration.GetBalanceTable();
+            return GetBalanceChangeEntries(
+                   queryEntity.BalanceId,
+                   Configuration.GetBalanceTable(),
+                   queryEntity,
+                   e => new AddressEntry.Entity(e),
+                   entities => new AddressEntry(entities.ToArray())
+                );
+        }
+
+        public WalletBalanceChangeEntry[] GetWalletEntries(string walletId)
+        {
+            var queryEntity = new WalletBalanceChangeEntry.Entity(null, walletId, null);
+            return GetBalanceChangeEntries(
+                   queryEntity.BalanceId,
+                   Configuration.GetWalletBalanceTable(),
+                   queryEntity,
+                   e => new WalletBalanceChangeEntry.Entity(e),
+                   entities => new WalletBalanceChangeEntry(entities.ToArray())
+                );
+        }
+
+        private TEntry[] GetBalanceChangeEntries<TEntry, TEntity>
+            (
+            string balanceId,
+            CloudTable table,
+            TEntity queryEntity,
+            Func<DynamicTableEntity, TEntity> createEntity,
+            Func<TEntity[], TEntry> createEntry
+            )
+            where TEntry : BalanceChangeEntry
+            where TEntity : BalanceChangeEntry.Entity
+        {
+
             var query = new TableQuery()
                             .Where(
                             TableQuery.CombineFilters(
                                                 TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, queryEntity.PartitionKey),
                                                 TableOperators.And,
                                                 TableQuery.CombineFilters(
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, queryEntity.IdString + "-"),
+                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, queryEntity.BalanceId + "-"),
                                                     TableOperators.And,
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, queryEntity.IdString + "|")
+                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, queryEntity.BalanceId + "|")
                                                 )
                             ));
 
             var entitiesByTransactionId = table
                                     .ExecuteQuery(query)
-                                    .Select(e => new AddressEntry.Entity(e))
+                                    .Select(createEntity)
                                     .GroupBy(e => e.TransactionId);
-            List<AddressEntry> result = new List<AddressEntry>();
+            List<TEntry> result = new List<TEntry>();
             foreach (var entities in entitiesByTransactionId)
             {
                 var entity = entities.Where(e => e.IsLoaded).FirstOrDefault();
                 if (entity == null)
                     entity = entities.First();
                 if (!entity.IsLoaded)
-                    if (LoadAddressEntity(entity))
+                    if (LoadBalanceChangeEntity(entity, null))
                     {
                         table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
                     }
-                var entry = new AddressEntry(entities.ToArray());
+                var entry = createEntry(entities.ToArray());
                 result.Add(entry);
             }
             return result.ToArray();
@@ -272,15 +306,11 @@ namespace NBitcoin.Indexer
             return result;
         }
 
-        public bool LoadAddressEntity(AddressEntry.Entity indexAddress)
-        {
-            return LoadAddressEntity(indexAddress, null);
-        }
-        public bool LoadAddressEntity(AddressEntry.Entity indexAddress, IDictionary<uint256, Transaction> transactionsCache)
+        private bool LoadBalanceChangeEntity<TEntity>(TEntity entity, IDictionary<uint256, Transaction> transactionsCache) where TEntity : BalanceChangeEntry.Entity
         {
             if (transactionsCache == null)
                 transactionsCache = new Dictionary<uint256, Transaction>();
-            var txId = new uint256(indexAddress.TransactionId);
+            var txId = new uint256(entity.TransactionId);
 
             Transaction tx = null;
             if (!transactionsCache.TryGetValue(txId, out tx))
@@ -294,13 +324,13 @@ namespace NBitcoin.Indexer
 
             Money total = Money.Zero;
 
-            if (indexAddress.ReceivedTxOuts.Count == 0)
-                indexAddress.ReceivedTxOuts.AddRange(tx.Outputs.Where((o, i) => indexAddress.ReceivedTxOutIndices.Contains((uint)i)).ToList());
+            if (entity.ReceivedTxOuts.Count == 0)
+                entity.ReceivedTxOuts.AddRange(tx.Outputs.Where((o, i) => entity.ReceivedTxOutIndices.Contains((uint)i)).ToList());
 
 
             transactionsCache.AddOrReplace(txId, tx);
 
-            foreach (var prev in indexAddress.SpentOutpoints)
+            foreach (var prev in entity.SpentOutpoints)
             {
                 Transaction sourceTransaction = null;
                 if (!transactionsCache.TryGetValue(prev.Hash, out sourceTransaction))
@@ -316,11 +346,17 @@ namespace NBitcoin.Indexer
                 {
                     return false;
                 }
-                indexAddress.SpentTxOuts.Add(sourceTransaction.Outputs[(int)prev.N]);
+                entity.SpentTxOuts.Add(sourceTransaction.Outputs[(int)prev.N]);
             }
 
             return true;
         }
+
+        public bool LoadAddressEntity(AddressEntry.Entity indexAddress)
+        {
+            return LoadBalanceChangeEntity(indexAddress, null);
+        }
+
         public AddressEntry[] GetEntries(KeyId keyId)
         {
             return GetEntries(new BitcoinAddress(keyId, Configuration.Network));
@@ -338,5 +374,36 @@ namespace NBitcoin.Indexer
             return GetEntries(pubKey.GetAddress(Configuration.Network));
         }
 
+        public void AddWalletRuleTypeConverter<T>() where T : WalletRule, new()
+        {
+            AddWalletRuleTypeConverter(new T().TypeName, () => new T());
+        }
+
+        public void AddWalletRuleTypeConverter(string typeName, Func<WalletRule> createEmptyRule)
+        {
+            _Rules.Add(typeName, createEmptyRule);
+        }
+        Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
+        public WalletRuleEntry[] GetWalletRules(string walletId)
+        {
+            var table = Configuration.GetWalletRulesTable();
+            var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity();
+            var query = new TableQuery()
+                                    .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
+            return
+                table.ExecuteQuery(query)
+                 .Select(e => new WalletRuleEntry(e, _Rules))
+                 .ToArray();
+        }
+
+
+        public WalletRuleEntry[] GetAllWalletRules()
+        {
+            return
+                Configuration.GetWalletRulesTable()
+                .ExecuteQuery(new TableQuery())
+                .Select(e => new WalletRuleEntry(e, _Rules))
+                .ToArray();
+        }
     }
 }

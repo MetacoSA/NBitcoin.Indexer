@@ -116,6 +116,7 @@ namespace NBitcoin.Indexer
             TaskCount = -1;
             FromBlk = 0;
             BlkCount = 9999999;
+
         }
 
         public TaskPool<TItem> CreateTaskPool<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, int defaultTaskCount)
@@ -129,18 +130,37 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        public void IndexBalances()
+        public void IndexWallets()
         {
             SetThrottling();
-            BlockingCollection<AddressEntry.Entity[]> indexedEntries = new BlockingCollection<AddressEntry.Entity[]>(100);
+            IndexBalancesCore<WalletBalanceChangeEntry.Entity>
+               (
+                    "Import wallets to azure started",
+                    "wallets",
+                    () => Configuration.GetWalletBalanceTable(),
+                    (blockId, tx, txId) => WalletBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId, Configuration.CreateIndexerClient())
+               );
 
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries), 30);
-            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
+        }
+
+        private void IndexBalancesCore<TEntity>(
+            string correlationLog,
+            string checkpointName,
+            Func<CloudTable> getTable,
+            Func<uint256, Transaction, uint256, Dictionary<string, TEntity>> extractFromTransaction
+            ) where TEntity : BalanceChangeEntry.Entity
+        {
+            SetThrottling();
+
+            BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
+
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()).ToArray(), getTable()), 30);
+            using (IndexerTrace.NewCorrelation(correlationLog).Open())
             {
                 Configuration.GetBalanceTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<string, AddressEntry.Entity>();
+                var buckets = new MultiValueDictionary<string, TEntity>();
 
-                var storedBlocks = Enumerate("balances");
+                var storedBlocks = Enumerate(checkpointName);
                 foreach (var block in storedBlocks)
                 {
                     var blockId = block.Item.Header.GetHash();
@@ -149,7 +169,7 @@ namespace NBitcoin.Indexer
                         var txId = tx.GetHash();
                         try
                         {
-                            var entryByAddress = AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
+                            var entryByAddress = extractFromTransaction(blockId, tx, txId);
 
                             foreach (var kv in entryByAddress)
                             {
@@ -158,7 +178,7 @@ namespace NBitcoin.Indexer
                                 if (bucket.Count == 100)
                                 {
                                     indexedEntries.Add(bucket.ToArray());
-                                    buckets.Remove(kv.Value.PartitionKey);
+                                    buckets.Remove(kv.Key);
                                 }
                             }
 
@@ -190,6 +210,16 @@ namespace NBitcoin.Indexer
                 tasks.Stop();
                 storedBlocks.SaveCheckpoint();
             }
+        }
+        public void IndexBalances()
+        {
+            IndexBalancesCore<AddressEntry.Entity>
+               (
+                    "Import balances to azure started",
+                    "balances",
+                    () => Configuration.GetBalanceTable(),
+                    (blockId, tx, txId) => AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId)
+               );
         }
 
 
@@ -261,6 +291,10 @@ namespace NBitcoin.Indexer
         public void Index(params AddressEntry.Entity[] entries)
         {
             Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetBalanceTable());
+        }
+        public void Index(params WalletBalanceChangeEntry.Entity[] entries)
+        {
+            Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetWalletBalanceTable());
         }
         public void Index(params TransactionEntry.Entity[] entities)
         {
@@ -628,6 +662,17 @@ namespace NBitcoin.Indexer
         {
             get;
             set;
+        }
+
+
+
+        public WalletRuleEntry AddWalletRule(string walletId, WalletRule walletRule)
+        {
+            var table = Configuration.GetWalletRulesTable();
+            var entry = new WalletRuleEntry(walletId, walletRule);
+            var entity = entry.CreateTableEntity();
+            table.Execute(TableOperation.InsertOrReplace(entity));
+            return entry;
         }
 
 

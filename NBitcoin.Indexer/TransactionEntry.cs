@@ -252,6 +252,9 @@ namespace NBitcoin.Indexer
             internal set;
         }
 
+        /// <summary>
+        /// Coins spent during the transaction, can be null if the indexer miss parent transactions
+        /// </summary>
         public List<Spendable> SpentCoins
         {
             get;

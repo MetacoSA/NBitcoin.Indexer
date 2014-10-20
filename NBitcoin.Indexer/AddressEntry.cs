@@ -13,87 +13,44 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public class AddressEntry
+    public class AddressEntry : BalanceChangeEntry
     {
-        ChainedBlock _ConfirmedBlock;
-        bool _ConfirmedSet;
-        public ChainedBlock ConfirmedBlock
+        public AddressEntry(params Entity[] entities)
+            : base(entities.OfType<BalanceChangeEntry.Entity>().ToArray())
+        {
+            if (entities.Length > 0)
+                _Id = entities[0].Id;
+        }
+
+        TxDestination _Id;
+        public TxDestination Id
         {
             get
             {
-                if (!_ConfirmedSet)
-                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(Chain chain) to attach the confirmed block to this entry");
-                return _ConfirmedBlock;
-            }
-            private set
-            {
-                _ConfirmedSet = true;
-                _ConfirmedBlock = value;
+                if (_Id == null && BalanceId != null)
+                {
+                    _Id = Helper.DecodeId(BalanceId);
+                }
+                return _Id;
             }
         }
-        /// <summary>
-        /// Fetch ConfirmationInfo if not already set about this entry from local chain
-        /// </summary>
-        /// <param name="chain">Local chain</param>
-        /// <returns>Returns this</returns>
-        public AddressEntry FetchConfirmedBlock(Chain chain)
+
+        public new AddressEntry FetchConfirmedBlock(Chain chain)
         {
-            if (_ConfirmedBlock != null)
-                return this;
-            if (BlockIds == null || BlockIds.Length == 0)
-                return this;
-            ConfirmedBlock = BlockIds.Select(id => chain.GetBlock(id)).FirstOrDefault(b => b != null);
-            return this;
+            return (AddressEntry)base.FetchConfirmedBlock(chain);
         }
-        public AddressEntry(params Entity[] entities)
+        public new class Entity : BalanceChangeEntry.Entity
         {
-            if (entities == null)
-                throw new ArgumentNullException("entities");
-            if (entities.Length == 0)
-                throw new ArgumentException("At least one entity should be provided", "entities");
-
-            var loadedEntity = entities.FirstOrDefault(e => e.IsLoaded);
-            if (loadedEntity == null)
-                loadedEntity = entities[0];
-
-            Id = loadedEntity.Id;
-            TransactionId = new uint256(loadedEntity.TransactionId);
-            BlockIds = entities
-                                    .Where(s => s.BlockId != null)
-                                    .Select(s => new uint256(s.BlockId))
-                                    .ToArray();
-            SpentOutpoints = loadedEntity.SpentOutpoints;
-            ReceivedTxOutIndices = loadedEntity.ReceivedTxOutIndices;
-            if (loadedEntity.IsLoaded)
+            public Entity(uint256 txid, TxDestination id, uint256 blockId)
+                : base(txid, Helper.EncodeId(id), blockId)
             {
-                ReceivedCoins = new List<Spendable>();
-                for (int i = 0 ; i < loadedEntity.ReceivedTxOutIndices.Count ; i++)
-                {
-                    ReceivedCoins.Add(new Spendable(new OutPoint(TransactionId, loadedEntity.ReceivedTxOutIndices[i]), loadedEntity.ReceivedTxOuts[i]));
-                }
-                SpentCoins = new List<Spendable>();
-                for (int i = 0 ; i < SpentOutpoints.Count ; i++)
-                {
-                    SpentCoins.Add(new Spendable(SpentOutpoints[i], loadedEntity.SpentTxOuts[i]));
-                }
-                BalanceChange = ReceivedCoins.Select(t => t.TxOut.Value).Sum() - SpentCoins.Select(t => t.TxOut.Value).Sum();
+                _Id = id;
             }
-            MempoolDate = entities.Where(e => e.BlockId == null).Select(e => e.Timestamp).FirstOrDefault();
-        }
-        public class Entity
-        {
-            internal class IntCompactVarInt : CompactVarInt
+            public Entity(DynamicTableEntity entity)
+                : base(entity)
             {
-                public IntCompactVarInt(uint value)
-                    : base(value, 4)
-                {
-                }
-                public IntCompactVarInt()
-                    : base(4)
-                {
-
-                }
             }
+
             public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
             {
                 return ExtractFromTransaction(null, tx, txId);
@@ -139,263 +96,31 @@ namespace NBitcoin.Indexer
                 return entryByAddress;
             }
 
-            public Entity()
-            {
 
-            }
-
+            TxDestination _Id;
             public TxDestination Id
             {
-                get;
-                set;
-            }
-
-            public Entity(DynamicTableEntity entity)
-            {
-                var splitted = entity.RowKey.Split('-');
-                Id = DecodeId(splitted[0]);
-                TransactionId = new uint256(splitted[1]);
-                if (splitted.Length >= 3 && splitted[2] != string.Empty)
-                    BlockId = new uint256(splitted[2]);
-                Timestamp = entity.Timestamp;
-                _PartitionKey = entity.PartitionKey;
-
-                _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
-                _SpentTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "b"));
-                _ReceivedTxOutIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "c"))
-                                        .Select(o => (uint)o.ToLong())
-                                        .ToList();
-                _ReceivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
-            }
-
-            private TxDestination DecodeId(string id)
-            {
-                if (id.StartsWith("a"))
-                    return new KeyId(id.Substring(1));
-                if (id.StartsWith("b"))
-                    return new ScriptId(id.Substring(1));
-                throw new NotSupportedException("Unknow Id type");
-            }
-            private static string EncodeId(TxDestination id)
-            {
-                if (id is KeyId)
-                    return "a" + id.ToString();
-                if (id is ScriptId)
-                    return "b" + id.ToString();
-                throw new NotSupportedException("Unknow Id type");
-            }
-
-            public DynamicTableEntity CreateTableEntity()
-            {
-                DynamicTableEntity entity = new DynamicTableEntity();
-                entity.ETag = "*";
-                entity.PartitionKey = PartitionKey;
-                entity.RowKey = IdString + "-" + TransactionId + "-" + BlockId;
-                Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
-                Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentTxOuts));
-                Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedTxOutIndices.Select(e => new IntCompactVarInt(e))));
-                Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedTxOuts));
-                return entity;
-            }
-
-            string _PartitionKey;
-            public string PartitionKey
-            {
                 get
                 {
-                    if (_PartitionKey == null && Id != null)
+                    if (BalanceId != null && _Id == null)
                     {
-                        var bytes = Id.ToBytes(true);
-                        _PartitionKey = Helper.GetPartitionKey(12, bytes, bytes.Length - 4, 3);
+                        _Id = Helper.DecodeId(BalanceId);
                     }
-                    return _PartitionKey;
+                    return _Id;
                 }
-            }
-
-            string _IdString;
-            public string IdString
-            {
-                get
+                set
                 {
-                    if (_IdString == null && Id != null)
-                    {
-                        _IdString = EncodeId(Id);
-                    }
-                    return _IdString;
+                    _Id = value;
+                    BalanceId = Helper.EncodeId(value);
                 }
             }
 
-            public Entity(uint256 txid, TxDestination id, uint256 blockId)
+            protected override string CalculatePartitionKey()
             {
-                Id = id;
-                TransactionId = txid;
-                BlockId = blockId;
-            }
-
-            public uint256 TransactionId
-            {
-                get;
-                set;
-            }
-            public uint256 BlockId
-            {
-                get;
-                set;
-            }
-
-
-
-            private readonly List<uint> _ReceivedTxOutIndices = new List<uint>();
-            public List<uint> ReceivedTxOutIndices
-            {
-                get
-                {
-                    return _ReceivedTxOutIndices;
-                }
-            }
-
-            private readonly List<TxOut> _SpentTxOuts = new List<TxOut>();
-            public List<TxOut> SpentTxOuts
-            {
-                get
-                {
-                    return _SpentTxOuts;
-                }
-            }
-
-            private readonly List<OutPoint> _SpentOutpoints = new List<OutPoint>();
-            public List<OutPoint> SpentOutpoints
-            {
-                get
-                {
-                    return _SpentOutpoints;
-                }
-            }
-            private readonly List<TxOut> _ReceivedTxOuts = new List<TxOut>();
-            public List<TxOut> ReceivedTxOuts
-            {
-                get
-                {
-                    return _ReceivedTxOuts;
-                }
-            }
-            public override string ToString()
-            {
-                return "RowKey : " + Id;
-            }
-
-            public bool IsLoaded
-            {
-                get
-                {
-                    return SpentOutpoints.Count == SpentTxOuts.Count && ReceivedTxOuts.Count == ReceivedTxOutIndices.Count;
-                }
-            }
-
-            public DateTimeOffset? Timestamp
-            {
-                get;
-                set;
-            }
-
-
-        }
-        public uint256 TransactionId
-        {
-            get;
-            set;
-        }
-
-        public TxDestination Id
-        {
-            get;
-            set;
-        }
-
-        List<Spendable> _ReceivedCoins;
-        public List<Spendable> ReceivedCoins
-        {
-            get
-            {
-                return _ReceivedCoins;
-            }
-            set
-            {
-                _ReceivedCoins = value;
+                var bytes = Id.ToBytes(true);
+                return Helper.GetPartitionKey(12, bytes, bytes.Length - 4, 3);
             }
         }
 
-        List<OutPoint> _SpentOutpoints = new List<OutPoint>();
-
-        /// <summary>
-        /// List of spent outpoints
-        /// </summary>
-        public List<OutPoint> SpentOutpoints
-        {
-            get
-            {
-                return _SpentOutpoints;
-            }
-            set
-            {
-                _SpentOutpoints = value;
-            }
-        }
-
-
-        List<Spendable> _SpentCoins;
-
-        /// <summary>
-        /// List of spent coins
-        /// Can be null if the indexer have not yet indexed parent transactions
-        /// Use SpentOutpoints if you only need outpoints
-        /// </summary>
-        public List<Spendable> SpentCoins
-        {
-            get
-            {
-                return _SpentCoins;
-            }
-            set
-            {
-                _SpentCoins = value;
-            }
-        }
-        public List<int> TxOutIndices
-        {
-            get;
-            set;
-        }
-
-
-
-        public uint256[] BlockIds
-        {
-            get;
-            set;
-        }
-
-        public Money BalanceChange
-        {
-            get;
-            set;
-        }
-
-        public override string ToString()
-        {
-            return Id + " - " + (BalanceChange == null ? "??" : BalanceChange.ToString());
-        }
-
-        public DateTimeOffset? MempoolDate
-        {
-            get;
-            set;
-        }
-
-        public List<uint> ReceivedTxOutIndices
-        {
-            get;
-            set;
-        }
     }
 }

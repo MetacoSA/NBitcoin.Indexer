@@ -83,7 +83,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AddressEntry.cs" />
+    <Compile Include="AddressRule.cs" />
     <Compile Include="AzureIndexer.cs" />
+    <Compile Include="BalanceChangeEntry.cs" />
     <Compile Include="ChainChangeEntry.cs" />
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="Helper.cs" />
@@ -97,6 +99,9 @@
     <Compile Include="IndexerTrace.cs" />
     <Compile Include="ProgressTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WalletBalanceChangeEntry.cs" />
+    <Compile Include="WalletRule.cs" />
+    <Compile Include="WalletRuleEntry.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

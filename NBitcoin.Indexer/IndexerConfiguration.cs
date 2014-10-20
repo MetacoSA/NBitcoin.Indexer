@@ -22,10 +22,10 @@ namespace NBitcoin.Indexer
 
         public void EnsureSetup()
         {
-            GetBalanceTable().CreateIfNotExists();
-            GetBlocksContainer().CreateIfNotExists();
-            GetChainTable().CreateIfNotExists();
-            GetTransactionTable().CreateIfNotExists();
+            foreach (var table in EnumerateTables())
+            {
+                table.CreateIfNotExists();
+            }
         }
 
 		protected static void Fill(IndexerConfiguration config)
@@ -65,7 +65,8 @@ namespace NBitcoin.Indexer
 		string _TransactionTable = "transactions";
 		string _BalanceTable = "balances";
 		string _ChainTable = "chain";
-
+        string _WalletTable = "wallets";
+        string _WalletBalanceTable = "walletbalances";
 
 		public StorageCredentials StorageCredentials
 		{
@@ -84,6 +85,14 @@ namespace NBitcoin.Indexer
 		{
 			return CreateTableClient().GetTableReference(GetFullName(_TransactionTable));
 		}
+        public CloudTable GetWalletRulesTable()
+        {
+            return CreateTableClient().GetTableReference(GetFullName(_WalletTable));
+        }
+        public CloudTable GetWalletBalanceTable()
+        {
+            return CreateTableClient().GetTableReference(GetFullName(_WalletBalanceTable));
+        }
 
 		private string GetFullName(string storageObjectName)
 		{
@@ -126,7 +135,10 @@ namespace NBitcoin.Indexer
 			yield return GetTransactionTable();
 			yield return GetBalanceTable();
 			yield return GetChainTable();
+            yield return GetWalletRulesTable();
+            yield return GetWalletBalanceTable();
 		}
+
 
         internal IndexerServerConfiguration AsServer()
         {

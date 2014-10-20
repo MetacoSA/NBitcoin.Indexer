@@ -37,6 +37,7 @@ namespace NBitcoin.Indexer.Tests
 			}
 
 			config.GetBlocksContainer().CreateIfNotExists();
+            config.EnsureSetup();
 			_Folder = folder;
 		}
 

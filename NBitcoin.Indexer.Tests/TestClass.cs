@@ -245,6 +245,95 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+
+        [Fact]
+        public void CanIndexWallet()
+        {
+            using (var tester = CreateTester())
+            {
+                var store = tester.CreateLocalBlockStore();
+                tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
+                var addr1 = new Key().PubKey;
+                var addrother = new Key().PubKey.GetAddress(Network.Main);
+                var b1 = new Block()
+                {
+                    Header =
+                    {
+                        Nonce = RandomUtils.GetUInt32(),
+                        HashPrevBlock = Network.Main.GetGenesis().GetHash()
+                    },
+                    Transactions =
+					{
+						new Transaction()
+						{
+							Outputs = 
+							{
+								new TxOut("10.0",addr1.ID),
+                                new TxOut("2.0",addrother),
+							}
+						}
+					}
+                };
+                store.Append(b1);
+
+                var expectedRule = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr1.ID));
+                var rules = tester.Client.GetWalletRules("MyWallet");
+                Assert.Equal(1, rules.Length);
+                Assert.Equal(expectedRule.WalletId, rules[0].WalletId);
+                Assert.Equal(expectedRule.Rule.ToString(), rules[0].Rule.ToString());
+
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexWallets();
+
+                var balance = tester.Client.GetWalletEntries("MyWallet");
+                var entry = AssertContainsMoney("10.0", balance);
+
+                var addr2 = new Key().PubKey.GetAddress(Network.Main);
+                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2));
+                rules = tester.Client.GetWalletRules("MyWallet");
+                Assert.Equal(2, rules.Length);
+                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2));
+                Assert.Equal(2, rules.Length);
+
+                var b2 = new Block()
+                {
+                    Header =
+                    {
+                        Nonce = RandomUtils.GetUInt32(),
+                        HashPrevBlock = Network.Main.GetGenesis().GetHash()
+                    },
+                    Transactions =
+					{
+						new Transaction()
+						{
+                            Inputs = 
+                            {
+                               new TxIn(new OutPoint(b1.Transactions[0].GetHash(),0))
+								{
+									ScriptSig = new PayToPubkeyHashTemplate()
+												.GenerateScriptSig(sig,addr1)
+								}
+                            },
+							Outputs = 
+							{
+								new TxOut("1.0",addr1.ID),
+                                new TxOut("2.0",addr2),
+                                new TxOut("4.0",addrother),
+							}
+						}
+					}
+                };
+                store.Append(b2);
+
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexWallets();
+
+
+                balance = tester.Client.GetWalletEntries("MyWallet");
+                entry = AssertContainsMoney("-7.0", balance);
+            }
+        }
+
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
         [Fact]
         public void CanUploadBalancesToAzure()
@@ -312,6 +401,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var entries = tester.Client.GetEntries(sender);
                 Assert.Equal(2, entries.Length);
+                Assert.Equal(sender.ID, entries[0].Id);
                 var entry = AssertContainsMoney("10.0", entries);
                 Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedCoins.Select(c => c.OutPoint)));
                 Assert.Equal(entry.BlockIds[0], b1.GetHash());
@@ -423,7 +513,7 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [DebuggerHidden]
-        private AddressEntry AssertContainsMoney(Money expected, AddressEntry[] entries)
+        private TEntry AssertContainsMoney<TEntry>(Money expected, TEntry[] entries) where TEntry : BalanceChangeEntry
         {
             var entry = entries.FirstOrDefault(e => e.BalanceChange == expected);
             Assert.True(entry != null);
