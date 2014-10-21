@@ -130,107 +130,21 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        public void IndexWallets()
+        public void IndexWalletBalances()
         {
-            SetThrottling();
-            IndexBalancesCore<WalletBalanceChangeEntry.Entity>
-               (
-                    "Import wallets to azure started",
-                    "wallets",
-                    () => Configuration.GetWalletBalanceTable(),
-                    (blockId, tx, txId) => WalletBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId, Configuration.CreateIndexerClient())
-               );
-
+            IndexBalances("wallets", new WalletBalanceChangeIndexer(Configuration));
         }
 
-        private void IndexBalancesCore<TEntity>(
-            string correlationLog,
-            string checkpointName,
-            Func<CloudTable> getTable,
-            Func<uint256, Transaction, uint256, Dictionary<string, TEntity>> extractFromTransaction
-            ) where TEntity : BalanceChangeEntry.Entity
+        
+        public void IndexAddressBalances()
         {
-            SetThrottling();
-
-            BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
-
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()).ToArray(), getTable()), 30);
-            using (IndexerTrace.NewCorrelation(correlationLog).Open())
-            {
-                Configuration.GetBalanceTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<string, TEntity>();
-
-                var storedBlocks = Enumerate(checkpointName);
-                foreach (var block in storedBlocks)
-                {
-                    var blockId = block.Item.Header.GetHash();
-                    foreach (var tx in block.Item.Transactions)
-                    {
-                        var txId = tx.GetHash();
-                        try
-                        {
-                            var entryByAddress = extractFromTransaction(blockId, tx, txId);
-
-                            foreach (var kv in entryByAddress)
-                            {
-                                buckets.Add(kv.Value.PartitionKey, kv.Value);
-                                var bucket = buckets[kv.Value.PartitionKey];
-                                if (bucket.Count == 100)
-                                {
-                                    indexedEntries.Add(bucket.ToArray());
-                                    buckets.Remove(kv.Key);
-                                }
-                            }
-
-                            if (storedBlocks.NeedSave)
-                            {
-                                foreach (var kv in buckets.AsLookup().ToArray())
-                                {
-                                    indexedEntries.Add(kv.ToArray());
-                                }
-                                buckets.Clear();
-                                tasks.Stop();
-                                storedBlocks.SaveCheckpoint();
-                                tasks.Start();
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            IndexerTrace.ErrorWhileImportingBalancesToAzure(ex, txId);
-                            throw;
-                        }
-                    }
-                }
-
-                foreach (var kv in buckets.AsLookup().ToArray())
-                {
-                    indexedEntries.Add(kv.ToArray());
-                }
-                buckets.Clear();
-                tasks.Stop();
-                storedBlocks.SaveCheckpoint();
-            }
+            IndexBalances("balances", new AddressBalanceChangeIndexer(Configuration));
         }
-        public void IndexBalances()
-        {
-            IndexBalancesCore<AddressEntry.Entity>
-               (
-                    "Import balances to azure started",
-                    "balances",
-                    () => Configuration.GetBalanceTable(),
-                    (blockId, tx, txId) => AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId)
-               );
-        }
-
-
-
-
-
 
         public long IndexTransactions()
         {
             long txCount = 0;
-            SetThrottling();
+            Helper.SetThrottling();
 
             BlockingCollection<TransactionEntry.Entity[]> transactions = new BlockingCollection<TransactionEntry.Entity[]>(20);
 
@@ -288,7 +202,7 @@ namespace NBitcoin.Indexer
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
 
-        public void Index(params AddressEntry.Entity[] entries)
+        public void Index(params AddressBalanceChangeEntry.Entity[] entries)
         {
             Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetBalanceTable());
         }
@@ -403,7 +317,7 @@ namespace NBitcoin.Indexer
         public long IndexBlocks()
         {
             long blkCount = 0;
-            SetThrottling();
+            Helper.SetThrottling();
             BlockingCollection<Block> blocks = new BlockingCollection<Block>(20);
             var tasks = CreateTaskPool(blocks, Index, 15);
 
@@ -460,7 +374,7 @@ namespace NBitcoin.Indexer
         public int IndexMempool()
         {
             int added = 0;
-            SetThrottling();
+            Helper.SetThrottling();
             using (IndexerTrace.NewCorrelation("Index Mempool").Open())
             {
                 var table = Configuration.GetTransactionTable();
@@ -510,9 +424,9 @@ namespace NBitcoin.Indexer
                     {
                         var txid = tx.GetHash();
                         Index(new TransactionEntry.Entity(txid, tx, null));
-                        foreach (var kv in AddressEntry.Entity.ExtractFromTransaction(tx, txid))
+                        foreach (var kv in AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txid))
                         {
-                            Index(new AddressEntry.Entity[] { kv.Value });
+                            Index(new AddressBalanceChangeEntry.Entity[] { kv.Value });
                         }
                         Interlocked.Increment(ref added);
                     });
@@ -531,9 +445,75 @@ namespace NBitcoin.Indexer
             return added;
         }
 
+        private void IndexBalances<TEntry,TEntity>(string checkpointName, BalanceChangeIndexer<TEntry,TEntity> indexer)
+            where TEntry : BalanceChangeEntry
+            where TEntity : BalanceChangeEntry.Entity
+        {
+            Helper.SetThrottling();
+
+            BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
+
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()).ToArray(), indexer.GetTable()), 30);
+            using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
+            {
+                indexer.GetTable().CreateIfNotExists();
+                var buckets = new MultiValueDictionary<string, TEntity>();
+
+                var storedBlocks = Enumerate(checkpointName);
+                foreach (var block in storedBlocks)
+                {
+                    var blockId = block.Item.Header.GetHash();
+                    foreach (var tx in block.Item.Transactions)
+                    {
+                        var txId = tx.GetHash();
+                        try
+                        {
+                            var entryByAddress = indexer.ExtractFromTransaction(blockId, tx, txId);
+
+                            foreach (var kv in entryByAddress)
+                            {
+                                buckets.Add(kv.Value.PartitionKey, kv.Value);
+                                var bucket = buckets[kv.Value.PartitionKey];
+                                if (bucket.Count == 100)
+                                {
+                                    indexedEntries.Add(bucket.ToArray());
+                                    buckets.Remove(kv.Key);
+                                }
+                            }
+
+                            if (storedBlocks.NeedSave)
+                            {
+                                foreach (var kv in buckets.AsLookup().ToArray())
+                                {
+                                    indexedEntries.Add(kv.ToArray());
+                                }
+                                buckets.Clear();
+                                tasks.Stop();
+                                storedBlocks.SaveCheckpoint();
+                                tasks.Start();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            IndexerTrace.ErrorWhileImportingBalancesToAzure(ex, txId);
+                            throw;
+                        }
+                    }
+                }
+
+                foreach (var kv in buckets.AsLookup().ToArray())
+                {
+                    indexedEntries.Add(kv.ToArray());
+                }
+                buckets.Clear();
+                tasks.Stop();
+                storedBlocks.SaveCheckpoint();
+            }
+        }
+
         public void IndexMainChain()
         {
-            SetThrottling();
+            Helper.SetThrottling();
 
             using (IndexerTrace.NewCorrelation("Index Main chain").Open())
             {
@@ -641,11 +621,6 @@ namespace NBitcoin.Indexer
             set;
         }
 
-
-        private static void SetThrottling()
-        {
-            Helper.SetThrottling();
-        }
         public int FromBlk
         {
             get;

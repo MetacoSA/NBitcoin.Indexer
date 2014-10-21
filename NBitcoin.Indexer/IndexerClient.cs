@@ -219,159 +219,74 @@ namespace NBitcoin.Indexer
                 }
             }
         }
-        public AddressEntry[] GetEntries(BitcoinAddress address)
+       
+
+        public WalletBalanceChangeEntry[] GetWalletBalance(string walletId)
         {
-            return GetEntries(address.ID);
+            return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null);
         }
 
 
-        public AddressEntry[] GetEntries(TxDestination id)
-        {
-            var queryEntity = new AddressEntry.Entity(null, id, null);
-            return GetBalanceChangeEntries(
-                   queryEntity.BalanceId,
-                   Configuration.GetBalanceTable(),
-                   queryEntity,
-                   e => new AddressEntry.Entity(e),
-                   entities => new AddressEntry(entities.ToArray())
-                );
-        }
-
-        public WalletBalanceChangeEntry[] GetWalletEntries(string walletId)
-        {
-            var queryEntity = new WalletBalanceChangeEntry.Entity(null, walletId, null);
-            return GetBalanceChangeEntries(
-                   queryEntity.BalanceId,
-                   Configuration.GetWalletBalanceTable(),
-                   queryEntity,
-                   e => new WalletBalanceChangeEntry.Entity(e),
-                   entities => new WalletBalanceChangeEntry(entities.ToArray())
-                );
-        }
-
-        private TEntry[] GetBalanceChangeEntries<TEntry, TEntity>
-            (
-            string balanceId,
-            CloudTable table,
-            TEntity queryEntity,
-            Func<DynamicTableEntity, TEntity> createEntity,
-            Func<TEntity[], TEntry> createEntry
-            )
-            where TEntry : BalanceChangeEntry
-            where TEntity : BalanceChangeEntry.Entity
-        {
-
-            var query = new TableQuery()
-                            .Where(
-                            TableQuery.CombineFilters(
-                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, queryEntity.PartitionKey),
-                                                TableOperators.And,
-                                                TableQuery.CombineFilters(
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, queryEntity.BalanceId + "-"),
-                                                    TableOperators.And,
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, queryEntity.BalanceId + "|")
-                                                )
-                            ));
-
-            var entitiesByTransactionId = table
-                                    .ExecuteQuery(query)
-                                    .Select(createEntity)
-                                    .GroupBy(e => e.TransactionId);
-            List<TEntry> result = new List<TEntry>();
-            foreach (var entities in entitiesByTransactionId)
-            {
-                var entity = entities.Where(e => e.IsLoaded).FirstOrDefault();
-                if (entity == null)
-                    entity = entities.First();
-                if (!entity.IsLoaded)
-                    if (LoadBalanceChangeEntity(entity, null))
-                    {
-                        table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
-                    }
-                var entry = createEntry(entities.ToArray());
-                result.Add(entry);
-            }
-            return result.ToArray();
-        }
-
-        public AddressEntry[][] GetAllEntries(BitcoinAddress[] addresses)
+        public AddressBalanceChangeEntry[][] GetAllAddressBalances(BitcoinAddress[] addresses)
         {
             Helper.SetThrottling();
-            AddressEntry[][] result = new AddressEntry[addresses.Length][];
+            AddressBalanceChangeEntry[][] result = new AddressBalanceChangeEntry[addresses.Length][];
             Parallel.For(0, addresses.Length,
             i =>
             {
-                result[i] = GetEntries(addresses[i]);
+                result[i] = GetAddressBalance(addresses[i]);
             });
             return result;
         }
 
-        private bool LoadBalanceChangeEntity<TEntity>(TEntity entity, IDictionary<uint256, Transaction> transactionsCache) where TEntity : BalanceChangeEntry.Entity
+
+        /// <summary>
+        /// Fetch the spent txout of the balance entry
+        /// </summary>
+        /// <param name="entity">The entity to load</param>
+        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
+        public bool LoadAddressBalanceChangeEntity(AddressBalanceChangeEntry.Entity entity)
         {
-            if (transactionsCache == null)
-                transactionsCache = new Dictionary<uint256, Transaction>();
-            var txId = new uint256(entity.TransactionId);
-
-            Transaction tx = null;
-            if (!transactionsCache.TryGetValue(txId, out tx))
-            {
-                var indexed = GetTransaction(txId);
-                if (indexed != null)
-                    tx = indexed.Transaction;
-            }
-            if (tx == null)
-                return false;
-
-            Money total = Money.Zero;
-
-            if (entity.ReceivedTxOuts.Count == 0)
-                entity.ReceivedTxOuts.AddRange(tx.Outputs.Where((o, i) => entity.ReceivedTxOutIndices.Contains((uint)i)).ToList());
-
-
-            transactionsCache.AddOrReplace(txId, tx);
-
-            foreach (var prev in entity.SpentOutpoints)
-            {
-                Transaction sourceTransaction = null;
-                if (!transactionsCache.TryGetValue(prev.Hash, out sourceTransaction))
-                {
-                    var sourceIndexedTx = GetTransactions(false, new uint256[] { prev.Hash }).FirstOrDefault();
-                    if (sourceIndexedTx != null)
-                    {
-                        sourceTransaction = sourceIndexedTx.Transaction;
-                        transactionsCache.AddOrReplace(prev.Hash, sourceTransaction);
-                    }
-                }
-                if (sourceTransaction == null || sourceTransaction.Outputs.Count <= prev.N)
-                {
-                    return false;
-                }
-                entity.SpentTxOuts.Add(sourceTransaction.Outputs[(int)prev.N]);
-            }
-
-            return true;
+            return new AddressBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, null);
         }
 
-        public bool LoadAddressEntity(AddressEntry.Entity indexAddress)
+        /// <summary>
+        /// Fetch the spent txout of the balance entry
+        /// </summary>
+        /// <param name="entity">The entity to load</param>
+        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
+
+        public bool LoadWalletBalanceChangeEntity(WalletBalanceChangeEntry.Entity entity)
         {
-            return LoadBalanceChangeEntity(indexAddress, null);
+            return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, null);
         }
 
-        public AddressEntry[] GetEntries(KeyId keyId)
+
+        public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinAddress address)
         {
-            return GetEntries(new BitcoinAddress(keyId, Configuration.Network));
+            return GetAddressBalance(address.ID);
         }
-        public AddressEntry[] GetEntries(ScriptId scriptId)
+
+
+        public AddressBalanceChangeEntry[] GetAddressBalance(TxDestination id)
         {
-            return GetEntries(new BitcoinScriptAddress(scriptId, Configuration.Network));
+            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeId(id), this, null);
         }
-        public AddressEntry[] GetEntries(BitcoinScriptAddress scriptAddress)
+        public AddressBalanceChangeEntry[] GetAddressBalance(KeyId keyId)
         {
-            return GetEntries((BitcoinAddress)scriptAddress);
+            return GetAddressBalance((TxDestination)keyId);
         }
-        public AddressEntry[] GetEntries(PubKey pubKey)
+        public AddressBalanceChangeEntry[] GetAddressBalance(ScriptId scriptId)
         {
-            return GetEntries(pubKey.GetAddress(Configuration.Network));
+            return GetAddressBalance((ScriptId)scriptId);
+        }
+        public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinScriptAddress scriptAddress)
+        {
+            return GetAddressBalance(scriptAddress.ID);
+        }
+        public AddressBalanceChangeEntry[] GetAddressBalance(PubKey pubKey)
+        {
+            return GetAddressBalance(pubKey.ID);
         }
 
         public void AddWalletRuleTypeConverter<T>() where T : WalletRule, new()

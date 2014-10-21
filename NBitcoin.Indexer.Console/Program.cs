@@ -42,7 +42,7 @@ namespace NBitcoin.Indexer.Console
                     }
                     if (options.IndexAddresses)
                     {
-                        indexer.IndexBalances();
+                        indexer.IndexAddressBalances();
                     }
                     if (options.CountBlkFiles)
                     {

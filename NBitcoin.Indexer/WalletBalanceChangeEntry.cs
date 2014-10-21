@@ -11,9 +11,8 @@ namespace NBitcoin.Indexer
     public class WalletBalanceChangeEntry : BalanceChangeEntry
     {
         public WalletBalanceChangeEntry(params Entity[] entities)
-            : base(entities.OfType<BalanceChangeEntry.Entity>().ToArray())
         {
-           
+            Init(entities);
         }
 
         public string WalletId
@@ -75,7 +74,7 @@ namespace NBitcoin.Indexer
                 }
 
                 Dictionary<string, Entity> entitiesByWallet = new Dictionary<string, Entity>();
-                var entryByAddress = AddressEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
+                var entryByAddress = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
                 foreach (var entryAddress in entryByAddress)
                 {
                     foreach (var walletRuleEntry in walletsByAddress.AsLookup()[entryAddress.Key])

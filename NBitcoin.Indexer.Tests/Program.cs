@@ -14,7 +14,7 @@ namespace NBitcoin.Indexer.Tests
                                          .Enumerate(false)
                                          .SelectMany(i=>i.Item.Transactions))
             {
-                AddressEntry.Entity.ExtractFromTransaction(tx,tx.GetHash());
+                AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx,tx.GetHash());
             }
         }
     }

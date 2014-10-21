@@ -27,7 +27,7 @@ namespace NBitcoin.Indexer.Tests
         public void CanSpreadBytes()
         {
             var bytes =
-                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new AddressEntry.Entity.IntCompactVarInt((uint)e)).ToArray());
+                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new AddressBalanceChangeEntry.Entity.IntCompactVarInt((uint)e)).ToArray());
 
             DynamicTableEntity entity = new DynamicTableEntity();
             Helper.SetEntityProperty(entity, "a", bytes);
@@ -39,7 +39,7 @@ namespace NBitcoin.Indexer.Tests
         {
             var tx = new Transaction(Encoders.Hex.DecodeData(File.ReadAllText("Data/BigTransaction.txt")));
             var txId = tx.GetHash();
-            var result = AddressEntry.Entity.ExtractFromTransaction(tx, txId);
+            var result = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txId);
             foreach (var e in result)
             {
                 var entity = e.Value.CreateTableEntity();
@@ -135,7 +135,7 @@ namespace NBitcoin.Indexer.Tests
                 node.AddToMempool(t3);
                 Assert.Equal(1, tester.Indexer.IndexMempool());
 
-                var entries = tester.Client.GetEntries(sender);
+                var entries = tester.Client.GetAddressBalance(sender);
                 AssertContainsMoney("10.0", entries);
                 AssertContainsMoney("-2.0", entries);
                 AssertContainsMoney("-2.1", entries);
@@ -152,8 +152,8 @@ namespace NBitcoin.Indexer.Tests
 						t3
 					}
                 });
-                tester.Indexer.IndexBalances();
-                entries = tester.Client.GetEntries(sender);
+                tester.Indexer.IndexAddressBalances();
+                entries = tester.Client.GetAddressBalance(sender);
                 Assert.True(entries.All(e => e.BlockIds.Length == 1));
             }
         }
@@ -283,9 +283,9 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(expectedRule.Rule.ToString(), rules[0].Rule.ToString());
 
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexWallets();
+                tester.Indexer.IndexWalletBalances();
 
-                var balance = tester.Client.GetWalletEntries("MyWallet");
+                var balance = tester.Client.GetWalletBalance("MyWallet");
                 var entry = AssertContainsMoney("10.0", balance);
 
                 var addr2 = new Key().PubKey;
@@ -326,10 +326,10 @@ namespace NBitcoin.Indexer.Tests
                 store.Append(b2);
 
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexWallets();
+                tester.Indexer.IndexWalletBalances();
 
 
-                balance = tester.Client.GetWalletEntries("MyWallet");
+                balance = tester.Client.GetWalletBalance("MyWallet");
                 entry = AssertContainsMoney("-7.0", balance);
 
                 var b3 = new Block()
@@ -373,8 +373,8 @@ namespace NBitcoin.Indexer.Tests
                 store.Append(b3);
 
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexWallets();
-                balance = tester.Client.GetWalletEntries("MyWallet");
+                tester.Indexer.IndexWalletBalances();
+                balance = tester.Client.GetWalletBalance("MyWallet");
                 entry = AssertContainsMoney("-2.68", balance);
             }
         }
@@ -442,9 +442,9 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Indexer.IndexBlocks();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexBalances();
+                tester.Indexer.IndexAddressBalances();
 
-                var entries = tester.Client.GetEntries(sender);
+                var entries = tester.Client.GetAddressBalance(sender);
                 Assert.Equal(2, entries.Length);
                 Assert.Equal(sender.ID, entries[0].Id);
                 var entry = AssertContainsMoney("10.0", entries);
@@ -457,10 +457,10 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(b1.Transactions[0].GetHash(), entry.SpentCoins[0].OutPoint.Hash);
                 Assert.Equal(0, (int)entry.SpentCoins[0].OutPoint.N);
 
-                entries = tester.Client.GetEntries(receiver);
+                entries = tester.Client.GetAddressBalance(receiver);
                 Assert.Equal(1, entries.Length);
                 AssertContainsMoney("2.0", entries);
-                entries = tester.Client.GetEntries(receiver);
+                entries = tester.Client.GetAddressBalance(receiver);
 
                 var b3 = new Block()
                 {
@@ -499,9 +499,9 @@ namespace NBitcoin.Indexer.Tests
                 }
                 tester.Indexer.IndexMainChain();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexBalances();
+                tester.Indexer.IndexAddressBalances();
 
-                entries = tester.Client.GetEntries(receiver);
+                entries = tester.Client.GetAddressBalance(receiver);
                 AssertContainsMoney("2.1", entries);
                 Chain chain = new Chain(Network.Main);
                 tester.Client
@@ -509,7 +509,7 @@ namespace NBitcoin.Indexer.Tests
                     .UpdateChain(chain);
                 entries.Select(e => e.FetchConfirmedBlock(chain)).ToArray();
 
-                entries = tester.Client.GetEntries(sender);
+                entries = tester.Client.GetAddressBalance(sender);
                 AssertContainsMoney(null, entries);
 
                 var b4 = new Block()
@@ -542,7 +542,7 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Indexer.IndexBlocks();
                 tester.Indexer.IndexTransactions();
-                tester.Indexer.IndexBalances();
+                tester.Indexer.IndexAddressBalances();
 
                 var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
                 Assert.Null(tx.SpentCoins);

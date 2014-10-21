@@ -20,7 +20,8 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-        public BalanceChangeEntry(params Entity[] entities)
+
+        public void Init<TEntity>(params TEntity[] entities) where TEntity : BalanceChangeEntry.Entity
         {
             if (entities == null)
                 throw new ArgumentNullException("entities");
