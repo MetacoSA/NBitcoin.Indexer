@@ -16,19 +16,10 @@ namespace NBitcoin.Indexer
         {
 
         }
-        public WalletRuleEntry(DynamicTableEntity entity, Dictionary<string, Func<WalletRule>> rulenameMapping)
+        public WalletRuleEntry(DynamicTableEntity entity, IndexerClient client)
         {
             WalletId = Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.PartitionKey));
-            JsonTextReader reader = new JsonTextReader(new StringReader(Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.RowKey))));
-            reader.Read();
-            reader.Read();
-            reader.Read();
-            var type = (string)reader.Value;
-            if (!rulenameMapping.ContainsKey(type))
-                throw new InvalidOperationException("Type " + rulenameMapping + " not registered with AzureIndexer.AddWalletRuleTypeConverter");
-            Rule = rulenameMapping[type]();
-            reader.Read();
-            Rule.ReadJson(reader, true);
+            Rule = client.DeserializeRule(Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.RowKey)));
         }
         public WalletRuleEntry(string walletId, WalletRule rule)
         {

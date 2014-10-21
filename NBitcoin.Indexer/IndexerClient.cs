@@ -2,7 +2,9 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.DataEncoders;
 using NBitcoin.OpenAsset;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -307,7 +309,7 @@ namespace NBitcoin.Indexer
                                     .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
             return
                 table.ExecuteQuery(query)
-                 .Select(e => new WalletRuleEntry(e, _Rules))
+                 .Select(e => new WalletRuleEntry(e, this))
                  .ToArray();
         }
 
@@ -317,8 +319,23 @@ namespace NBitcoin.Indexer
             return
                 Configuration.GetWalletRulesTable()
                 .ExecuteQuery(new TableQuery())
-                .Select(e => new WalletRuleEntry(e, _Rules))
+                .Select(e => new WalletRuleEntry(e, this))
                 .ToArray();
+        }
+
+        internal WalletRule DeserializeRule(string str)
+        {
+            JsonTextReader reader = new JsonTextReader(new StringReader(str));
+            reader.Read();
+            reader.Read();
+            reader.Read();
+            var type = (string)reader.Value;
+            if (!_Rules.ContainsKey(type))
+                throw new InvalidOperationException("Type " + type + " not registered with AzureIndexer.AddWalletRuleTypeConverter");
+            var rule = _Rules[type]();
+            reader.Read();
+            rule.ReadJson(reader, true);
+            return rule;
         }
     }
 }

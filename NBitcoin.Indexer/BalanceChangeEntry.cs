@@ -42,12 +42,12 @@ namespace NBitcoin.Indexer
             ReceivedTxOutIndices = loadedEntity.ReceivedTxOutIndices;
             if (loadedEntity.IsLoaded)
             {
-                ReceivedCoins = new List<Spendable>();
+                ReceivedCoins = new SpendableCollection();
                 for (int i = 0 ; i < loadedEntity.ReceivedTxOutIndices.Count ; i++)
                 {
                     ReceivedCoins.Add(new Spendable(new OutPoint(TransactionId, loadedEntity.ReceivedTxOutIndices[i]), loadedEntity.ReceivedTxOuts[i]));
                 }
-                SpentCoins = new List<Spendable>();
+                SpentCoins = new SpendableCollection();
                 for (int i = 0 ; i < SpentOutpoints.Count ; i++)
                 {
                     SpentCoins.Add(new Spendable(SpentOutpoints[i], loadedEntity.SpentTxOuts[i]));
@@ -98,7 +98,7 @@ namespace NBitcoin.Indexer
                 _ReceivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
             }
 
-            public DynamicTableEntity CreateTableEntity()
+            public virtual DynamicTableEntity CreateTableEntity()
             {
                 DynamicTableEntity entity = new DynamicTableEntity();
                 entity.ETag = "*";
@@ -244,10 +244,10 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        
 
-        List<Spendable> _ReceivedCoins;
-        public List<Spendable> ReceivedCoins
+
+        SpendableCollection _ReceivedCoins;
+        public SpendableCollection ReceivedCoins
         {
             get
             {
@@ -277,14 +277,14 @@ namespace NBitcoin.Indexer
         }
 
 
-        List<Spendable> _SpentCoins;
+        SpendableCollection _SpentCoins;
 
         /// <summary>
         /// List of spent coins
         /// Can be null if the indexer have not yet indexed parent transactions
         /// Use SpentOutpoints if you only need outpoints
         /// </summary>
-        public List<Spendable> SpentCoins
+        public SpendableCollection SpentCoins
         {
             get
             {

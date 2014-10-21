@@ -31,7 +31,7 @@ namespace NBitcoin.Indexer
 
         protected override WalletBalanceChangeEntry.Entity CreateEntity(DynamicTableEntity tableEntity)
         {
-            return new WalletBalanceChangeEntry.Entity(tableEntity);
+            return new WalletBalanceChangeEntry.Entity(tableEntity, Configuration.CreateIndexerClient());
         }
 
         protected override WalletBalanceChangeEntry CreateEntry(WalletBalanceChangeEntry.Entity[] entities)
