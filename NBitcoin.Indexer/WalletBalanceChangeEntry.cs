@@ -169,6 +169,8 @@ namespace NBitcoin.Indexer
                         if (!entitiesByWallet.TryGetValue(walletRuleEntry.WalletId, out walletEntity))
                         {
                             walletEntity = new Entity(txId, walletRuleEntry.WalletId, blockId);
+                            walletEntity.HasOpReturn = entryAddress.Value.HasOpReturn;
+                            walletEntity.IsCoinbase = entryAddress.Value.IsCoinbase;
                             entitiesByWallet.Add(walletRuleEntry.WalletId, walletEntity);
                         }
                         walletEntity.ReceivedTxOutIndices.AddRange(entryAddress.Value.ReceivedTxOutIndices);

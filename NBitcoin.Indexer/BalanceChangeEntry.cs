@@ -31,7 +31,8 @@ namespace NBitcoin.Indexer
             var loadedEntity = entities.FirstOrDefault(e => e.IsLoaded);
             if (loadedEntity == null)
                 loadedEntity = entities[0];
-
+            HasOpReturn = loadedEntity.HasOpReturn;
+            IsCoinbase = loadedEntity.IsCoinbase;
             BalanceId = loadedEntity.BalanceId;
             TransactionId = new uint256(loadedEntity.TransactionId);
             BlockIds = entities
@@ -88,6 +89,7 @@ namespace NBitcoin.Indexer
                 if (splitted.Length >= 3 && splitted[2] != string.Empty)
                     BlockId = new uint256(splitted[2]);
                 Timestamp = entity.Timestamp;
+
                 _PartitionKey = entity.PartitionKey;
 
                 _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
@@ -96,6 +98,14 @@ namespace NBitcoin.Indexer
                                         .Select(o => (uint)o.ToLong())
                                         .ToList();
                 _ReceivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
+
+                EntityProperty flagProperty = null;
+                if (entity.Properties.TryGetValue("e", out flagProperty))
+                {
+                    var flags = flagProperty.StringValue;
+                    HasOpReturn = flags[0] == 'o';
+                    IsCoinbase = flags[1] == 'o';
+                }
             }
 
             public virtual DynamicTableEntity CreateTableEntity()
@@ -108,6 +118,8 @@ namespace NBitcoin.Indexer
                 Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentTxOuts));
                 Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedTxOutIndices.Select(e => new IntCompactVarInt(e))));
                 Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedTxOuts));
+                var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
+                entity.Properties.AddOrReplace("e", new EntityProperty(flags));
                 return entity;
             }
 
@@ -187,6 +199,19 @@ namespace NBitcoin.Indexer
                     return _ReceivedTxOuts;
                 }
             }
+
+            public bool IsCoinbase
+            {
+                get;
+                set;
+            }
+
+            public bool HasOpReturn
+            {
+                get;
+                set;
+            }
+
             public override string ToString()
             {
                 return "RowKey : " + BalanceId;
@@ -205,7 +230,6 @@ namespace NBitcoin.Indexer
                 get;
                 set;
             }
-
         }
 
         ChainedBlock _ConfirmedBlock;
@@ -327,6 +351,18 @@ namespace NBitcoin.Indexer
         }
 
         public List<uint> ReceivedTxOutIndices
+        {
+            get;
+            set;
+        }
+
+
+        public bool IsCoinbase
+        {
+            get;
+            set;
+        }
+        public bool HasOpReturn
         {
             get;
             set;

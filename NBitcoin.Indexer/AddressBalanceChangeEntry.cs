@@ -78,8 +78,14 @@ namespace NBitcoin.Indexer
                 }
 
                 uint i = 0;
+                bool hasOpReturn = false;
                 foreach (var output in tx.Outputs)
                 {
+                    if (output.ScriptPubKey.ToRawScript(true)[0] == 0x6a)
+                    {
+                        hasOpReturn = true;
+                        continue;
+                    }
                     var receiver = output.ScriptPubKey.GetDestination();
                     if (receiver != null)
                     {
@@ -87,11 +93,17 @@ namespace NBitcoin.Indexer
                         if (!entryByAddress.TryGetValue(receiver.ToString(), out entry))
                         {
                             entry = new AddressBalanceChangeEntry.Entity(txId, receiver, blockId);
+                            entry.IsCoinbase = tx.IsCoinBase;
                             entryByAddress.Add(receiver.ToString(), entry);
                         }
                         entry.ReceivedTxOutIndices.Add(i);
                     }
                     i++;
+                }
+                if (hasOpReturn)
+                {
+                    foreach (var entity in entryByAddress)
+                        entity.Value.HasOpReturn = hasOpReturn;
                 }
                 return entryByAddress;
             }
@@ -121,6 +133,5 @@ namespace NBitcoin.Indexer
                 return Helper.GetPartitionKey(12, bytes, bytes.Length - 4, 3);
             }
         }
-
     }
 }
