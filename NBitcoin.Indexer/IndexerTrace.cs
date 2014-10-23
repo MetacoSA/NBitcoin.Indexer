@@ -69,7 +69,7 @@ namespace NBitcoin.Indexer
             if (medianSpeed != 0)
             {
                 var remaining = progress.TotalBytes - progress.ProcessedBytes;
-                var remainingTime = TimeSpan.FromTicks(interval.Ticks * (remaining / medianSpeed));
+                var remainingTime = TimeSpan.FromTicks((long)((double)interval.Ticks * ((double)remaining / (double)medianSpeed)));
                 info += " (" + Pretty(remainingTime) + ")";
             }
             _Trace.TraceInformation(info);
