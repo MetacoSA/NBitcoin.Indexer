@@ -452,10 +452,9 @@ namespace NBitcoin.Indexer
             where TEntity : BalanceChangeEntry.Entity
         {
             Helper.SetThrottling();
-            var table = indexer.GetTable();
             BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
 
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()), table), 30);
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()), indexer.GetTable()), 30);
             using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
             {
                 indexer.GetTable().CreateIfNotExists();
