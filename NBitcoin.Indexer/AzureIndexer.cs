@@ -111,7 +111,7 @@ namespace NBitcoin.Indexer
         {
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
-            CheckpointInterval = TimeSpan.FromMinutes(10.0);
+            CheckpointInterval = TimeSpan.FromMinutes(15.0);
             _Configuration = configuration;
             TaskCount = -1;
             FromBlk = 0;
