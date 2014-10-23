@@ -135,7 +135,7 @@ namespace NBitcoin.Indexer
             IndexBalances("wallets", new WalletBalanceChangeIndexer(Configuration));
         }
 
-        
+
         public void IndexAddressBalances()
         {
             IndexBalances("balances", new AddressBalanceChangeIndexer(Configuration));
@@ -214,10 +214,8 @@ namespace NBitcoin.Indexer
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
         }
-        private void Index(ITableEntity[] entities, CloudTable table)
+        private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
-            if (entities.Length == 0)
-                return;
             bool firstException = false;
             while (true)
             {
@@ -229,26 +227,30 @@ namespace NBitcoin.Indexer
                             MaximumExecutionTime = _Timeout,
                             ServerTimeout = _Timeout,
                         };
-                    if (entities.Length > 1)
+
+                    var batch = new TableBatchOperation();
+                    int count = 0;
+                    foreach (var entity in entities)
                     {
-                        var batch = new TableBatchOperation();
-                        foreach (var tx in entities)
-                        {
-                            batch.Add(TableOperation.InsertOrReplace(tx));
-                        }
-                        table.ExecuteBatch(batch, options);
+                        batch.Add(TableOperation.InsertOrReplace(entity));
+                        count++;
                     }
+
+                    if (count > 1)
+                        table.ExecuteBatch(batch, options);
                     else
                     {
-                        table.Execute(TableOperation.InsertOrReplace(entities[0]), options);
+                        if(count == 1)
+                            table.Execute(batch[0], options);
                     }
+
                     if (firstException)
                         IndexerTrace.RetryWorked();
                     break;
                 }
                 catch (Exception ex)
                 {
-                    IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities, ex);
+                    IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities.ToArray(), ex);
                     Thread.Sleep(5000);
                     firstException = true;
                 }
@@ -445,15 +447,15 @@ namespace NBitcoin.Indexer
             return added;
         }
 
-        private void IndexBalances<TEntry,TEntity>(string checkpointName, BalanceChangeIndexer<TEntry,TEntity> indexer)
+        private void IndexBalances<TEntry, TEntity>(string checkpointName, BalanceChangeIndexer<TEntry, TEntity> indexer)
             where TEntry : BalanceChangeEntry
             where TEntity : BalanceChangeEntry.Entity
         {
             Helper.SetThrottling();
-
+            var table = indexer.GetTable();
             BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
 
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()).ToArray(), indexer.GetTable()), 30);
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()), table), 30);
             using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
             {
                 indexer.GetTable().CreateIfNotExists();
