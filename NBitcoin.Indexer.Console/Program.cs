@@ -44,6 +44,10 @@ namespace NBitcoin.Indexer.Console
                     {
                         indexer.IndexAddressBalances();
                     }
+                    if (options.IndexWallets)
+                    {
+                        indexer.IndexWalletBalances();
+                    }
                     if (options.CountBlkFiles)
                     {
                         var dir = new DirectoryInfo(indexer.Configuration.BlockDirectory);

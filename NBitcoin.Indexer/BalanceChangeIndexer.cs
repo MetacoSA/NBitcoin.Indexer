@@ -107,6 +107,6 @@ namespace NBitcoin.Indexer
             return true;
         }
 
-        public abstract Dictionary<string, TEntity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId);
+        public abstract IEnumerable<TEntity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId);
     }
 }

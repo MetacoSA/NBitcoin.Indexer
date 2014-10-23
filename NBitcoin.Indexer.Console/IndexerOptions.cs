@@ -70,6 +70,14 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
+        [Option('w', "IndexWallets", DefaultValue = false, Required = false, HelpText = "Index wallets into azure table")]
+        public bool IndexWallets
+        {
+            get;
+            set;
+        }
+
+
         [Option('a', "IndexAddresses", DefaultValue = false, Required = false, HelpText = "Index bitcoin addresses into azure table")]
         public bool IndexAddresses
         {

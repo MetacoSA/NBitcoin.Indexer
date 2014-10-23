@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
+using NBitcoin.Indexer.Internal;
 using NBitcoin.OpenAsset;
 using Newtonsoft.Json;
 using System;
@@ -314,13 +315,14 @@ namespace NBitcoin.Indexer
         }
 
 
-        public WalletRuleEntry[] GetAllWalletRules()
+        public WalletRuleEntryCollection GetAllWalletRules()
         {
             return
+                new WalletRuleEntryCollection(
                 Configuration.GetWalletRulesTable()
                 .ExecuteQuery(new TableQuery())
                 .Select(e => new WalletRuleEntry(e, this))
-                .ToArray();
+                .ToArray());
         }
 
         internal WalletRule DeserializeRule(string str)

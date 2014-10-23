@@ -51,15 +51,15 @@ namespace NBitcoin.Indexer
             {
             }
 
-            public static Dictionary<string, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
+            public static Dictionary<TxDestination, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
             {
                 return ExtractFromTransaction(null, tx, txId);
             }
-            public static Dictionary<string, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
+            public static Dictionary<TxDestination, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
             {
                 if (txId == null)
                     txId = tx.GetHash();
-                Dictionary<string, AddressBalanceChangeEntry.Entity> entryByAddress = new Dictionary<string, AddressBalanceChangeEntry.Entity>();
+                Dictionary<TxDestination, AddressBalanceChangeEntry.Entity> entryByAddress = new Dictionary<TxDestination, AddressBalanceChangeEntry.Entity>();
                 foreach (var input in tx.Inputs)
                 {
                     if (tx.IsCoinBase)
@@ -68,10 +68,10 @@ namespace NBitcoin.Indexer
                     if (signer != null)
                     {
                         AddressBalanceChangeEntry.Entity entry = null;
-                        if (!entryByAddress.TryGetValue(signer.ToString(), out entry))
+                        if (!entryByAddress.TryGetValue(signer, out entry))
                         {
                             entry = new AddressBalanceChangeEntry.Entity(txId, signer, blockId);
-                            entryByAddress.Add(signer.ToString(), entry);
+                            entryByAddress.Add(signer, entry);
                         }
                         entry.SpentOutpoints.Add(input.PrevOut);
                     }
@@ -90,11 +90,11 @@ namespace NBitcoin.Indexer
                     if (receiver != null)
                     {
                         AddressBalanceChangeEntry.Entity entry = null;
-                        if (!entryByAddress.TryGetValue(receiver.ToString(), out entry))
+                        if (!entryByAddress.TryGetValue(receiver, out entry))
                         {
                             entry = new AddressBalanceChangeEntry.Entity(txId, receiver, blockId);
                             entry.IsCoinbase = tx.IsCoinBase;
-                            entryByAddress.Add(receiver.ToString(), entry);
+                            entryByAddress.Add(receiver, entry);
                         }
                         entry.ReceivedTxOutIndices.Add(i);
                     }

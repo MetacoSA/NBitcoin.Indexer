@@ -38,9 +38,9 @@ namespace NBitcoin.Indexer
             return new AddressBalanceChangeEntry(entities);
         }
 
-        public override Dictionary<string, AddressBalanceChangeEntry.Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
+        public override IEnumerable<AddressBalanceChangeEntry.Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
         {
-            return AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
+            return AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId).Values;
         }
     }
 }

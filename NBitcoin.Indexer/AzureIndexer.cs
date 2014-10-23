@@ -468,16 +468,16 @@ namespace NBitcoin.Indexer
                         var txId = tx.GetHash();
                         try
                         {
-                            var entryByAddress = indexer.ExtractFromTransaction(blockId, tx, txId);
+                            var entries = indexer.ExtractFromTransaction(blockId, tx, txId);
 
-                            foreach (var kv in entryByAddress)
+                            foreach (var entry in entries)
                             {
-                                buckets.Add(kv.Value.PartitionKey, kv.Value);
-                                var bucket = buckets[kv.Value.PartitionKey];
+                                buckets.Add(entry.PartitionKey, entry);
+                                var bucket = buckets[entry.PartitionKey];
                                 if (bucket.Count == 100)
                                 {
                                     indexedEntries.Add(bucket.ToArray());
-                                    buckets.Remove(kv.Key);
+                                    buckets.Remove(entry.PartitionKey);
                                 }
                             }
 
@@ -505,7 +505,6 @@ namespace NBitcoin.Indexer
                 {
                     indexedEntries.Add(kv.ToArray());
                 }
-                buckets.Clear();
                 tasks.Stop();
                 storedBlocks.SaveCheckpoint();
             }

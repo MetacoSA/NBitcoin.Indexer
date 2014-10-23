@@ -14,9 +14,21 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+        public IndexerClient Client
+        {
+            get;
+            set;
+        }
+        public WalletRuleEntryCollection Wallets
+        {
+            get;
+            set;
+        }
         public WalletBalanceChangeIndexer(IndexerConfiguration configuration)
         {
             Configuration = configuration;
+            Client = Configuration.CreateIndexerClient();
+            Wallets = Client.GetAllWalletRules();
         }
         public override Microsoft.WindowsAzure.Storage.Table.CloudTable GetTable()
         {
@@ -31,7 +43,7 @@ namespace NBitcoin.Indexer
 
         protected override WalletBalanceChangeEntry.Entity CreateEntity(DynamicTableEntity tableEntity)
         {
-            return new WalletBalanceChangeEntry.Entity(tableEntity, Configuration.CreateIndexerClient());
+            return new WalletBalanceChangeEntry.Entity(tableEntity, Client);
         }
 
         protected override WalletBalanceChangeEntry CreateEntry(WalletBalanceChangeEntry.Entity[] entities)
@@ -39,9 +51,9 @@ namespace NBitcoin.Indexer
             return new WalletBalanceChangeEntry(entities);
         }
 
-        public override Dictionary<string, WalletBalanceChangeEntry.Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
+        public override IEnumerable<WalletBalanceChangeEntry.Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
         {
-            return WalletBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId, Configuration.CreateIndexerClient());
+            return WalletBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId, Wallets).Values;
         }
     }
 }

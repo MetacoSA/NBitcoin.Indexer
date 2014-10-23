@@ -148,22 +148,13 @@ namespace NBitcoin.Indexer
             public static Dictionary<string, Entity> ExtractFromTransaction(uint256 blockId,
                                                                             Transaction tx,
                                                                             uint256 txId,
-                                                                            IndexerClient indexerClient)
+                                                                            WalletRuleEntryCollection walletCollection)
             {
-                var walletsByAddress = new MultiValueDictionary<string, WalletRuleEntry>();
-                foreach (var walletRule in indexerClient.GetAllWalletRules())
-                {
-                    if (walletRule.Rule is AddressRule)
-                    {
-                        walletsByAddress.Add(((AddressRule)walletRule.Rule).Id.ToString(), walletRule);
-                    }
-                }
-
                 Dictionary<string, Entity> entitiesByWallet = new Dictionary<string, Entity>();
                 var entryByAddress = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
                 foreach (var entryAddress in entryByAddress)
                 {
-                    foreach (var walletRuleEntry in walletsByAddress.AsLookup()[entryAddress.Key])
+                    foreach (var walletRuleEntry in walletCollection.GetRulesForAddress(entryAddress.Key))
                     {
                         Entity walletEntity = null;
                         if (!entitiesByWallet.TryGetValue(walletRuleEntry.WalletId, out walletEntity))
