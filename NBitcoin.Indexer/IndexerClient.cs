@@ -250,7 +250,17 @@ namespace NBitcoin.Indexer
         /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
         public bool LoadAddressBalanceChangeEntity(AddressBalanceChangeEntry.Entity entity)
         {
-            return new AddressBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, null);
+            return LoadAddressBalanceChangeEntity(entity, null);
+        }
+
+        /// <summary>
+        /// Fetch the spent txout of the balance entry
+        /// </summary>
+        /// <param name="entity">The entity to load</param>
+        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
+        public bool LoadAddressBalanceChangeEntity(AddressBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
+        {
+            return new AddressBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
         }
 
         /// <summary>
@@ -261,7 +271,18 @@ namespace NBitcoin.Indexer
 
         public bool LoadWalletBalanceChangeEntity(WalletBalanceChangeEntry.Entity entity)
         {
-            return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, null);
+            return LoadWalletBalanceChangeEntity(entity, null);
+        }
+
+        /// <summary>
+        /// Fetch the spent txout of the balance entry
+        /// </summary>
+        /// <param name="entity">The entity to load</param>
+        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
+
+        public bool LoadWalletBalanceChangeEntity(WalletBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
+        {
+            return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
         }
 
 
