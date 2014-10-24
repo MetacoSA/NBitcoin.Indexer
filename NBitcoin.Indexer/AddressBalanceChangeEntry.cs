@@ -55,6 +55,8 @@ namespace NBitcoin.Indexer
             {
                 return ExtractFromTransaction(null, tx, txId);
             }
+
+            static TxNullDataTemplate _OpReturnTemplate = new TxNullDataTemplate();
             public static Dictionary<TxDestination, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
             {
                 if (txId == null)
@@ -81,7 +83,7 @@ namespace NBitcoin.Indexer
                 bool hasOpReturn = false;
                 foreach (var output in tx.Outputs)
                 {
-                    if (output.ScriptPubKey.ToRawScript(true)[0] == 0x6a)
+                    if (_OpReturnTemplate.CheckScriptPubKey(output.ScriptPubKey))
                     {
                         hasOpReturn = true;
                         continue;
