@@ -9,7 +9,7 @@ namespace NBitcoin.Indexer
 {
     public class WalletRuleEntryCollection : IEnumerable<WalletRuleEntry>
     {
-        IEnumerable<WalletRuleEntry> _WalletRules;
+        List<WalletRuleEntry> _WalletRules;
 
         MultiValueDictionary<string, WalletRuleEntry> _EntriesByWallet;
         ILookup<string, WalletRuleEntry> _EntriesByWalletLookup;
@@ -22,7 +22,34 @@ namespace NBitcoin.Indexer
         {
             if (walletRules == null)
                 throw new ArgumentNullException("walletRules");
-            _WalletRules = walletRules;
+
+            _WalletRules = new List<WalletRuleEntry>(walletRules);
+        }
+
+        public void Add(WalletRuleEntry entry)
+        {
+            _WalletRules.Add(entry);
+            Added(entry);
+        }
+
+        private void Added(WalletRuleEntry entry)
+        {
+            if (_EntriesByAddressLookup != null)
+            {
+                _EntriesByWallet.Add(entry.WalletId, entry);
+            }
+            if (_EntriesByAddress != null)
+            {
+                var rule = entry.Rule as AddressRule;
+                if (rule != null)
+                    _EntriesByAddress.Add(rule.Id, entry);
+            }
+        }
+        public void AddRange(IEnumerable<WalletRuleEntry> entries)
+        {
+            _WalletRules.AddRange(entries);
+            foreach (var e in entries)
+                Added(e);
         }
 
         public IEnumerable<WalletRuleEntry> GetRulesForWallet(string walletName)

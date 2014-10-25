@@ -342,8 +342,7 @@ namespace NBitcoin.Indexer
                 new WalletRuleEntryCollection(
                 Configuration.GetWalletRulesTable()
                 .ExecuteQuery(new TableQuery())
-                .Select(e => new WalletRuleEntry(e, this))
-                .ToArray());
+                .Select(e => new WalletRuleEntry(e, this)));
         }
 
         internal WalletRule DeserializeRule(string str)
