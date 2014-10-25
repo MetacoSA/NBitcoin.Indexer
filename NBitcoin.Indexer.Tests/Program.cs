@@ -10,12 +10,15 @@ namespace NBitcoin.Indexer.Tests
     {
         public static void Main(string[] args)
         {
-            foreach(var tx in new BlockStore(@"E:\Bitcoin\blocks",Network.Main)
-                                         .Enumerate(false)
-                                         .SelectMany(i=>i.Item.Transactions))
-            {
-                AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx,tx.GetHash());
-            }
+            //IndexerServerConfiguration.FromConfiguration()
+            //    .CreateIndexer()
+            //    .IndexWalletBalances();
+            //foreach(var tx in new BlockStore(@"E:\Bitcoin\blocks",Network.Main)
+            //                             .Enumerate(false)
+            //                             .SelectMany(i=>i.Item.Transactions))
+            //{
+            //    AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx,tx.GetHash());
+            //}
         }
     }
 }

@@ -28,6 +28,7 @@ namespace NBitcoin.Indexer
         {
             Configuration = configuration;
             Client = Configuration.CreateIndexerClient();
+            Configuration.GetWalletRulesTable().CreateIfNotExists();
             Wallets = Client.GetAllWalletRules();
         }
         public override Microsoft.WindowsAzure.Storage.Table.CloudTable GetTable()
