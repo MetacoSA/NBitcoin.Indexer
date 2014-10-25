@@ -10,9 +10,9 @@ namespace NBitcoin.Indexer.Tests
     {
         public static void Main(string[] args)
         {
-            //IndexerServerConfiguration.FromConfiguration()
-            //    .CreateIndexer()
-            //    .IndexWalletBalances();
+            IndexerServerConfiguration.FromConfiguration()
+                .CreateIndexer()
+                .IndexWalletBalances();
             //foreach(var tx in new BlockStore(@"E:\Bitcoin\blocks",Network.Main)
             //                             .Enumerate(false)
             //                             .SelectMany(i=>i.Item.Transactions))
