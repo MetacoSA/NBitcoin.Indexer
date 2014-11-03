@@ -79,7 +79,7 @@ namespace NBitcoin.Indexer
 
             }
 
-            
+
 
             public Entity(DynamicTableEntity entity)
             {
@@ -244,10 +244,21 @@ namespace NBitcoin.Indexer
             }
             private set
             {
-                _ConfirmedSet = true;
                 _ConfirmedBlock = value;
             }
         }
+
+        int _Confirmations;
+        public int Confirmations
+        {
+            get
+            {
+                if (!_ConfirmedSet)
+                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(Chain chain) to attach the confirmed block to this entry");
+                return _Confirmations;
+            }
+        }
+
         /// <summary>
         /// Fetch ConfirmationInfo if not already set about this entry from local chain
         /// </summary>
@@ -257,9 +268,14 @@ namespace NBitcoin.Indexer
         {
             if (_ConfirmedBlock != null)
                 return this;
+            _ConfirmedSet = true;
             if (BlockIds == null || BlockIds.Length == 0)
                 return this;
             ConfirmedBlock = BlockIds.Select(id => chain.GetBlock(id)).FirstOrDefault(b => b != null);
+            if (ConfirmedBlock != null)
+            {
+                _Confirmations = chain.Height - ConfirmedBlock.Height + 1;
+            }
             return this;
         }
         public uint256 TransactionId

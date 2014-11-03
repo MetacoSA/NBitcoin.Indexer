@@ -140,10 +140,15 @@ namespace NBitcoin.Indexer.Tests
                 AssertContainsMoney("-2.0", entries);
                 AssertContainsMoney("-2.1", entries);
 
+                var chain = new Chain(Network.Main);
                 Assert.True(entries.All(e => e.BlockIds.Length == 0));
+                Assert.Equal(0, entries.FetchConfirmedBlocks(chain).WhereConfirmed().ToArray().Length);
 
                 var store = tester.CreateLocalBlockStore();
-                store.Append(new Block()
+                var block = new Block(new BlockHeader()
+                {
+                    HashPrevBlock = chain.Tip.HashBlock
+                })
                 {
                     Transactions = new List<Transaction>()
 					{
@@ -151,10 +156,13 @@ namespace NBitcoin.Indexer.Tests
 						t2,
 						t3
 					}
-                });
+                };
+                store.Append(block);
+                chain.SetTip(block.Header);
                 tester.Indexer.IndexAddressBalances();
                 entries = tester.Client.GetAddressBalance(sender);
                 Assert.True(entries.All(e => e.BlockIds.Length == 1));
+                Assert.Equal(3, entries.FetchConfirmedBlocks(chain).WhereConfirmed().ToArray().Length);
             }
         }
 
@@ -489,6 +497,14 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(entry.IsCoinbase);
                 Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedCoins.Select(c => c.OutPoint)));
                 Assert.Equal(entry.BlockIds[0], b1.GetHash());
+
+                var spentCoins = entries.SelectSpentCoins().ToArray();
+                Assert.Equal(1, spentCoins.Length);
+                Assert.Equal(Money.Parse("10"), spentCoins[0].TxOut.Value);
+
+                var unspentCoins = entries.SelectUnspentCoins().ToArray();
+                Assert.Equal(1, unspentCoins.Length);
+                Assert.Equal(Money.Parse("8"), unspentCoins[0].TxOut.Value);
 
                 entry = AssertContainsMoney("-2.0", entries);
                 Assert.False(entry.IsCoinbase);
