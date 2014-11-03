@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
@@ -192,13 +193,14 @@ namespace NBitcoin.Indexer
             return entity.ToObject();
         }
 
-        public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded)
+        public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
         {
             var table = Configuration.GetChainTable();
             var query = new TableQuery<ChainChangeEntry.Entity>();
             List<ChainChangeEntry> blocks = new List<ChainChangeEntry>();
             foreach (var block in table.ExecuteQuery(query).Select(e => e.ToObject()))
             {
+                cancellation.ThrowIfCancellationRequested();
                 if (block.Height > currentTip.Height)
                     yield return block;
                 else if (block.Height < currentTip.Height)
@@ -222,7 +224,7 @@ namespace NBitcoin.Indexer
                 }
             }
         }
-       
+
 
         public WalletBalanceChangeEntry[] GetWalletBalance(string walletId)
         {
