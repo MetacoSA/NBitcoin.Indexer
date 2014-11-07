@@ -34,7 +34,7 @@ namespace NBitcoin.Indexer
 
         private void Added(WalletRuleEntry entry)
         {
-            if (_EntriesByAddressLookup != null)
+            if (_EntriesByWalletLookup != null)
             {
                 _EntriesByWallet.Add(entry.WalletId, entry);
             }
