@@ -1,5 +1,6 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Indexer.Internal;
+using NBitcoin.OpenAsset;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -20,7 +21,8 @@ namespace NBitcoin.Indexer
 
         public TEntry[] GetBalanceEntries(string balanceId,
                                         IndexerClient indexerClient,
-                                        IDictionary<uint256, Transaction> transactionsCache
+                                        IDictionary<uint256, Transaction> transactionsCache,
+                                        bool coloredBalance
             )
         {
             var table = GetTable();
@@ -53,10 +55,59 @@ namespace NBitcoin.Indexer
                     {
                         table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
                     }
+                if (coloredBalance && entity.IsLoaded && entity.ColorInformationData == null)
+                {
+                    if (LoadColoredBalanceChangeEntity(entity, indexerClient, transactionsCache))
+                    {
+                        table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
+                    }
+                }
                 var entry = CreateEntry(entities.ToArray());
                 result.Add(entry);
             }
             return result.ToArray();
+        }
+
+        private bool LoadColoredBalanceChangeEntity(TEntity entity, IndexerClient client, IDictionary<uint256, Transaction> transactionsCache)
+        {
+            if (transactionsCache == null)
+                transactionsCache = new Dictionary<uint256, Transaction>();
+            var txId = new uint256(entity.TransactionId);
+
+            var txEntry = client.GetTransaction(false, true, txId);
+            if (txEntry == null || txEntry.ColoredTransaction == null)
+                return false;
+
+            var info = new BalanceChangeEntry.Entity.ColorInformation();
+
+            for (int i = 0 ; i < entity.SpentOutpoints.Count ; i++)
+            {
+                var spentOutpoint = entity.SpentOutpoints[i];
+                var index = txEntry.Transaction.Inputs.IndexOf(txEntry.Transaction.Inputs.Where(_=>_.PrevOut == spentOutpoint).First());
+                var coinInfo = new BalanceChangeEntry.Entity.ColorCoinInformation();
+                info.Inputs.Add(coinInfo);
+                var coloredInput = txEntry.ColoredTransaction.Inputs.Where(ii => ii.Index == index).Select(_ => _.Asset).FirstOrDefault();
+                coinInfo.Asset = coloredInput;
+                coinInfo.Transfer = false;
+            }
+
+            foreach (int index in entity.ReceivedTxOutIndices)
+            {
+                var coinInfo = new BalanceChangeEntry.Entity.ColorCoinInformation();
+                info.Outputs.Add(coinInfo);
+                var coloredInput = txEntry.ColoredTransaction.Transfers.Where(ii => ii.Index == index).Select(_ => _.Asset).FirstOrDefault();
+                coinInfo.Asset = coloredInput;
+                coinInfo.Transfer = true;
+                if (coloredInput == null)
+                {
+                    coloredInput = txEntry.ColoredTransaction.Issuances.Where(ii => ii.Index == index).Select(_ => _.Asset).FirstOrDefault();
+                    coinInfo.Asset = coloredInput;
+                    coinInfo.Transfer = false;
+                }
+            }
+
+            entity.ColorInformationData = info;
+            return true;
         }
 
         public bool LoadBalanceChangeEntity(TEntity entity,

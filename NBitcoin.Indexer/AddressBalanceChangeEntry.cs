@@ -86,6 +86,7 @@ namespace NBitcoin.Indexer
                     if (_OpReturnTemplate.CheckScriptPubKey(output.ScriptPubKey))
                     {
                         hasOpReturn = true;
+                        i++;
                         continue;
                     }
                     var receiver = output.ScriptPubKey.GetDestination();

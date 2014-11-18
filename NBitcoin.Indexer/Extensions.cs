@@ -19,6 +19,12 @@ namespace NBitcoin.Indexer
             });
         }
 
+        public static TBalanceChangeEntry FromTransactionId<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, uint256 txId)
+            where TBalanceChangeEntry : BalanceChangeEntry
+        {
+            return entries.FirstOrDefault(e => e.TransactionId == txId);
+        }
+
         public static SpendableCollection SelectSpentCoins<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries)
            where TBalanceChangeEntry : BalanceChangeEntry
         {

@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
+using NBitcoin.OpenAsset;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -20,6 +21,21 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+
+
+        ColoredBalanceChangeEntry _ColoredBalanceChangeEntry;
+        public ColoredBalanceChangeEntry ColoredBalanceChangeEntry
+        {
+            get
+            {
+                return _ColoredBalanceChangeEntry;
+            }
+            internal set
+            {
+                _ColoredBalanceChangeEntry = value;
+            }
+        }
+
 
         public void Init<TEntity>(params TEntity[] entities) where TEntity : BalanceChangeEntry.Entity
         {
@@ -55,11 +71,113 @@ namespace NBitcoin.Indexer
                 }
                 BalanceChange = ReceivedCoins.Select(t => t.TxOut.Value).Sum() - SpentCoins.Select(t => t.TxOut.Value).Sum();
             }
+            if (loadedEntity.ColorInformationData != null)
+            {
+                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, loadedEntity.ColorInformationData);
+            }
             MempoolDate = entities.Where(e => e.BlockId == null).Select(e => e.Timestamp).FirstOrDefault();
         }
 
         public abstract class Entity
         {
+            public class ColorCoinInformation : IBitcoinSerializable
+            {
+                public ColorCoinInformation()
+                {
+
+                }
+                public Asset Asset
+                {
+                    get
+                    {
+                        if (_AssetId == new uint160(0))
+                            return null;
+                        return new Asset(new AssetId(_AssetId), _Quantity);
+                    }
+                    set
+                    {
+                        if (value == null)
+                        {
+                            _AssetId = new uint160(0);
+                            _Quantity = 0;
+                        }
+                        else
+                        {
+                            _AssetId = new uint160(value.Id.ToBytes(true));
+                            _Quantity = value.Quantity;
+                        }
+                    }
+                }
+
+                uint160 _AssetId;
+                ulong _Quantity;
+
+
+                int _Transfer;
+                public bool Transfer
+                {
+                    get
+                    {
+                        return _Transfer == 1;
+                    }
+                    set
+                    {
+                        _Transfer = value ? 1 : 0;
+                    }
+                }
+
+                #region IBitcoinSerializable Members
+
+                public void ReadWrite(BitcoinStream stream)
+                {
+                    stream.ReadWrite(ref _AssetId);
+                    stream.ReadWrite(ref _Quantity);
+                    stream.ReadWrite(ref _Transfer);
+                }
+
+                #endregion
+            }
+            public class ColorInformation : IBitcoinSerializable
+            {
+                List<ColorCoinInformation> _Inputs = new List<ColorCoinInformation>();
+                public List<ColorCoinInformation> Inputs
+                {
+                    get
+                    {
+                        return _Inputs;
+                    }
+                    set
+                    {
+                        _Inputs = value;
+                    }
+                }
+                List<ColorCoinInformation> _Outputs = new List<ColorCoinInformation>();
+                public List<ColorCoinInformation> Outputs
+                {
+                    get
+                    {
+                        return _Outputs;
+                    }
+                    set
+                    {
+                        _Outputs = value;
+                    }
+                }
+
+
+
+                #region IBitcoinSerializable Members
+
+                public void ReadWrite(BitcoinStream stream)
+                {
+                    stream.ReadWrite(ref _Inputs);
+                    stream.ReadWrite(ref _Outputs);
+                }
+
+                #endregion
+            }
+
+
             internal class IntCompactVarInt : CompactVarInt
             {
                 public IntCompactVarInt(uint value)
@@ -106,6 +224,13 @@ namespace NBitcoin.Indexer
                     HasOpReturn = flags[0] == 'o';
                     IsCoinbase = flags[1] == 'o';
                 }
+
+                EntityProperty colorInformationProperty = null;
+                if (entity.Properties.TryGetValue("f", out colorInformationProperty))
+                {
+                    ColorInformationData = new ColorInformation();
+                    ColorInformationData.FromBytes(colorInformationProperty.BinaryValue);
+                }
             }
 
             public virtual DynamicTableEntity CreateTableEntity()
@@ -120,10 +245,20 @@ namespace NBitcoin.Indexer
                 Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedTxOuts));
                 var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
                 entity.Properties.AddOrReplace("e", new EntityProperty(flags));
+                if (ColorInformationData != null)
+                {
+                    entity.Properties.AddOrReplace("f", new EntityProperty(ColorInformationData.ToBytes()));
+                }
                 return entity;
             }
 
             public string BalanceId
+            {
+                get;
+                set;
+            }
+
+            public ColorInformation ColorInformationData
             {
                 get;
                 set;
@@ -334,11 +469,6 @@ namespace NBitcoin.Indexer
             {
                 _SpentCoins = value;
             }
-        }
-        public List<int> TxOutIndices
-        {
-            get;
-            set;
         }
 
 

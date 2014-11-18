@@ -228,7 +228,7 @@ namespace NBitcoin.Indexer
 
         public WalletBalanceChangeEntry[] GetWalletBalance(string walletId)
         {
-            return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null);
+            return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null, ColoredBalance);
         }
 
 
@@ -296,7 +296,7 @@ namespace NBitcoin.Indexer
 
         public AddressBalanceChangeEntry[] GetAddressBalance(TxDestination id)
         {
-            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeId(id), this, null);
+            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeId(id), this, null, ColoredBalance);
         }
         public AddressBalanceChangeEntry[] GetAddressBalance(KeyId keyId)
         {
@@ -360,6 +360,12 @@ namespace NBitcoin.Indexer
             reader.Read();
             rule.ReadJson(reader, true);
             return rule;
+        }
+
+        public bool ColoredBalance
+        {
+            get;
+            set;
         }
     }
 }

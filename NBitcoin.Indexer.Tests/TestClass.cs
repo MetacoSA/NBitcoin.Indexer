@@ -71,6 +71,142 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+        BitcoinSecret alice = new BitcoinSecret("KyJTjvFpPF6DDX4fnT56d2eATPfxjdUPXFFUb85psnCdh34iyXRQ");
+        BitcoinSecret bob = new BitcoinSecret("KysJMPCkFP4SLsEQAED9CzCurJBkeVvAa4jeN1BBtYS7P5LocUBQ");
+        BitcoinSecret nico = new BitcoinSecret("L2uC8xNjmcfwje6eweucYvFsmKASbMDALy4rCJBAg8wofpH6barj");
+        BitcoinSecret satoshi = new BitcoinSecret("L1CpAon5d8zroENbkiMbk3dtd3kcbms6QGF5x475KKTMmXVaJXh3");
+
+        BitcoinSecret goldGuy = new BitcoinSecret("KyuzoVnpsqW529yzozkzP629wUDBsPmm4QEkh9iKnvw3Dy5JJiNg");
+        BitcoinSecret silverGuy = new BitcoinSecret("L4KvjpqDtdGEn7Lw6HdDQjbg74MwWRrFZMQTgJozeHAKJw5rQ2Kn");
+
+        [Fact]
+        public void CanGetColoredBalance()
+        {
+            using (var tester = CreateTester())
+            {
+                var store = tester.CreateLocalBlockStore();
+                tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
+                tester.Client.ColoredBalance = true;
+
+                //Colored coin Payment
+                //GoldGuy emits gold to Nico
+                var txBuilder = new TransactionBuilder();
+
+                var issuanceCoinsTransaction
+                    = new Transaction()
+                    {
+                        Outputs =
+		                {
+			                new TxOut("1.0", goldGuy.Key.PubKey),
+			                new TxOut("1.0", silverGuy.Key.PubKey),
+			                new TxOut("1.0", nico.GetAddress()),
+			                new TxOut("1.0", alice.GetAddress()),
+		                }
+                    };
+
+                IssuanceCoin[] issuanceCoins = issuanceCoinsTransaction
+                                        .Outputs
+                                        .Take(2)
+                                        .Select((o, i) => new Coin(new OutPoint(issuanceCoinsTransaction.GetHash(), i), o))
+                                        .Select(c => new IssuanceCoin(c))
+                                        .ToArray();
+                var goldIssuanceCoin = issuanceCoins[0];
+                var silverIssuanceCoin = issuanceCoins[1];
+                var nicoCoin = new Coin(new OutPoint(issuanceCoinsTransaction, 2), issuanceCoinsTransaction.Outputs[2]);
+                var aliceCoin = new Coin(new OutPoint(issuanceCoinsTransaction, 3), issuanceCoinsTransaction.Outputs[3]);
+
+                var goldId = goldIssuanceCoin.AssetId;
+                var silverId = silverIssuanceCoin.AssetId;
+
+                Block b = PushStore(store, issuanceCoinsTransaction);
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexAddressBalances();
+
+                var balance = tester.Client.GetAddressBalance(nico.GetAddress());
+                var entry = AssertContainsMoney(Money.Parse("1.0"), balance);
+                Assert.NotNull(entry.ColoredBalanceChangeEntry);
+                Assert.Equal(Money.Parse("1.0"), entry.ColoredBalanceChangeEntry.UncoloredBalanceChange);
+
+                txBuilder = new TransactionBuilder();
+                var tx = txBuilder
+                    .AddKeys(goldGuy.Key)
+                    .AddCoins(goldIssuanceCoin)
+                    .IssueAsset(nico.GetAddress(), new Asset(goldId, 30))
+                    .SetChange(goldGuy.Key.PubKey)
+                    .BuildTransaction(true);
+
+                b = PushStore(store, tx, b);
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexAddressBalances();
+
+                var ctx = new IndexerColoredTransactionRepository(tester.Indexer.Configuration);
+
+                balance = tester.Client.GetAddressBalance(nico.GetAddress());
+                var coloredEntry = balance.FromTransactionId(tx.GetHash()).ColoredBalanceChangeEntry;
+                Assert.Equal(Money.Parse("0.0"), coloredEntry.UncoloredBalanceChange);
+                Assert.Equal(30, coloredEntry.GetAsset(goldId).BalanceChange);
+
+                var coloredCoins = ColoredCoin.Find(tx, ctx).ToArray();
+                var nicoGold = coloredCoins[0];
+
+                txBuilder = new TransactionBuilder();
+                //GoldGuy sends 20 gold to alice against 0.6 BTC. Nico sends 10 gold to alice + 0.02 BTC.
+                tx = txBuilder
+                    .AddKeys(goldGuy.Key)
+                    .AddCoins(goldIssuanceCoin)
+                    .IssueAsset(alice.GetAddress(), new Asset(goldId, 20))
+                    .SetChange(goldGuy.Key.PubKey)
+                    .Then()
+                    .AddKeys(nico.Key)
+                    .AddCoins(nicoCoin)
+                    .AddCoins(nicoGold)
+                    .SendAsset(alice.GetAddress(), new Asset(goldId, 10))
+                    .Send(alice.GetAddress(), Money.Parse("0.02"))
+                    .SetChange(nico.GetAddress())
+                    .Then()
+                    .AddKeys(alice.Key)
+                    .AddCoins(aliceCoin)
+                    .Send(goldGuy.GetAddress(), Money.Parse("0.6"))
+                    .SetChange(alice.GetAddress())
+                    .BuildTransaction(true);
+
+                b = PushStore(store, tx, b);
+                tester.Indexer.IndexTransactions();
+                tester.Indexer.IndexAddressBalances();
+
+                //Nico, should have lost 0.02 BTC and 10 gold
+                balance = tester.Client.GetAddressBalance(nico.GetAddress());
+                coloredEntry = balance.FromTransactionId(tx.GetHash()).ColoredBalanceChangeEntry;
+                Assert.Equal(Money.Parse("-0.02") - txBuilder.ColoredDust, coloredEntry.UncoloredBalanceChange);
+                Assert.Equal(-10, coloredEntry.GetAsset(goldId).BalanceChange);
+
+                //Alice, should have lost 0.58 BTC, but win 10 + 20 gold (one is a transfer, the other issuance)
+                balance = tester.Client.GetAddressBalance(alice.GetAddress());
+                coloredEntry = balance.FromTransactionId(tx.GetHash()).ColoredBalanceChangeEntry;
+                Assert.Equal(Money.Parse("-0.58"), coloredEntry.UncoloredBalanceChange);
+                Assert.Equal(30, coloredEntry.GetAsset(goldId).BalanceChange);
+            }
+        }
+
+        private Block PushStore(BlockStore store, Transaction tx, Block prev = null)
+        {
+            if (prev == null)
+                prev = Network.Main.GetGenesis();
+            var b = new Block()
+               {
+                   Header =
+                   {
+                       Nonce = RandomUtils.GetUInt32(),
+                       HashPrevBlock = prev.GetHash()
+                   },
+                   Transactions =
+					{
+						tx
+					}
+               };
+            store.Append(b);
+            return b;
+        }
 
         [Fact]
         public void CanIndexMeempool()
