@@ -140,7 +140,7 @@ namespace NBitcoin.Indexer
 		}
 
 
-        internal IndexerServerConfiguration AsServer()
+        public IndexerServerConfiguration AsServer()
         {
             return new IndexerServerConfiguration()
             {

@@ -25,6 +25,8 @@ namespace NBitcoin.Indexer
                                         bool coloredBalance
             )
         {
+            if (transactionsCache == null)
+                transactionsCache = new Dictionary<uint256, Transaction>();
             var table = GetTable();
             var queryEntity = CreateQueryEntity(balanceId);
 

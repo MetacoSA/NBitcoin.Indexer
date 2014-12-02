@@ -16,6 +16,7 @@ using System.Linq;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -301,6 +302,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(3, entries.FetchConfirmedBlocks(chain).WhereConfirmed().ToArray().Length);
             }
         }
+
 
         [Fact]
         public void CanImportMainChain()
