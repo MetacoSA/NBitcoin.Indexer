@@ -9,7 +9,7 @@ namespace NBitcoin.Indexer
 {
 	public static class ChainChangeEntryExtensions
 	{
-		public static void UpdateChain(this IEnumerable<ChainChangeEntry> entries, Chain chain)
+		public static void UpdateChain(this IEnumerable<ChainChangeEntry> entries, ChainBase chain)
 		{
 			Stack<ChainChangeEntry> toApply = new Stack<ChainChangeEntry>();
 			foreach(var entry in entries)

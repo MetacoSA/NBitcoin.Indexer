@@ -556,7 +556,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public void Index(Chain chain, int startHeight)
+        public void Index(ChainBase chain, int startHeight)
         {
             List<ChainChangeEntry> entries = new List<ChainChangeEntry>();
             for (int i = startHeight ; i <= chain.Tip.Height ; i++)

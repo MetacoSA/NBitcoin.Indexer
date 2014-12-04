@@ -35,7 +35,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public new AddressBalanceChangeEntry FetchConfirmedBlock(Chain chain)
+        public new AddressBalanceChangeEntry FetchConfirmedBlock(ChainBase chain)
         {
             return (AddressBalanceChangeEntry)base.FetchConfirmedBlock(chain);
         }

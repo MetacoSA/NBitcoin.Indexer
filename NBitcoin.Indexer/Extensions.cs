@@ -9,7 +9,7 @@ namespace NBitcoin.Indexer
     public static class Extensions
     {
 
-        public static IEnumerable<TBalanceChangeEntry> FetchConfirmedBlocks<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, Chain chain)
+        public static IEnumerable<TBalanceChangeEntry> FetchConfirmedBlocks<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, ChainBase chain)
             where TBalanceChangeEntry : BalanceChangeEntry
         {
             return entries.Select(e =>
@@ -37,7 +37,7 @@ namespace NBitcoin.Indexer
             return SelectSpentCoins(entries, false);
         }
 
-        public static IEnumerable<TBalanceChangeEntry> OrderByReceived<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, Chain chain)
+        public static IEnumerable<TBalanceChangeEntry> OrderByReceived<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, ChainBase chain)
             where TBalanceChangeEntry : BalanceChangeEntry
         {
             return entries

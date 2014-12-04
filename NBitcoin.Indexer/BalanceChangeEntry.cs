@@ -374,7 +374,7 @@ namespace NBitcoin.Indexer
             get
             {
                 if (!_ConfirmedSet)
-                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(Chain chain) to attach the confirmed block to this entry");
+                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(ChainBase chain) to attach the confirmed block to this entry");
                 return _ConfirmedBlock;
             }
             private set
@@ -389,7 +389,7 @@ namespace NBitcoin.Indexer
             get
             {
                 if (!_ConfirmedSet)
-                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(Chain chain) to attach the confirmed block to this entry");
+                    throw new InvalidOperationException("You need to call FetchConfirmedBlock(ChainBase chain) to attach the confirmed block to this entry");
                 return _Confirmations;
             }
         }
@@ -399,7 +399,7 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="chain">Local chain</param>
         /// <returns>Returns this</returns>
-        public BalanceChangeEntry FetchConfirmedBlock(Chain chain)
+        public BalanceChangeEntry FetchConfirmedBlock(ChainBase chain)
         {
             if (_ConfirmedBlock != null)
                 return this;
