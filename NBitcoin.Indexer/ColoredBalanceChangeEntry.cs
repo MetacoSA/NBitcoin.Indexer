@@ -118,6 +118,11 @@ namespace NBitcoin.Indexer
             }
             return change;
         }
+
+        public AssetBalanceChange GetAsset(BitcoinAssetId asset)
+        {
+            return GetAsset(asset.AssetId);
+        }
         public AssetBalanceChange GetAsset(AssetId assetId)
         {
             return GetAsset(assetId, false);
