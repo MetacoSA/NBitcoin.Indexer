@@ -425,15 +425,15 @@ namespace NBitcoin.Indexer.Tests
                             },
 							Outputs = 
 							{
-								new TxOut("10.0",addr1.ID),
-                                new TxOut("2.0",addrother.ID),
+								new TxOut("10.0",addr1.Hash),
+                                new TxOut("2.0",addrother.Hash),
 							}
 						}
 					}
                 };
                 store.Append(b1);
 
-                var expectedRule = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr1.ID));
+                var expectedRule = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr1.Hash));
                 var rules = tester.Client.GetWalletRules("MyWallet");
                 Assert.Equal(1, rules.Length);
                 Assert.Equal(expectedRule.WalletId, rules[0].WalletId);
@@ -447,10 +447,10 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(entry.IsCoinbase);
                 Assert.False(entry.HasOpReturn);
                 var addr2 = new Key().PubKey;
-                var rule2 = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.ID));
+                var rule2 = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.Hash));
                 rules = tester.Client.GetWalletRules("MyWallet");
                 Assert.Equal(2, rules.Length);
-                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.ID));
+                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.Hash));
                 Assert.Equal(2, rules.Length);
 
                 var b2 = new Block()
@@ -474,10 +474,10 @@ namespace NBitcoin.Indexer.Tests
                             },
 							Outputs = 
 							{
-								new TxOut("1.0",addr1.ID),
-                                new TxOut("2.0",addr2.ID),
-                                new TxOut("4.0",addrother.ID),
-                                new TxOut("0.1",addr1.ID),
+								new TxOut("1.0",addr1.Hash),
+                                new TxOut("2.0",addr2.Hash),
+                                new TxOut("4.0",addrother.Hash),
+                                new TxOut("0.1",addr1.Hash),
                                 new TxOut("0.01",new TxNullDataTemplate().GenerateScriptPubKey(new byte[]{1,2,3}))
 							}
 						}
@@ -529,10 +529,10 @@ namespace NBitcoin.Indexer.Tests
                             },
 							Outputs = 
 							{
-								new TxOut("0.10",addr1.ID),
-                                new TxOut("0.22",addr2.ID),
-                                new TxOut("1.0",addrother.ID),
-                                new TxOut("0.23",addr2.ID),
+								new TxOut("0.10",addr1.Hash),
+                                new TxOut("0.22",addr2.Hash),
+                                new TxOut("1.0",addrother.Hash),
+                                new TxOut("0.23",addr2.Hash),
 							}
 						}
 					}
@@ -630,7 +630,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var entries = tester.Client.GetAddressBalance(sender);
                 Assert.Equal(2, entries.Length);
-                Assert.Equal(sender.ID, entries[0].Id);
+                Assert.Equal(sender.Hash, entries[0].Hash);
                 var entry = AssertContainsMoney("10.0", entries);
                 Assert.True(entry.IsCoinbase);
                 Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedCoins.Select(c => c.OutPoint)));

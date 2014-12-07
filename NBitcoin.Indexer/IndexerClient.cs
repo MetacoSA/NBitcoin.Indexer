@@ -290,7 +290,7 @@ namespace NBitcoin.Indexer
 
         public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinAddress address)
         {
-            return GetAddressBalance(address.ID);
+            return GetAddressBalance(address.Hash);
         }
 
 
@@ -308,11 +308,11 @@ namespace NBitcoin.Indexer
         }
         public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinScriptAddress scriptAddress)
         {
-            return GetAddressBalance(scriptAddress.ID);
+            return GetAddressBalance(scriptAddress.Hash);
         }
         public AddressBalanceChangeEntry[] GetAddressBalance(PubKey pubKey)
         {
-            return GetAddressBalance(pubKey.ID);
+            return GetAddressBalance(pubKey.Hash);
         }
 
         public void AddWalletRuleTypeConverter<T>() where T : WalletRule, new()

@@ -12,7 +12,7 @@ namespace NBitcoin.Indexer
     {
         public AddressRule(BitcoinAddress address)
         {
-            Id = address.ID;
+            Id = address.Hash;
         }
         public AddressRule(TxDestination id)
         {

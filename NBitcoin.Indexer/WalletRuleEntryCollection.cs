@@ -68,7 +68,7 @@ namespace NBitcoin.Indexer
 
         public IEnumerable<WalletRuleEntry> GetRulesForAddress(BitcoinAddress address)
         {
-            return GetRulesForAddress(address.ID);
+            return GetRulesForAddress(address.Hash);
         }
 
         public IEnumerable<WalletRuleEntry> GetRulesForAddress(TxDestination id)

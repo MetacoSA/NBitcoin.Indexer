@@ -19,19 +19,28 @@ namespace NBitcoin.Indexer
         {
             Init(entities);
             if (entities.Length > 0)
-                _Id = entities[0].Id;
+                _Hash = entities[0].Id;
         }
 
-        TxDestination _Id;
+        [Obsolete("Use Hash instead")]
         public TxDestination Id
         {
             get
             {
-                if (_Id == null && BalanceId != null)
+                return Hash;
+            }
+        }
+
+        TxDestination _Hash;
+        public TxDestination Hash
+        {
+            get
+            {
+                if (_Hash == null && BalanceId != null)
                 {
-                    _Id = Helper.DecodeId(BalanceId);
+                    _Hash = Helper.DecodeId(BalanceId);
                 }
-                return _Id;
+                return _Hash;
             }
         }
 
