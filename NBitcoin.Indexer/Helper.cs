@@ -1,4 +1,5 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.Indexer.Converters;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -139,6 +140,14 @@ namespace NBitcoin.Indexer
                     break;
             }
             return result.ToString("X2");
+        }
+
+        internal static void InitializeSerializer(Newtonsoft.Json.JsonSerializerSettings serializerSettings)
+        {
+            serializerSettings.Converters.Add(new ScriptJsonConverter());
+            var customDataConverter = new CustomDataConverter();
+            serializerSettings.Converters.Add(customDataConverter);
+            customDataConverter.AddKnownType<ScriptRule>();
         }
     }
 }

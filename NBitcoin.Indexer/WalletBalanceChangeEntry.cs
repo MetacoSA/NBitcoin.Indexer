@@ -1,5 +1,6 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Indexer.Internal;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -93,28 +94,28 @@ namespace NBitcoin.Indexer
                 stream.ReadWrite(ref pairs);
                 foreach (var p in pairs)
                 {
-                    _MatchedRulesByInputOutpointIndex.Add(p.N, client.DeserializeRule(p.Rule));
+                    _MatchedRulesByInputOutpointIndex.Add(p.N, client.Deserialize(p.Rule));
                 }
                 stream.ReadWrite(ref pairs);
                 foreach (var p in pairs)
                 {
-                    _MatchedRulesByOutputIndex.Add(p.N, client.DeserializeRule(p.Rule));
+                    _MatchedRulesByOutputIndex.Add(p.N, client.Deserialize(p.Rule));
                 }
             }
 
-            public override DynamicTableEntity CreateTableEntity()
+            public override DynamicTableEntity CreateTableEntity(JsonSerializerSettings settings)
             {
-                var entity = base.CreateTableEntity();
+                var entity = base.CreateTableEntity(settings);
                 var outpoints = _MatchedRulesByInputOutpointIndex.Select(kv => new UIntPair()
                 {
                     N = kv.Key,
-                    Rule = kv.Value.ToString()
+                    Rule = JsonConvert.SerializeObject(kv.Value, settings)
                 }).ToArray();
 
                 var ns = _MatchedRulesByOutputIndex.Select(kv => new UIntPair()
                 {
                     N = kv.Key,
-                    Rule = kv.Value.ToString()
+                    Rule = JsonConvert.SerializeObject(kv.Value, settings)
                 }).ToArray();
 
                 MemoryStream ms = new MemoryStream();
@@ -154,7 +155,7 @@ namespace NBitcoin.Indexer
                 var entryByAddress = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
                 foreach (var entryAddress in entryByAddress)
                 {
-                    foreach (var walletRuleEntry in walletCollection.GetRulesForAddress(entryAddress.Key))
+                    foreach (var walletRuleEntry in walletCollection.GetRulesFor(entryAddress.Key))
                     {
                         Entity walletEntity = null;
                         if (!entitiesByWallet.TryGetValue(walletRuleEntry.WalletId, out walletEntity))

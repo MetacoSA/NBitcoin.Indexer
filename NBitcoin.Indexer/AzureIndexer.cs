@@ -4,6 +4,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
+using NBitcoin.Indexer.Converters;
 using NBitcoin.Indexer.Internal;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
@@ -92,7 +93,6 @@ namespace NBitcoin.Indexer
             return config.CreateIndexer();
         }
 
-
         public int TaskCount
         {
             get;
@@ -116,7 +116,6 @@ namespace NBitcoin.Indexer
             TaskCount = -1;
             FromBlk = 0;
             BlkCount = 9999999;
-
         }
 
         public TaskPool<TItem> CreateTaskPool<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, int defaultTaskCount)
@@ -204,11 +203,11 @@ namespace NBitcoin.Indexer
 
         public void Index(params AddressBalanceChangeEntry.Entity[] entries)
         {
-            Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetBalanceTable());
+            Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)).ToArray(), Configuration.GetBalanceTable());
         }
         public void Index(params WalletBalanceChangeEntry.Entity[] entries)
         {
-            Index(entries.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetWalletBalanceTable());
+            Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)).ToArray(), Configuration.GetWalletBalanceTable());
         }
         public void Index(params TransactionEntry.Entity[] entities)
         {
@@ -454,7 +453,7 @@ namespace NBitcoin.Indexer
             Helper.SetThrottling();
             BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
 
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity()), indexer.GetTable()), 30);
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)), indexer.GetTable()), 30);
             using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
             {
                 indexer.GetTable().CreateIfNotExists();
@@ -639,18 +638,5 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-
-
-
-        public WalletRuleEntry AddWalletRule(string walletId, WalletRule walletRule)
-        {
-            var table = Configuration.GetWalletRulesTable();
-            var entry = new WalletRuleEntry(walletId, walletRule);
-            var entity = entry.CreateTableEntity();
-            table.Execute(TableOperation.InsertOrReplace(entity));
-            return entry;
-        }
-
-
     }
 }

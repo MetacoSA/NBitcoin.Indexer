@@ -8,38 +8,27 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public abstract class WalletRule
+    public abstract class WalletRule : ICustomData
     {
-        public virtual string TypeName
+        public WalletRule()
         {
-            get
-            {
-                return this.GetType().Name;
-            }
+            Type = this.GetType().Name;
+        }
+        public string Type
+        {
+            get;
+            set;
         }
 
-        public void ReadJson(JsonReader reader, bool skipTypeDeclaration)
+        public ICustomData AttachedData
         {
-            if(!skipTypeDeclaration)
-            {
-                reader.Read();
-                reader.Read();
-                reader.Read();
-            }
-
-            ReadJsonCore(reader);
+            get;
+            set;
         }
 
-        public void WriteJson(JsonWriter writer)
+        public string ToString(JsonSerializerSettings serializerSettings)
         {
-            writer.WriteStartObject();
-            writer.WritePropertyName("Type");
-            writer.WriteValue(TypeName);
-            WriteJsonCore(writer);
-            writer.WriteEndObject();
+            return JsonConvert.SerializeObject(this, serializerSettings);
         }
-
-        protected abstract void WriteJsonCore(JsonWriter writer);
-        protected abstract void ReadJsonCore(JsonReader reader);
     }
 }

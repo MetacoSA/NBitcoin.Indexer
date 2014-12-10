@@ -1,6 +1,8 @@
 ﻿using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.Indexer.Converters;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -19,6 +21,24 @@ namespace NBitcoin.Indexer
 			Fill(config);
 			return config;
 		}
+
+        private JsonSerializerSettings _SerializerSettings = new JsonSerializerSettings();
+        public JsonSerializerSettings SerializerSettings
+        {
+            get
+            {
+                return _SerializerSettings;
+            }
+            private set
+            {
+                _SerializerSettings = value;
+            }
+        }
+        public void AddKnownType<T>() where T : ICustomData
+        {
+            var converter = SerializerSettings.Converters.OfType<CustomDataConverter>().FirstOrDefault();
+            converter.AddKnownType<T>();
+        }
 
         public void EnsureSetup()
         {
@@ -54,6 +74,7 @@ namespace NBitcoin.Indexer
 		public IndexerConfiguration()
 		{
 			Network = Network.Main;
+            Helper.InitializeSerializer(SerializerSettings);
 		}
 		public Network Network
 		{
@@ -146,7 +167,8 @@ namespace NBitcoin.Indexer
             {
                 StorageCredentials = StorageCredentials,
                 StorageNamespace = StorageNamespace,
-                Network = Network                
+                Network = Network,
+                SerializerSettings = SerializerSettings
             };
         }
     }

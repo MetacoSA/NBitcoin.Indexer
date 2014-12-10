@@ -55,13 +55,13 @@ namespace NBitcoin.Indexer
                 if (!entity.IsLoaded)
                     if (LoadBalanceChangeEntity(entity, indexerClient, transactionsCache))
                     {
-                        table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
+                        table.Execute(TableOperation.Merge(entity.CreateTableEntity(indexerClient.Configuration.SerializerSettings)));
                     }
                 if (coloredBalance && entity.IsLoaded && entity.ColorInformationData == null)
                 {
                     if (LoadColoredBalanceChangeEntity(entity, indexerClient, transactionsCache))
                     {
-                        table.Execute(TableOperation.Merge(entity.CreateTableEntity()));
+                        table.Execute(TableOperation.Merge(entity.CreateTableEntity(indexerClient.Configuration.SerializerSettings)));
                     }
                 }
                 var entry = CreateEntry(entities.ToArray());

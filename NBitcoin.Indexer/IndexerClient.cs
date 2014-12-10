@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
+using NBitcoin.Indexer.Converters;
 using NBitcoin.Indexer.Internal;
 using NBitcoin.OpenAsset;
 using Newtonsoft.Json;
@@ -33,8 +34,6 @@ namespace NBitcoin.Indexer
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
-            AddWalletRuleTypeConverter<AddressRule>();
-
         }
 
 
@@ -188,7 +187,7 @@ namespace NBitcoin.Indexer
             var part = table.ExecuteQuery(new TableQuery()
             {
                 TakeCount = 1
-            }).Select(e=> new ChainPartEntry(e)).FirstOrDefault();
+            }).Select(e => new ChainPartEntry(e)).FirstOrDefault();
             if (part == null)
                 return null;
 
@@ -341,20 +340,11 @@ namespace NBitcoin.Indexer
             return GetAddressBalance(pubKey.Hash);
         }
 
-        public void AddWalletRuleTypeConverter<T>() where T : WalletRule, new()
-        {
-            AddWalletRuleTypeConverter(new T().TypeName, () => new T());
-        }
-
-        public void AddWalletRuleTypeConverter(string typeName, Func<WalletRule> createEmptyRule)
-        {
-            _Rules.Add(typeName, createEmptyRule);
-        }
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
         public WalletRuleEntry[] GetWalletRules(string walletId)
         {
             var table = Configuration.GetWalletRulesTable();
-            var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity();
+            var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity(Configuration.SerializerSettings);
             var query = new TableQuery()
                                     .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
             return
@@ -362,6 +352,18 @@ namespace NBitcoin.Indexer
                  .Select(e => new WalletRuleEntry(e, this))
                  .ToArray();
         }
+
+
+
+        public WalletRuleEntry AddWalletRule(string walletId, WalletRule walletRule)
+        {
+            var table = Configuration.GetWalletRulesTable();
+            var entry = new WalletRuleEntry(walletId, walletRule);
+            var entity = entry.CreateTableEntity(Configuration.SerializerSettings);
+            table.Execute(TableOperation.InsertOrReplace(entity));
+            return entry;
+        }
+
 
 
         public WalletRuleEntryCollection GetAllWalletRules()
@@ -373,25 +375,15 @@ namespace NBitcoin.Indexer
                 .Select(e => new WalletRuleEntry(e, this)));
         }
 
-        internal WalletRule DeserializeRule(string str)
-        {
-            JsonTextReader reader = new JsonTextReader(new StringReader(str));
-            reader.Read();
-            reader.Read();
-            reader.Read();
-            var type = (string)reader.Value;
-            if (!_Rules.ContainsKey(type))
-                throw new InvalidOperationException("Type " + type + " not registered with AzureIndexer.AddWalletRuleTypeConverter");
-            var rule = _Rules[type]();
-            reader.Read();
-            rule.ReadJson(reader, true);
-            return rule;
-        }
-
         public bool ColoredBalance
         {
             get;
             set;
+        }
+
+        internal WalletRule Deserialize(string rule)
+        {
+            return (WalletRule)JsonConvert.DeserializeObject<ICustomData>(rule, Configuration.SerializerSettings);
         }
     }
 }

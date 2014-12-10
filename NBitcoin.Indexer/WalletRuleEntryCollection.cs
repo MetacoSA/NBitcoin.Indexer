@@ -14,8 +14,8 @@ namespace NBitcoin.Indexer
         MultiValueDictionary<string, WalletRuleEntry> _EntriesByWallet;
         ILookup<string, WalletRuleEntry> _EntriesByWalletLookup;
 
-        MultiValueDictionary<TxDestination, WalletRuleEntry> _EntriesByAddress;
-        ILookup<TxDestination, WalletRuleEntry> _EntriesByAddressLookup;
+        MultiValueDictionary<Script, WalletRuleEntry> _EntriesByAddress;
+        ILookup<Script, WalletRuleEntry> _EntriesByAddressLookup;
 
 
         internal WalletRuleEntryCollection(IEnumerable<WalletRuleEntry> walletRules)
@@ -40,9 +40,9 @@ namespace NBitcoin.Indexer
             }
             if (_EntriesByAddress != null)
             {
-                var rule = entry.Rule as AddressRule;
+                var rule = entry.Rule as ScriptRule;
                 if (rule != null)
-                    _EntriesByAddress.Add(rule.Id, entry);
+                    _EntriesByAddress.Add(rule.Script, entry);
             }
         }
         public void AddRange(IEnumerable<WalletRuleEntry> entries)
@@ -66,27 +66,28 @@ namespace NBitcoin.Indexer
             return _EntriesByWalletLookup[walletName];
         }
 
-        public IEnumerable<WalletRuleEntry> GetRulesForAddress(BitcoinAddress address)
+
+        public IEnumerable<WalletRuleEntry> GetRulesFor(IDestination destination)
         {
-            return GetRulesForAddress(address.Hash);
+            return GetRulesFor(destination.ScriptPubKey);
         }
 
-        public IEnumerable<WalletRuleEntry> GetRulesForAddress(TxDestination id)
+        public IEnumerable<WalletRuleEntry> GetRulesFor(Script script)
         {
             if (_EntriesByAddress == null)
             {
-                _EntriesByAddress = new MultiValueDictionary<TxDestination, WalletRuleEntry>();
+                _EntriesByAddress = new MultiValueDictionary<Script, WalletRuleEntry>();
                 foreach (var entry in this)
                 {
-                    var rule = entry.Rule as AddressRule;
+                    var rule = entry.Rule as ScriptRule;
                     if (rule != null)
                     {
-                        _EntriesByAddress.Add(rule.Id, entry);
+                        _EntriesByAddress.Add(rule.Script, entry);
                     }
                 }
                 _EntriesByAddressLookup = _EntriesByAddress.AsLookup();
             }
-            return _EntriesByAddressLookup[id];
+            return _EntriesByAddressLookup[script];
         }
 
 

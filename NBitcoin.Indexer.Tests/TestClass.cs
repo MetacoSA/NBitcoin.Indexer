@@ -43,7 +43,7 @@ namespace NBitcoin.Indexer.Tests
             var result = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txId);
             foreach (var e in result)
             {
-                var entity = e.Value.CreateTableEntity();
+                var entity = e.Value.CreateTableEntity(null);
             }
         }
         [Fact]
@@ -399,6 +399,34 @@ namespace NBitcoin.Indexer.Tests
         }
 
 
+        class DummyAttachedData : ICustomData
+        {
+            public DummyAttachedData()
+            {
+                Type = "DummyAttachedData";
+            }
+            public DummyAttachedData(string blabla)
+            {
+                Blabla = blabla;
+                Type = "DummyAttachedData";
+            }
+            #region ICustomData Members
+
+            public string Type
+            {
+                get;
+                set;
+            }
+
+            public string Blabla
+            {
+                get;
+                set;
+            }
+
+            #endregion
+        }
+
         [Fact]
         public void CanIndexWallet()
         {
@@ -432,8 +460,11 @@ namespace NBitcoin.Indexer.Tests
 					}
                 };
                 store.Append(b1);
-
-                var expectedRule = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr1.Hash));
+                tester.Indexer.Configuration.AddKnownType<DummyAttachedData>();
+                var expectedRule = tester.Client.AddWalletRule("MyWallet", new ScriptRule(addr1.Hash)
+                {
+                    AttachedData = new DummyAttachedData("hello")
+                });
                 var rules = tester.Client.GetWalletRules("MyWallet");
                 Assert.Equal(1, rules.Length);
                 Assert.Equal(expectedRule.WalletId, rules[0].WalletId);
@@ -447,10 +478,10 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(entry.IsCoinbase);
                 Assert.False(entry.HasOpReturn);
                 var addr2 = new Key().PubKey;
-                var rule2 = tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.Hash));
+                var rule2 = tester.Client.AddWalletRule("MyWallet", new ScriptRule(addr2.Hash));
                 rules = tester.Client.GetWalletRules("MyWallet");
                 Assert.Equal(2, rules.Length);
-                tester.Indexer.AddWalletRule("MyWallet", new AddressRule(addr2.Hash));
+                tester.Client.AddWalletRule("MyWallet", new ScriptRule(addr2.Hash));
                 Assert.Equal(2, rules.Length);
 
                 var b2 = new Block()
@@ -541,21 +572,23 @@ namespace NBitcoin.Indexer.Tests
 
                 var tx = b3.Transactions[0];
 
+                var settings = tester.Client.Configuration.SerializerSettings;
+
                 tester.Indexer.IndexTransactions();
                 tester.Indexer.IndexWalletBalances();
                 balance = tester.Client.GetWalletBalance("MyWallet");
                 entry = AssertContainsMoney("-2.55", balance);
 
-                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[0].PrevOut]).ToString(), rule1.Rule.ToString());
-                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[1].PrevOut]).ToString(), rule2.Rule.ToString());
+                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[0].PrevOut]).ToString(settings), rule1.Rule.ToString(settings));
+                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[1].PrevOut]).ToString(settings), rule2.Rule.ToString(settings));
                 Assert.Null(entry.GetMatchedRule(b3.Transactions[0].Inputs[2].PrevOut));
-                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[3].PrevOut]).ToString(), rule1.Rule.ToString());
+                Assert.Equal(entry.GetMatchedRule(entry.SpentCoins[tx.Inputs[3].PrevOut]).ToString(settings), rule1.Rule.ToString(settings));
 
                 var receivedOutpoints = tx.Outputs.Select((o, i) => new OutPoint(tx.GetHash(), i)).ToArray();
-                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[0]]).ToString(), rule1.Rule.ToString());
-                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[1]]).ToString(), rule2.Rule.ToString());
+                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[0]]).ToString(settings), rule1.Rule.ToString(settings));
+                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[1]]).ToString(settings), rule2.Rule.ToString(settings));
                 Assert.Null(entry.GetMatchedRule(new OutPoint(b3.Transactions[0].GetHash(), 2)));
-                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[3]]).ToString(), rule2.Rule.ToString());
+                Assert.Equal(entry.GetMatchedRule(entry.ReceivedCoins[receivedOutpoints[3]]).ToString(settings), rule2.Rule.ToString(settings));
             }
         }
 

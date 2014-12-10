@@ -4,6 +4,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
 using NBitcoin.OpenAsset;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -233,7 +234,7 @@ namespace NBitcoin.Indexer
                 }
             }
 
-            public virtual DynamicTableEntity CreateTableEntity()
+            public virtual DynamicTableEntity CreateTableEntity(JsonSerializerSettings settings)
             {
                 DynamicTableEntity entity = new DynamicTableEntity();
                 entity.ETag = "*";
