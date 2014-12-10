@@ -25,7 +25,7 @@ namespace NBitcoin.Indexer
 
         protected override AddressBalanceChangeEntry.Entity CreateQueryEntity(string balanceId)
         {
-            return new AddressBalanceChangeEntry.Entity(null, Helper.DecodeId(balanceId), null);
+            return new AddressBalanceChangeEntry.Entity(null, Helper.DecodeScript(balanceId), null);
         }
 
         protected override AddressBalanceChangeEntry.Entity CreateEntity(DynamicTableEntity tableEntity)

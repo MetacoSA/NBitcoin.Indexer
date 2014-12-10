@@ -256,15 +256,19 @@ namespace NBitcoin.Indexer
             return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null, ColoredBalance);
         }
 
+        public AddressBalanceChangeEntry[][] GetAllBalances(IDestination[] destinations)
+        {
+            return GetAllBalances(destinations.Select(d => d.ScriptPubKey).ToArray());
+        }
 
-        public AddressBalanceChangeEntry[][] GetAllAddressBalances(BitcoinAddress[] addresses)
+        public AddressBalanceChangeEntry[][] GetAllBalances(Script[] scriptPubKeys)
         {
             Helper.SetThrottling();
-            AddressBalanceChangeEntry[][] result = new AddressBalanceChangeEntry[addresses.Length][];
-            Parallel.For(0, addresses.Length,
+            AddressBalanceChangeEntry[][] result = new AddressBalanceChangeEntry[scriptPubKeys.Length][];
+            Parallel.For(0, scriptPubKeys.Length,
             i =>
             {
-                result[i] = GetAddressBalance(addresses[i]);
+                result[i] = GetBalance(scriptPubKeys[i]);
             });
             return result;
         }
@@ -311,35 +315,15 @@ namespace NBitcoin.Indexer
         {
             return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
         }
-
-
-        public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinAddress address)
+        public AddressBalanceChangeEntry[] GetBalance(IDestination destination)
         {
-            return GetAddressBalance(address.Hash);
+            return GetBalance(destination.ScriptPubKey);
         }
-
-
-        public AddressBalanceChangeEntry[] GetAddressBalance(TxDestination id)
+        public AddressBalanceChangeEntry[] GetBalance(Script scriptPubKey)
         {
-            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeId(id), this, null, ColoredBalance);
+            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeScript(scriptPubKey), this, null, ColoredBalance);
         }
-        public AddressBalanceChangeEntry[] GetAddressBalance(KeyId keyId)
-        {
-            return GetAddressBalance((TxDestination)keyId);
-        }
-        public AddressBalanceChangeEntry[] GetAddressBalance(ScriptId scriptId)
-        {
-            return GetAddressBalance((ScriptId)scriptId);
-        }
-        public AddressBalanceChangeEntry[] GetAddressBalance(BitcoinScriptAddress scriptAddress)
-        {
-            return GetAddressBalance(scriptAddress.Hash);
-        }
-        public AddressBalanceChangeEntry[] GetAddressBalance(PubKey pubKey)
-        {
-            return GetAddressBalance(pubKey.Hash);
-        }
-
+       
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
         public WalletRuleEntry[] GetWalletRules(string walletId)
         {

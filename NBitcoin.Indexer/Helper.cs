@@ -1,4 +1,5 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.Converters;
 using System;
 using System.Collections.Generic;
@@ -61,23 +62,6 @@ namespace NBitcoin.Indexer
                 return true;
             }
             return false;
-        }
-
-        public static TxDestination DecodeId(string id)
-        {
-            if (id.StartsWith("a"))
-                return new KeyId(id.Substring(1));
-            if (id.StartsWith("b"))
-                return new ScriptId(id.Substring(1));
-            throw new NotSupportedException("Unknow Id type");
-        }
-        public static string EncodeId(TxDestination id)
-        {
-            if (id is KeyId)
-                return "a" + id.ToString();
-            if (id is ScriptId)
-                return "b" + id.ToString();
-            throw new NotSupportedException("Unknow Id type");
         }
 
         const int ColumnMaxSize = 63000;
@@ -148,6 +132,16 @@ namespace NBitcoin.Indexer
             var customDataConverter = new CustomDataConverter();
             serializerSettings.Converters.Add(customDataConverter);
             customDataConverter.AddKnownType<ScriptRule>();
+        }
+
+        public static string EncodeScript(Script scriptPubKey)
+        {
+            return Encoders.Hex.EncodeData(scriptPubKey.ToBytes(true));
+        }
+
+        public static Script DecodeScript(string scriptPubKey)
+        {
+            return Script.FromBytesUnsafe(Encoders.Hex.DecodeData(scriptPubKey));
         }
     }
 }

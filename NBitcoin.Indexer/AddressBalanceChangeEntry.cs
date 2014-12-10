@@ -19,28 +19,19 @@ namespace NBitcoin.Indexer
         {
             Init(entities);
             if (entities.Length > 0)
-                _Hash = entities[0].Id;
+                _ScriptPubKey = entities[0].ScriptPubKey;
         }
 
-        [Obsolete("Use Hash instead")]
-        public TxDestination Id
+        Script _ScriptPubKey;
+        public Script ScriptPubKey
         {
             get
             {
-                return Hash;
-            }
-        }
-
-        TxDestination _Hash;
-        public TxDestination Hash
-        {
-            get
-            {
-                if (_Hash == null && BalanceId != null)
+                if (_ScriptPubKey == null && BalanceId != null)
                 {
-                    _Hash = Helper.DecodeId(BalanceId);
+                    _ScriptPubKey = Helper.DecodeScript(BalanceId);
                 }
-                return _Hash;
+                return _ScriptPubKey;
             }
         }
 
@@ -50,27 +41,27 @@ namespace NBitcoin.Indexer
         }
         public new class Entity : BalanceChangeEntry.Entity
         {
-            public Entity(uint256 txid, TxDestination id, uint256 blockId)
-                : base(txid, Helper.EncodeId(id), blockId)
+            public Entity(uint256 txid, Script scriptPubKey, uint256 blockId)
+                : base(txid, Helper.EncodeScript(scriptPubKey), blockId)
             {
-                _Id = id;
+                _ScriptPubKey = scriptPubKey;
             }
             public Entity(DynamicTableEntity entity)
                 : base(entity)
             {
             }
 
-            public static Dictionary<TxDestination, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
+            public static Dictionary<Script, Entity> ExtractFromTransaction(Transaction tx, uint256 txId)
             {
                 return ExtractFromTransaction(null, tx, txId);
             }
 
             static TxNullDataTemplate _OpReturnTemplate = new TxNullDataTemplate();
-            public static Dictionary<TxDestination, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
+            public static Dictionary<Script, Entity> ExtractFromTransaction(uint256 blockId, Transaction tx, uint256 txId)
             {
                 if (txId == null)
                     txId = tx.GetHash();
-                Dictionary<TxDestination, AddressBalanceChangeEntry.Entity> entryByAddress = new Dictionary<TxDestination, AddressBalanceChangeEntry.Entity>();
+                Dictionary<Script, AddressBalanceChangeEntry.Entity> entryByScriptPubKey = new Dictionary<Script, AddressBalanceChangeEntry.Entity>();
                 foreach (var input in tx.Inputs)
                 {
                     if (tx.IsCoinBase)
@@ -79,10 +70,10 @@ namespace NBitcoin.Indexer
                     if (signer != null)
                     {
                         AddressBalanceChangeEntry.Entity entry = null;
-                        if (!entryByAddress.TryGetValue(signer, out entry))
+                        if (!entryByScriptPubKey.TryGetValue(signer.ScriptPubKey, out entry))
                         {
-                            entry = new AddressBalanceChangeEntry.Entity(txId, signer, blockId);
-                            entryByAddress.Add(signer, entry);
+                            entry = new AddressBalanceChangeEntry.Entity(txId, signer.ScriptPubKey, blockId);
+                            entryByScriptPubKey.Add(signer.ScriptPubKey, entry);
                         }
                         entry.SpentOutpoints.Add(input.PrevOut);
                     }
@@ -98,50 +89,48 @@ namespace NBitcoin.Indexer
                         i++;
                         continue;
                     }
-                    var receiver = output.ScriptPubKey.GetDestination();
-                    if (receiver != null)
+
+                    AddressBalanceChangeEntry.Entity entry = null;
+                    if (!entryByScriptPubKey.TryGetValue(output.ScriptPubKey, out entry))
                     {
-                        AddressBalanceChangeEntry.Entity entry = null;
-                        if (!entryByAddress.TryGetValue(receiver, out entry))
-                        {
-                            entry = new AddressBalanceChangeEntry.Entity(txId, receiver, blockId);
-                            entry.IsCoinbase = tx.IsCoinBase;
-                            entryByAddress.Add(receiver, entry);
-                        }
-                        entry.ReceivedTxOutIndices.Add(i);
+                        entry = new AddressBalanceChangeEntry.Entity(txId, output.ScriptPubKey, blockId);
+                        entry.IsCoinbase = tx.IsCoinBase;
+                        entryByScriptPubKey.Add(output.ScriptPubKey, entry);
                     }
+                    entry.ReceivedTxOutIndices.Add(i);
+
                     i++;
                 }
                 if (hasOpReturn)
                 {
-                    foreach (var entity in entryByAddress)
+                    foreach (var entity in entryByScriptPubKey)
                         entity.Value.HasOpReturn = hasOpReturn;
                 }
-                return entryByAddress;
+                return entryByScriptPubKey;
             }
 
 
-            TxDestination _Id;
-            public TxDestination Id
+            Script _ScriptPubKey;
+            public Script ScriptPubKey
             {
                 get
                 {
-                    if (BalanceId != null && _Id == null)
+                    if (BalanceId != null && _ScriptPubKey == null)
                     {
-                        _Id = Helper.DecodeId(BalanceId);
+                        _ScriptPubKey = Helper.DecodeScript(BalanceId);
                     }
-                    return _Id;
+                    return _ScriptPubKey;
                 }
                 set
                 {
-                    _Id = value;
-                    BalanceId = Helper.EncodeId(value);
+                    _ScriptPubKey = value;
+                    BalanceId = Helper.EncodeScript(value);
                 }
             }
 
             protected override string CalculatePartitionKey()
             {
-                var bytes = Id.ToBytes(true);
+                var bytes = ScriptPubKey.ToBytes(true);
                 return Helper.GetPartitionKey(12, bytes, bytes.Length - 4, 3);
             }
         }
