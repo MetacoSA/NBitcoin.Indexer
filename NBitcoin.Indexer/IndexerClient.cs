@@ -182,47 +182,73 @@ namespace NBitcoin.Indexer
             return result;
         }
 
-        public ChainChangeEntry GetBestBlock()
+        public ChainBlockHeader GetBestBlock()
         {
             var table = Configuration.GetChainTable();
-            var query = new TableQuery<ChainChangeEntry.Entity>()
-                        .Take(1);
-            var entity = table.ExecuteQuery<ChainChangeEntry.Entity>(query).FirstOrDefault();
-            if (entity == null)
+            var part = table.ExecuteQuery(new TableQuery()
+            {
+                TakeCount = 1
+            }).Select(e=> new ChainPartEntry(e)).FirstOrDefault();
+            if (part == null)
                 return null;
-            return entity.ToObject();
+
+            var block = part.BlockHeaders[part.BlockHeaders.Count - 1];
+            return new ChainBlockHeader()
+            {
+                BlockId = block.GetHash(),
+                Header = block,
+                Height = part.ChainOffset + part.BlockHeaders.Count - 1
+            };
         }
 
-        public IEnumerable<ChainChangeEntry> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
+        public IEnumerable<ChainBlockHeader> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
         {
             var table = Configuration.GetChainTable();
-            var query = new TableQuery<ChainChangeEntry.Entity>();
-            List<ChainChangeEntry> blocks = new List<ChainChangeEntry>();
-            foreach (var block in table.ExecuteQuery(query).Select(e => e.ToObject()))
+            List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
+            foreach (var chainPart in
+            table.ExecuteQuery(new TableQuery()
+            {
+                TakeCount = 2   //If almost synchronized, then it won't affect too much table throttling
+            })
+            .Concat(table.ExecuteQuery(new TableQuery()).Skip(2))
+            .Select(e => new ChainPartEntry(e)))
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (block.Height > currentTip.Height)
-                    yield return block;
-                else if (block.Height < currentTip.Height)
-                {
-                    currentTip = currentTip.FindAncestorOrSelf(block.Height);
-                }
 
-                if (block.Height == currentTip.Height)
+                int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
+                foreach (var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
                 {
-                    if (block.BlockId == currentTip.HashBlock)
+                    if (height > currentTip.Height)
+                        yield return CreateChainChange(height, block);
+                    else if (height < currentTip.Height)
                     {
-                        if (forkIncluded)
-                            yield return block;
-                        break;
+                        currentTip = currentTip.FindAncestorOrSelf(height);
                     }
                     else
                     {
-                        yield return block;
+                        var chainChange = CreateChainChange(height, block);
+                        if (chainChange.BlockId == currentTip.HashBlock)
+                        {
+                            if (forkIncluded)
+                                yield return chainChange;
+                            break;
+                        }
+                        yield return chainChange;
                         currentTip = currentTip.Previous;
                     }
+                    height--;
                 }
             }
+        }
+
+        private ChainBlockHeader CreateChainChange(int height, BlockHeader block)
+        {
+            return new ChainBlockHeader()
+                       {
+                           Height = height,
+                           Header = block,
+                           BlockId = block.GetHash()
+                       };
         }
 
 

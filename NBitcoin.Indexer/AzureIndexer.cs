@@ -240,7 +240,7 @@ namespace NBitcoin.Indexer
                         table.ExecuteBatch(batch, options);
                     else
                     {
-                        if(count == 1)
+                        if (count == 1)
                             table.Execute(batch[0], options);
                     }
 
@@ -556,48 +556,49 @@ namespace NBitcoin.Indexer
             }
         }
 
+
+        internal const int BlockHeaderPerRow = 6;
         public void Index(ChainBase chain, int startHeight)
         {
-            List<ChainChangeEntry> entries = new List<ChainChangeEntry>();
+            List<ChainPartEntry> entries = new List<ChainPartEntry>(((chain.Height - startHeight) / BlockHeaderPerRow) + 5);
+            startHeight = startHeight - (startHeight % BlockHeaderPerRow);
+            ChainPartEntry chainPart = null;
             for (int i = startHeight ; i <= chain.Tip.Height ; i++)
             {
+                if (chainPart == null)
+                    chainPart = new ChainPartEntry()
+                    {
+                        ChainOffset = i
+                    };
+
                 var block = chain.GetBlock(i);
-                var entry = new ChainChangeEntry()
+                chainPart.BlockHeaders.Add(block.Header);
+
+                if (chainPart.BlockHeaders.Count == BlockHeaderPerRow)
                 {
-                    BlockId = block.HashBlock,
-                    Header = block.Header,
-                    Height = block.Height
-                };
-                entries.Add(entry);
-
+                    entries.Add(chainPart);
+                    chainPart = null;
+                }
             }
-
-            Index(entries.ToArray());
-
+            if (chainPart != null)
+                entries.Add(chainPart);
+            Index(entries);
         }
 
-        public void Index(params ChainChangeEntry[] chainChanges)
+        private void Index(List<ChainPartEntry> chainParts)
         {
             CloudTable table = Configuration.GetChainTable();
-            string lastPartition = null;
             TableBatchOperation batch = new TableBatchOperation();
-            ChainChangeEntry last = chainChanges.LastOrDefault();
-            for (int i = 0 ; i < chainChanges.Length ; i++)
+            var last = chainParts[chainParts.Count - 1];
+            foreach (var entry in chainParts)
             {
-                var entry = chainChanges[i];
-                var partition = ChainChangeEntry.Entity.GetPartitionKey(entry.Height);
-                if ((partition == lastPartition || lastPartition == null) && batch.Count < 100)
-                {
-                    batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
-                }
-                else
+                batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
+                if (batch.Count == 100)
                 {
                     table.ExecuteBatch(batch);
                     batch = new TableBatchOperation();
-                    batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
                 }
-                lastPartition = partition;
-                IndexerTrace.RemainingBlockChain(entry.Height, last.Height);
+                IndexerTrace.RemainingBlockChain(entry.ChainOffset, last.ChainOffset + last.BlockHeaders.Count - 1);
             }
             if (batch.Count > 0)
             {
