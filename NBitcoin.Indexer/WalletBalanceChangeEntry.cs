@@ -152,7 +152,7 @@ namespace NBitcoin.Indexer
                                                                             WalletRuleEntryCollection walletCollection)
             {
                 Dictionary<string, Entity> entitiesByWallet = new Dictionary<string, Entity>();
-                var entryByAddress = AddressBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
+                var entryByAddress = ScriptBalanceChangeEntry.Entity.ExtractFromTransaction(blockId, tx, txId);
                 foreach (var entryAddress in entryByAddress)
                 {
                     foreach (var walletRuleEntry in walletCollection.GetRulesFor(entryAddress.Key))

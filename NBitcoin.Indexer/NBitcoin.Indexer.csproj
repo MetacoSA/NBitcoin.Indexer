@@ -86,8 +86,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AddressBalanceChangeIndexer.cs" />
-    <Compile Include="AddressBalanceChangeEntry.cs" />
+    <Compile Include="ScriptBalanceChangeIndexer.cs" />
+    <Compile Include="ScriptBalanceChangeEntry.cs" />
     <Compile Include="Converters\CustomDataJsonConverter.cs" />
     <Compile Include="Converters\ScriptJsonConverter.cs" />
     <Compile Include="ScriptRule.cs" />

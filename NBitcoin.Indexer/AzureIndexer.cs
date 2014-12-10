@@ -137,7 +137,7 @@ namespace NBitcoin.Indexer
 
         public void IndexAddressBalances()
         {
-            IndexBalances("balances", new AddressBalanceChangeIndexer(Configuration));
+            IndexBalances("balances", new ScriptBalanceChangeIndexer(Configuration));
         }
 
         public long IndexTransactions()
@@ -201,7 +201,7 @@ namespace NBitcoin.Indexer
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
 
-        public void Index(params AddressBalanceChangeEntry.Entity[] entries)
+        public void Index(params ScriptBalanceChangeEntry.Entity[] entries)
         {
             Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)).ToArray(), Configuration.GetBalanceTable());
         }
@@ -425,9 +425,9 @@ namespace NBitcoin.Indexer
                     {
                         var txid = tx.GetHash();
                         Index(new TransactionEntry.Entity(txid, tx, null));
-                        foreach (var kv in AddressBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txid))
+                        foreach (var kv in ScriptBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txid))
                         {
-                            Index(new AddressBalanceChangeEntry.Entity[] { kv.Value });
+                            Index(new ScriptBalanceChangeEntry.Entity[] { kv.Value });
                         }
                         Interlocked.Increment(ref added);
                     });

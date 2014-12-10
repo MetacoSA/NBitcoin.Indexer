@@ -13,9 +13,9 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public class AddressBalanceChangeEntry : BalanceChangeEntry
+    public class ScriptBalanceChangeEntry : BalanceChangeEntry
     {
-        public AddressBalanceChangeEntry(params Entity[] entities)
+        public ScriptBalanceChangeEntry(params Entity[] entities)
         {
             Init(entities);
             if (entities.Length > 0)
@@ -35,9 +35,9 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public new AddressBalanceChangeEntry FetchConfirmedBlock(ChainBase chain)
+        public new ScriptBalanceChangeEntry FetchConfirmedBlock(ChainBase chain)
         {
-            return (AddressBalanceChangeEntry)base.FetchConfirmedBlock(chain);
+            return (ScriptBalanceChangeEntry)base.FetchConfirmedBlock(chain);
         }
         public new class Entity : BalanceChangeEntry.Entity
         {
@@ -61,7 +61,7 @@ namespace NBitcoin.Indexer
             {
                 if (txId == null)
                     txId = tx.GetHash();
-                Dictionary<Script, AddressBalanceChangeEntry.Entity> entryByScriptPubKey = new Dictionary<Script, AddressBalanceChangeEntry.Entity>();
+                Dictionary<Script, ScriptBalanceChangeEntry.Entity> entryByScriptPubKey = new Dictionary<Script, ScriptBalanceChangeEntry.Entity>();
                 foreach (var input in tx.Inputs)
                 {
                     if (tx.IsCoinBase)
@@ -69,10 +69,10 @@ namespace NBitcoin.Indexer
                     var signer = input.ScriptSig.GetSigner();
                     if (signer != null)
                     {
-                        AddressBalanceChangeEntry.Entity entry = null;
+                        ScriptBalanceChangeEntry.Entity entry = null;
                         if (!entryByScriptPubKey.TryGetValue(signer.ScriptPubKey, out entry))
                         {
-                            entry = new AddressBalanceChangeEntry.Entity(txId, signer.ScriptPubKey, blockId);
+                            entry = new ScriptBalanceChangeEntry.Entity(txId, signer.ScriptPubKey, blockId);
                             entryByScriptPubKey.Add(signer.ScriptPubKey, entry);
                         }
                         entry.SpentOutpoints.Add(input.PrevOut);
@@ -90,10 +90,10 @@ namespace NBitcoin.Indexer
                         continue;
                     }
 
-                    AddressBalanceChangeEntry.Entity entry = null;
+                    ScriptBalanceChangeEntry.Entity entry = null;
                     if (!entryByScriptPubKey.TryGetValue(output.ScriptPubKey, out entry))
                     {
-                        entry = new AddressBalanceChangeEntry.Entity(txId, output.ScriptPubKey, blockId);
+                        entry = new ScriptBalanceChangeEntry.Entity(txId, output.ScriptPubKey, blockId);
                         entry.IsCoinbase = tx.IsCoinBase;
                         entryByScriptPubKey.Add(output.ScriptPubKey, entry);
                     }

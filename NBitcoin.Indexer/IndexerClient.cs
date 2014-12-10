@@ -256,15 +256,15 @@ namespace NBitcoin.Indexer
             return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null, ColoredBalance);
         }
 
-        public AddressBalanceChangeEntry[][] GetAllBalances(IDestination[] destinations)
+        public ScriptBalanceChangeEntry[][] GetAllBalances(IDestination[] destinations)
         {
             return GetAllBalances(destinations.Select(d => d.ScriptPubKey).ToArray());
         }
 
-        public AddressBalanceChangeEntry[][] GetAllBalances(Script[] scriptPubKeys)
+        public ScriptBalanceChangeEntry[][] GetAllBalances(Script[] scriptPubKeys)
         {
             Helper.SetThrottling();
-            AddressBalanceChangeEntry[][] result = new AddressBalanceChangeEntry[scriptPubKeys.Length][];
+            ScriptBalanceChangeEntry[][] result = new ScriptBalanceChangeEntry[scriptPubKeys.Length][];
             Parallel.For(0, scriptPubKeys.Length,
             i =>
             {
@@ -279,7 +279,7 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="entity">The entity to load</param>
         /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-        public bool LoadAddressBalanceChangeEntity(AddressBalanceChangeEntry.Entity entity)
+        public bool LoadAddressBalanceChangeEntity(ScriptBalanceChangeEntry.Entity entity)
         {
             return LoadAddressBalanceChangeEntity(entity, null);
         }
@@ -289,9 +289,9 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="entity">The entity to load</param>
         /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-        public bool LoadAddressBalanceChangeEntity(AddressBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
+        public bool LoadAddressBalanceChangeEntity(ScriptBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
         {
-            return new AddressBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
+            return new ScriptBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
         }
 
         /// <summary>
@@ -315,13 +315,13 @@ namespace NBitcoin.Indexer
         {
             return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
         }
-        public AddressBalanceChangeEntry[] GetBalance(IDestination destination)
+        public ScriptBalanceChangeEntry[] GetBalance(IDestination destination)
         {
             return GetBalance(destination.ScriptPubKey);
         }
-        public AddressBalanceChangeEntry[] GetBalance(Script scriptPubKey)
+        public ScriptBalanceChangeEntry[] GetBalance(Script scriptPubKey)
         {
-            return new AddressBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeScript(scriptPubKey), this, null, ColoredBalance);
+            return new ScriptBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeScript(scriptPubKey), this, null, ColoredBalance);
         }
        
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
