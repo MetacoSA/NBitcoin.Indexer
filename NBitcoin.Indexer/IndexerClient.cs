@@ -372,19 +372,27 @@ namespace NBitcoin.Indexer
             return (WalletRule)JsonConvert.DeserializeObject<ICustomData>(rule, Configuration.SerializerSettings);
         }
 
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId)
+        {
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId));
+        }
         public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination)
         {
             return GetOrderedBalance(destination.ScriptPubKey);
         }
 
+
         public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey)
+        {
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey));
+        }
+
+        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId)
         {
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
             var table = Configuration.GetBalanceTable();
-            foreach (var c in table.ExecuteQuery(new TableQuery()
-            {
-                FilterString = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, Helper.EncodeScript(scriptPubKey))
-            }))
+            foreach (var c in QueryBalance(balanceId, table))
             {
                 var change = new OrderedBalanceChange(c);
                 if (change.BlockId == null)
@@ -409,6 +417,55 @@ namespace NBitcoin.Indexer
                 EnsurePreviousLoaded(change);
                 yield return change;
             }
+        }
+
+        private static IEnumerable<DynamicTableEntity> QueryBalance(string balanceId, CloudTable table)
+        {
+            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
+            return table.ExecuteQuery(CreateQuery(partition, balanceId));
+        }
+
+        private static TableQuery CreateQuery(string partition, string startWith)
+        {
+            return new TableQuery()
+            {
+                FilterString =
+                TableQuery.CombineFilters(
+                                            TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, partition),
+                                            TableOperators.And,
+                                            TableQuery.CombineFilters(
+                                                TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, startWith + "-"),
+                                                TableOperators.And,
+                                                TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, startWith + "|")
+                                            ))
+            };
+        }
+
+        public void CleanUnconfirmedChanges(IDestination destination, TimeSpan olderThan)
+        {
+            CleanUnconfirmedChanges(destination.ScriptPubKey, olderThan);
+        }
+
+        public void CleanUnconfirmedChanges(Script scriptPubKey, TimeSpan olderThan)
+        {
+            var table = Configuration.GetBalanceTable();
+            List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
+            foreach (var c in QueryBalance(OrderedBalanceChange.GetBalanceId(scriptPubKey), table))
+            {
+                var change = new OrderedBalanceChange(c);
+                if (change.BlockId != null)
+                    break;
+                if (DateTime.UtcNow - change.SeenUtc < olderThan)
+                    continue;
+                unconfirmed.Add(c);
+            }
+
+            Parallel.ForEach(unconfirmed, c =>
+            {
+                var t = Configuration.GetBalanceTable();
+                c.ETag = "*";
+                t.Execute(TableOperation.Delete(c));
+            });
         }
 
         public bool EnsurePreviousLoaded(OrderedBalanceChange change)

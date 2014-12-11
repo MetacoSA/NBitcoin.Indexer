@@ -701,6 +701,11 @@ namespace NBitcoin.Indexer.Tests
 
                 satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
                 Assert.True(satoshiBalance[0].Amount == -Money.Parse("0.1"));
+
+                tester.Client.CleanUnconfirmedChanges(satoshi, TimeSpan.Zero);
+
+                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                Assert.True(satoshiBalance.Length == 2);
             }
         }
 

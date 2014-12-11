@@ -1,5 +1,6 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
+using NBitcoin.Indexer.DamienG.Security.Cryptography;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,7 @@ namespace NBitcoin.Indexer
 {
     public class OrderedBalanceChange
     {
-        public static IEnumerable<OrderedBalanceChange> Extract(uint256 txId, Transaction transaction, uint256 blockId, BlockHeader blockHeader, int height)
+        public static IEnumerable<OrderedBalanceChange> ExtractScriptBalances(uint256 txId, Transaction transaction, uint256 blockId, BlockHeader blockHeader, int height)
         {
             if (transaction == null)
                 throw new ArgumentNullException("transaction");
@@ -35,7 +36,7 @@ namespace NBitcoin.Indexer
                     OrderedBalanceChange entry = null;
                     if (!changeByScriptPubKey.TryGetValue(signer.ScriptPubKey, out entry))
                     {
-                        entry = new OrderedBalanceChange(txId, signer.ScriptPubKey, blockId, blockHeader, height);
+                        entry = new OrderedBalanceChange(txId, OrderedBalanceChange.GetBalanceId(signer.ScriptPubKey), blockId, blockHeader, height);
                         changeByScriptPubKey.Add(signer.ScriptPubKey, entry);
                     }
                     entry.SpentOutpoints.Add(input.PrevOut);
@@ -58,7 +59,7 @@ namespace NBitcoin.Indexer
                 OrderedBalanceChange entry = null;
                 if (!changeByScriptPubKey.TryGetValue(output.ScriptPubKey, out entry))
                 {
-                    entry = new OrderedBalanceChange(txId, output.ScriptPubKey, blockId, blockHeader, height);
+                    entry = new OrderedBalanceChange(txId, GetBalanceId(output.ScriptPubKey), blockId, blockHeader, height);
                     changeByScriptPubKey.Add(output.ScriptPubKey, entry);
                 }
                 entry.ReceivedCoins.Add(new Coin()
@@ -182,17 +183,17 @@ namespace NBitcoin.Indexer
 
         internal OrderedBalanceChange(DynamicTableEntity entity)
         {
-            BalanceId = entity.PartitionKey;
             var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
-            Height = Helper.StringToHeight(splitted[0]);
+            Height = Helper.StringToHeight(splitted[1]);
+            BalanceId = splitted[0];
             if (Height == int.MaxValue)
             {
-                TransactionId = new uint256(splitted[2]);
+                TransactionId = new uint256(splitted[3]);
             }
             else
             {
-                BlockId = new uint256(splitted[1]);
-                TransactionId = new uint256(splitted[2]);
+                BlockId = new uint256(splitted[2]);
+                TransactionId = new uint256(splitted[3]);
             }
             SeenUtc = entity.Properties["s"].DateTime.Value;
 
@@ -223,26 +224,26 @@ namespace NBitcoin.Indexer
             IsCoinbase = flags[1] == 'o';
         }
 
-        public OrderedBalanceChange(uint256 txId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
+        public OrderedBalanceChange(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
             : this()
         {
             BlockId = blockId;
             SeenUtc = blockHeader == null ? DateTime.UtcNow : blockHeader.BlockTime.UtcDateTime;
             Height = blockHeader == null ? int.MaxValue : height;
             TransactionId = txId;
-            BalanceId = Helper.EncodeScript(scriptPubKey);
+            BalanceId = balanceId;
         }
 
         internal DynamicTableEntity ToEntity()
         {
             DynamicTableEntity entity = new DynamicTableEntity();
             entity.ETag = "*";
-            entity.PartitionKey = BalanceId;
+            entity.PartitionKey = GetPartitionKey(BalanceId);
             if (BlockId != null)
-                entity.RowKey = Helper.HeightToString(Height) + "-" + BlockId + "-" + TransactionId;
+                entity.RowKey = BalanceId + "-" + Helper.HeightToString(Height) + "-" + BlockId + "-" + TransactionId;
             else
             {
-                entity.RowKey = Helper.HeightToString(int.MaxValue) + "-" + ToString(SeenUtc) + "-" + TransactionId;
+                entity.RowKey = BalanceId + "-" + Helper.HeightToString(int.MaxValue) + "-" + ToString(SeenUtc) + "-" + TransactionId;
             }
 
             entity.Properties.Add("s", new EntityProperty(SeenUtc));
@@ -259,6 +260,11 @@ namespace NBitcoin.Indexer
             return entity;
         }
 
+        public static string GetPartitionKey(string balanceId)
+        {
+            return Helper.GetPartitionKey(12, Crc32.Compute(balanceId));
+        }
+
         const string DateFormat = "yyyyMMddhhmmssff";
         private string ToString(DateTime date)
         {
@@ -267,7 +273,17 @@ namespace NBitcoin.Indexer
 
         public static IEnumerable<OrderedBalanceChange> Extract(Transaction tx)
         {
-            return Extract(null, tx, null, null, 0);
+            return ExtractScriptBalances(null, tx, null, null, 0);
+        }
+
+        public static string GetBalanceId(Script scriptPubKey)
+        {
+            return Helper.EncodeScript(scriptPubKey);
+        }
+
+        public static string GetBalanceId(string walletId)
+        {
+            return "w" + Encoders.Hex.EncodeData(Encoding.UTF8.GetBytes(walletId));
         }
     }
 }

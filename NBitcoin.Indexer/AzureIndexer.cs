@@ -517,8 +517,8 @@ namespace NBitcoin.Indexer
             foreach (var transaction in block.Transactions)
             {
                 var txId = transaction.GetHash();
-                var changes = OrderedBalanceChange.Extract(txId, transaction, blockId, block.Header, height);
-                foreach (var group in changes.GroupBy(c => c.BalanceId, c => c.ToEntity()))
+                var changes = OrderedBalanceChange.ExtractScriptBalances(txId, transaction, blockId, block.Header, height).Select(c => c.ToEntity());
+                foreach (var group in changes.GroupBy(c => c.PartitionKey))
                 {
                     Index(group, table);
                 }

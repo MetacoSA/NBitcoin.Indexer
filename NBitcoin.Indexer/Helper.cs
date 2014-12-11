@@ -170,5 +170,11 @@ namespace NBitcoin.Indexer
         {
             return int.Parse(ToggleChars(rowkey));
         }
+
+        public static string GetPartitionKey(int bits, uint nbr)
+        {
+            var bytes = BitConverter.GetBytes(nbr);
+            return GetPartitionKey(bits, bytes, 0, 4);
+        }
     }
 }
