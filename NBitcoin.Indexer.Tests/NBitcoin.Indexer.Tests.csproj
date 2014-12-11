@@ -94,6 +94,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BlockGenerator.cs" />
+    <Compile Include="ChainBuilder.cs" />
     <Compile Include="IndexerTester.cs" />
     <Compile Include="MiniNode.cs" />
     <Compile Include="Program.cs" />

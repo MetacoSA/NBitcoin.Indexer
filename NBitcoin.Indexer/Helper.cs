@@ -143,5 +143,32 @@ namespace NBitcoin.Indexer
         {
             return Script.FromBytesUnsafe(Encoders.Hex.DecodeData(scriptPubKey));
         }
+
+        static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
+        static char[] Digit = Enumerable.Range(0, 10).Select(c => c.ToString()[0]).ToArray();
+
+        //Convert '012' to '987'
+        internal static string HeightToString(int height)
+        {
+            var input = height.ToString(format);
+            return ToggleChars(input);
+        }
+
+        internal static string ToggleChars(string input)
+        {
+            char[] result = new char[input.Length];
+            for (int i = 0 ; i < result.Length ; i++)
+            {
+                var index = Array.IndexOf(Digit, input[i]);
+                result[i] = Digit[Digit.Length - index - 1];
+            }
+            return new string(result);
+        }
+
+        //Convert '987' to '012'
+        internal static int StringToHeight(string rowkey)
+        {
+            return int.Parse(ToggleChars(rowkey));
+        }
     }
 }

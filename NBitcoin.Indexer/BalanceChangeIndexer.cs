@@ -134,7 +134,7 @@ namespace NBitcoin.Indexer
 
             if (entity.ReceivedTxOuts.Count == 0)
                 entity.ReceivedTxOuts.AddRange(tx.Outputs.Where((o, i) => entity.ReceivedTxOutIndices.Contains((uint)i)).ToList());
-
+            
 
             transactionsCache.AddOrReplace(txId, tx);
 

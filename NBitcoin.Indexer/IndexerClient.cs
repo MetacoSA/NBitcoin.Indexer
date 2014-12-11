@@ -92,6 +92,8 @@ namespace NBitcoin.Indexer
             {
                 Parallel.For(0, txIds.Length, i =>
                 {
+                    if (txIds[0] == 0)
+                        return;
                     var table = Configuration.GetTransactionTable();
                     var searchedEntity = new TransactionEntry.Entity(txIds[i]);
                     queries[i] = new TableQuery()
@@ -323,7 +325,7 @@ namespace NBitcoin.Indexer
         {
             return new ScriptBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeScript(scriptPubKey), this, null, ColoredBalance);
         }
-       
+
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
         public WalletRuleEntry[] GetWalletRules(string walletId)
         {
@@ -368,6 +370,71 @@ namespace NBitcoin.Indexer
         internal WalletRule Deserialize(string rule)
         {
             return (WalletRule)JsonConvert.DeserializeObject<ICustomData>(rule, Configuration.SerializerSettings);
+        }
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination)
+        {
+            return GetOrderedBalance(destination.ScriptPubKey);
+        }
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey)
+        {
+            Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
+            var table = Configuration.GetBalanceTable();
+            foreach (var c in table.ExecuteQuery(new TableQuery()
+            {
+                FilterString = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, Helper.EncodeScript(scriptPubKey))
+            }))
+            {
+                var change = new OrderedBalanceChange(c);
+                if (change.BlockId == null)
+                    unconfirmed.Enqueue(change);
+                else
+                {
+                    while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
+                    {
+                        var unconfirmedChange = unconfirmed.Dequeue();
+                        EnsurePreviousLoaded(unconfirmedChange);
+                        yield return unconfirmedChange;
+                    }
+
+                    EnsurePreviousLoaded(change);
+                    yield return change;
+                }
+            }
+
+            while (unconfirmed.Count != 0)
+            {
+                var change = unconfirmed.Dequeue();
+                EnsurePreviousLoaded(change);
+                yield return change;
+            }
+        }
+
+        public bool EnsurePreviousLoaded(OrderedBalanceChange change)
+        {
+            if (change.SpentCoins != null)
+                return true;
+
+            var transactions = GetTransactions(false, change.SpentOutpoints.Select(s => s.Hash).ToArray());
+            List<Coin> result = new List<Coin>();
+            for (int i = 0 ; i < transactions.Length ; i++)
+            {
+                var outpoint = change.SpentOutpoints[i];
+                if (outpoint.IsNull)
+                    continue;
+                var prev = transactions[i];
+                if (prev == null)
+                    return false;
+                result.Add(new Coin(outpoint, prev.Transaction.Outputs[change.SpentOutpoints[i].N]));
+            }
+            change.SpentCoins = result;
+            var entity = change.ToEntity();
+            var data = Helper.GetEntityProperty(entity, "b");
+            entity.Properties.Clear();
+            Helper.SetEntityProperty(entity, "b", data);
+            Configuration.GetBalanceTable().Execute(TableOperation.Merge(entity));
+            return true;
         }
     }
 }

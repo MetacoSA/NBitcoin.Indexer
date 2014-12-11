@@ -510,47 +510,43 @@ namespace NBitcoin.Indexer
             }
         }
 
+        public void IndexOrderedBalance(int height, Block block)
+        {
+            var table = Configuration.GetBalanceTable();
+            var blockId = block.GetHash();
+            foreach (var transaction in block.Transactions)
+            {
+                var txId = transaction.GetHash();
+                var changes = OrderedBalanceChange.Extract(txId, transaction, blockId, block.Header, height);
+                foreach (var group in changes.GroupBy(c => c.BalanceId, c => c.ToEntity()))
+                {
+                    Index(group, table);
+                }
+            }
+        }
+
+        public void IndexOrderedBalance(Transaction tx)
+        {
+            var table = Configuration.GetBalanceTable();
+            foreach (var group in OrderedBalanceChange.Extract(tx).GroupBy(c => c.BalanceId, c => c.ToEntity()))
+            {
+                Index(group, table);
+            }
+        }
+
         public void IndexMainChain()
         {
-            Helper.SetThrottling();
-
-            using (IndexerTrace.NewCorrelation("Index Main chain").Open())
+            using (var node = Configuration.ConnectToNode())
             {
-                Configuration.GetChainTable().CreateIfNotExists();
-                using (var node = Configuration.ConnectToNode())
+                var chain = Configuration.GetLocalChain("ImportMainChain");
+                node.SynchronizeChain(chain);
+                try
                 {
-                    var chain = Configuration.GetLocalChain("ImportMainChain");
-                    try
-                    {
-                        node.SynchronizeChain(chain);
-                        IndexerTrace.LocalMainChainTip(chain.Tip);
-                        var client = Configuration.CreateIndexerClient();
-                        var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
-
-                        var height = 0;
-                        if (changes.Count != 0)
-                        {
-                            IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
-                            if (changes[0].Height > chain.Tip.Height)
-                            {
-                                IndexerTrace.LocalMainChainIsLate();
-                                return;
-                            }
-                            height = changes[changes.Count - 1].Height + 1;
-                            if (height > chain.Height)
-                            {
-                                IndexerTrace.LocalMainChainIsUpToDate(chain.Tip);
-                                return;
-                            }
-                        }
-
-                        IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
-                        Index(chain, height);
-                    }
-                    finally
-                    {
-                        chain.Changes.Dispose();
-                    }
+                    IndexMainChain(chain);
+                }
+                finally
+                {
+                    chain.Changes.Dispose();
                 }
             }
         }
@@ -572,7 +568,6 @@ namespace NBitcoin.Indexer
 
                 var block = chain.GetBlock(i);
                 chainPart.BlockHeaders.Add(block.Header);
-
                 if (chainPart.BlockHeaders.Count == BlockHeaderPerRow)
                 {
                     entries.Add(chainPart);
@@ -637,6 +632,40 @@ namespace NBitcoin.Indexer
         {
             get;
             set;
+        }
+
+        public void IndexMainChain(ChainBase chain)
+        {
+            Helper.SetThrottling();
+
+            using (IndexerTrace.NewCorrelation("Index Main chain").Open())
+            {
+                Configuration.GetChainTable().CreateIfNotExists();
+                IndexerTrace.LocalMainChainTip(chain.Tip);
+                var client = Configuration.CreateIndexerClient();
+                var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
+
+                var height = 0;
+                if (changes.Count != 0)
+                {
+                    IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
+                    if (changes[0].Height > chain.Tip.Height)
+                    {
+                        IndexerTrace.LocalMainChainIsLate();
+                        return;
+                    }
+                    height = changes[changes.Count - 1].Height + 1;
+                    if (height > chain.Height)
+                    {
+                        IndexerTrace.LocalMainChainIsUpToDate(chain.Tip);
+                        return;
+                    }
+                }
+
+                IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
+                Index(chain, height);
+
+            }
         }
     }
 }

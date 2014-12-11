@@ -73,6 +73,7 @@ namespace NBitcoin.Indexer
                         if (!entryByScriptPubKey.TryGetValue(signer.ScriptPubKey, out entry))
                         {
                             entry = new ScriptBalanceChangeEntry.Entity(txId, signer.ScriptPubKey, blockId);
+                            entry.IsCoinbase = tx.IsCoinBase;
                             entryByScriptPubKey.Add(signer.ScriptPubKey, entry);
                         }
                         entry.SpentOutpoints.Add(input.PrevOut);

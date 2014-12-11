@@ -593,6 +593,118 @@ namespace NBitcoin.Indexer.Tests
         }
 
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
+
+        [Fact]
+        public void CanGetOrderedBalancesToAzure()
+        {
+            using (var tester = CreateTester())
+            {
+                var bob = new Key();
+                var alice = new Key();
+                var satoshi = new Key();
+
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.EmitMoney(bob, "50.0");
+                chainBuilder.EmitMoney(alice, "50.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.EmitMoney(bob, "20.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.SyncIndexer();
+
+                var bobBalance = tester.Client.GetOrderedBalance(bob).ToArray();
+                Assert.True(bobBalance.Length == 2);
+                Assert.True(bobBalance[0].Amount == Money.Parse("20.0"));
+                Assert.True(bobBalance[0].IsCoinbase);
+                Assert.True(!bobBalance[0].HasOpReturn);
+                Assert.True(bobBalance[1].Amount == Money.Parse("50.0"));
+
+                var aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
+                var tx = new TransactionBuilder()
+                    .AddCoins(bobBalance[0].ReceivedCoins)
+                    .AddKeys(bob)
+                    .Send(alice, "5.0")
+                    .SetChange(bob)
+                    .Then()
+                    .AddCoins(aliceBalance[0].ReceivedCoins)
+                    .AddKeys(alice)
+                    .Send(satoshi, "1.0")
+                    .SendFees("0.05")
+                    .SetChange(alice)
+                    .BuildTransaction(true);
+                tx.AddOutput(new TxOut(Money.Zero, TxNullDataTemplate.Instance.GenerateScriptPubKey(RandomUtils.GetBytes(3)))); //Add OP_RETURN
+                chainBuilder.Emit(tx);
+                var block = chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                bobBalance = tester.Client.GetOrderedBalance(bob).ToArray();
+                Assert.True(bobBalance[0].Amount == -Money.Parse("5.0"));
+
+                for (int i = 0 ; i < 2 ; i++)
+                {
+
+                    aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
+                    Assert.True(aliceBalance[0].Amount == -Money.Parse("1.0") - Money.Parse("0.05") + Money.Parse("5.0"));
+
+                    Assert.True(aliceBalance[0].SpentIndices.Count == 1);
+                    Assert.True(aliceBalance[0].SpentIndices[0] == 1);
+                    Assert.True(aliceBalance[0].SpentOutpoints[0] == tx.Inputs[1].PrevOut);
+                    Assert.True(aliceBalance[0].SpentCoins[0].Outpoint == aliceBalance[1].ReceivedCoins[0].Outpoint);
+                    Assert.True(aliceBalance[0].TransactionId == tx.GetHash());
+                    Assert.True(aliceBalance[0].Height == 3);
+                    Assert.True(aliceBalance[0].BlockId == block.GetHash());
+                    Assert.True(!aliceBalance[0].IsCoinbase);
+                    Assert.True(aliceBalance[0].HasOpReturn);
+                    Assert.True(aliceBalance[0].ReceivedCoins[0].Outpoint == new OutPoint(tx.GetHash(), 1)); //Bob coin
+                    Assert.True(aliceBalance[0].ReceivedCoins[1].Outpoint == new OutPoint(tx.GetHash(), 2)); //Change
+                }
+
+                var satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                Assert.True(satoshiBalance[0].Amount == Money.Parse("1.0"));
+
+                tx = new TransactionBuilder()
+                        .AddCoins(satoshiBalance[0].ReceivedCoins)
+                        .AddKeys(satoshi)
+                        .Send(alice, "0.2")
+                        .SetChange(satoshi)
+                        .BuildTransaction(true);
+
+                tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+                tester.Indexer.IndexOrderedBalance(tx);
+
+                tx = new TransactionBuilder()
+                       .AddCoins(satoshiBalance[0].ReceivedCoins)
+                       .AddKeys(satoshi)
+                       .Send(alice, "0.3")
+                       .SetChange(satoshi)
+                       .BuildTransaction(true);
+
+                tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+                tester.Indexer.IndexOrderedBalance(tx);
+
+                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                Assert.True(satoshiBalance[0].Amount == -Money.Parse("0.3"));
+                Assert.True(satoshiBalance[1].Amount == -Money.Parse("0.2"));
+
+                tx = new TransactionBuilder()
+                       .AddCoins(satoshiBalance[0].ReceivedCoins)
+                       .AddKeys(satoshi)
+                       .Send(alice, "0.1")
+                       .SetChange(satoshi)
+                       .BuildTransaction(true);
+
+                Thread.Sleep(1000);
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                Assert.True(satoshiBalance[0].Amount == -Money.Parse("0.1"));
+            }
+        }
+
+
         [Fact]
         public void CanUploadBalancesToAzure()
         {

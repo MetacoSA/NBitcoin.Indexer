@@ -178,7 +178,6 @@ namespace NBitcoin.Indexer
                 #endregion
             }
 
-
             internal class IntCompactVarInt : CompactVarInt
             {
                 public IntCompactVarInt(uint value)

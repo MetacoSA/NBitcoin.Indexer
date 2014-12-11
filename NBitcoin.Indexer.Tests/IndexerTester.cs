@@ -139,5 +139,10 @@ namespace NBitcoin.Indexer.Tests
 			Indexer.Configuration.BlockDirectory = store.Folder.FullName;
 			return new MiniNode(store, nodeServer);
 		}
-	}
+
+        internal ChainBuilder CreateChainBuilder()
+        {
+            return new ChainBuilder(this);
+        }
+    }
 }
