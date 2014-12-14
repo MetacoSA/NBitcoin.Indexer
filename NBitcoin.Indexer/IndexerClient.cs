@@ -507,9 +507,12 @@ namespace NBitcoin.Indexer
             }
 
             var entity = change.ToEntity(Configuration.SerializerSettings);
-            var data = Helper.GetEntityProperty(entity, "b");
+            var spentCoins = Helper.GetEntityProperty(entity, "b");
+            var coloredTx = ColoredBalance ? entity.Properties["g"].BinaryValue : null;
             entity.Properties.Clear();
-            Helper.SetEntityProperty(entity, "b", data);
+            if (coloredTx != null)
+                entity.Properties.Add("g", new EntityProperty(coloredTx));
+            Helper.SetEntityProperty(entity, "b", spentCoins);
             Configuration.GetBalanceTable().Execute(TableOperation.Merge(entity));
             return true;
         }

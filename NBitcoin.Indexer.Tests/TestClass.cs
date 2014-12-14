@@ -177,6 +177,7 @@ namespace NBitcoin.Indexer.Tests
 
                 //Nico, should have lost 0.02 BTC and 10 gold
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
+                balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
                 coloredEntry = balance[0].ColoredBalanceChangeEntry;
                 Assert.Equal(Money.Parse("-0.02") - txBuilder.ColoredDust, coloredEntry.UncoloredBalanceChange);
                 Assert.Equal(-10, coloredEntry.GetAsset(goldId).BalanceChange);

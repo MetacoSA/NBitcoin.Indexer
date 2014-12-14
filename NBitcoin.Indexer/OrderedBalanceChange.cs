@@ -317,7 +317,7 @@ namespace NBitcoin.Indexer
 
             _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
 
-            if (entity.Properties.ContainsKey("b"))
+            if (entity.Properties.ContainsKey("b0"))
                 _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin(s)).ToList());
             else if (_SpentOutpoints.Count == 0)
                 _SpentCoins = new CoinCollection();
