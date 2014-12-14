@@ -129,16 +129,16 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        public void IndexWalletBalances()
-        {
-            IndexBalances("wallets", new WalletBalanceChangeIndexer(Configuration));
-        }
+        //public void IndexWalletBalances()
+        //{
+        //    IndexBalances("wallets", new WalletBalanceChangeIndexer(Configuration));
+        //}
 
 
-        public void IndexAddressBalances()
-        {
-            IndexBalances("balances", new ScriptBalanceChangeIndexer(Configuration));
-        }
+        //public void IndexAddressBalances()
+        //{
+        //    IndexBalances("balances", (blockId,tx,txId)=> OrderedBalanceChange.ExtractScriptBalances(txId,tx,txId) );
+        //}
 
         public long IndexTransactions()
         {
@@ -446,18 +446,16 @@ namespace NBitcoin.Indexer
             return added;
         }
 
-        private void IndexBalances<TEntry, TEntity>(string checkpointName, BalanceChangeIndexer<TEntry, TEntity> indexer)
-            where TEntry : BalanceChangeEntry
-            where TEntity : BalanceChangeEntry.Entity
+        private void IndexBalances(string checkpointName, Func<uint256, Transaction, uint256, IEnumerable<OrderedBalanceChange>> extract)
         {
             Helper.SetThrottling();
-            BlockingCollection<TEntity[]> indexedEntries = new BlockingCollection<TEntity[]>(100);
+            BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
 
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)), indexer.GetTable()), 30);
+            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.ToEntity(Configuration.SerializerSettings)), this.Configuration.GetBalanceTable()), 30);
             using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
             {
-                indexer.GetTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<string, TEntity>();
+                this.Configuration.GetBalanceTable().CreateIfNotExists();
+                var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
 
                 var storedBlocks = Enumerate(checkpointName);
                 foreach (var block in storedBlocks)
@@ -468,7 +466,7 @@ namespace NBitcoin.Indexer
                         var txId = tx.GetHash();
                         try
                         {
-                            var entries = indexer.ExtractFromTransaction(blockId, tx, txId);
+                            var entries = extract(blockId, tx, txId);
 
                             foreach (var entry in entries)
                             {
@@ -517,7 +515,22 @@ namespace NBitcoin.Indexer
             foreach (var transaction in block.Transactions)
             {
                 var txId = transaction.GetHash();
-                var changes = OrderedBalanceChange.ExtractScriptBalances(txId, transaction, blockId, block.Header, height).Select(c => c.ToEntity());
+                var changes = OrderedBalanceChange.ExtractScriptBalances(txId, transaction, blockId, block.Header, height).Select(c => c.ToEntity(Configuration.SerializerSettings));
+                foreach (var group in changes.GroupBy(c => c.PartitionKey))
+                {
+                    Index(group, table);
+                }
+            }
+        }
+
+        public void IndexWalletOrderedBalance(int height, Block block, WalletRuleEntryCollection walletRules)
+        {
+            var table = Configuration.GetBalanceTable();
+            var blockId = block.GetHash();
+            foreach (var transaction in block.Transactions)
+            {
+                var txId = transaction.GetHash();
+                var changes = OrderedBalanceChange.ExtractWalletBalances(txId, transaction, blockId, block.Header, height, walletRules).Select(c => c.ToEntity(Configuration.SerializerSettings));
                 foreach (var group in changes.GroupBy(c => c.PartitionKey))
                 {
                     Index(group, table);
@@ -528,7 +541,7 @@ namespace NBitcoin.Indexer
         public void IndexOrderedBalance(Transaction tx)
         {
             var table = Configuration.GetBalanceTable();
-            foreach (var group in OrderedBalanceChange.Extract(tx).GroupBy(c => c.BalanceId, c => c.ToEntity()))
+            foreach (var group in OrderedBalanceChange.Extract(tx).GroupBy(c => c.BalanceId, c => c.ToEntity(Configuration.SerializerSettings)))
             {
                 Index(group, table);
             }
@@ -667,5 +680,7 @@ namespace NBitcoin.Indexer
 
             }
         }
+
+
     }
 }

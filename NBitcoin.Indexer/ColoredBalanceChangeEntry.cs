@@ -47,14 +47,14 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal void AddReceivedCoin(Asset asset, Spendable receivedCoin, bool isTransfer)
+        internal void AddReceivedCoin(Asset asset, Coin receivedCoin, bool isTransfer)
         {
-            _ReceivedCoins.Add(new ColoredCoin(asset, new Coin(receivedCoin.OutPoint, receivedCoin.TxOut)));
+            _ReceivedCoins.Add(new ColoredCoin(asset, receivedCoin));
         }
 
-        internal void AddSpentCoin(Asset asset, Spendable spentCoin)
+        internal void AddSpentCoin(Asset asset, Coin spentCoin)
         {
-            _SentCoins.Add(new ColoredCoin(asset, new Coin(spentCoin.OutPoint, spentCoin.TxOut)));
+            _SentCoins.Add(new ColoredCoin(asset, spentCoin));
         }
 
         public override string ToString()
@@ -64,17 +64,26 @@ namespace NBitcoin.Indexer
     }
     public class ColoredBalanceChangeEntry
     {
-        public ColoredBalanceChangeEntry(BalanceChangeEntry balanceChangeEntry, BalanceChangeEntry.Entity.ColorInformation colorInformation)
+        internal ColoredTransaction _Colored;
+        public ColoredBalanceChangeEntry(OrderedBalanceChange balanceChange, ColoredTransaction coloredTransaction)
         {
-            for (int i = 0 ; i < balanceChangeEntry.SpentCoins.Count ; i++)
+            _Colored = coloredTransaction;
+            for (var i = 0 ; i < balanceChange.SpentIndices.Count ; i++)
             {
-                var colorCoinInfo = colorInformation.Inputs[i];
-                AddSpentCoin(colorCoinInfo.Asset, balanceChangeEntry.SpentCoins[i]);
+                var spentIndex = balanceChange.SpentIndices[i];
+                var entry = coloredTransaction.Inputs.FirstOrDefault(o => o.Index == (uint)spentIndex);
+                if (entry != null)
+                    AddSpentCoin(entry.Asset, balanceChange.SpentCoins[(int)i]);
+                else
+                    AddSpentCoin(null, balanceChange.SpentCoins[(int)i]);
             }
-            for (int i = 0 ; i < balanceChangeEntry.ReceivedCoins.Count ; i++)
+            foreach (var coin in balanceChange.ReceivedCoins)
             {
-                var colorCoinInfo = colorInformation.Outputs[i];
-                AddReceivedCoin(colorCoinInfo.Asset, balanceChangeEntry.ReceivedCoins[i], colorCoinInfo.Transfer);
+                var entry = coloredTransaction.GetColoredEntry(coin.Outpoint.N);
+                if (entry != null)
+                    AddReceivedCoin(entry.Asset, coin, !coloredTransaction.Issuances.Contains(entry));
+                else
+                    AddReceivedCoin(null, coin, false);
             }
         }
 
@@ -86,16 +95,16 @@ namespace NBitcoin.Indexer
             }
         }
 
-        private List<Spendable> _UncoloredReceivedCoins = new List<Spendable>();
-        public List<Spendable> UncoloredReceivedCoins
+        private List<Coin> _UncoloredReceivedCoins = new List<Coin>();
+        public List<Coin> UncoloredReceivedCoins
         {
             get
             {
                 return _UncoloredReceivedCoins;
             }
         }
-        private List<Spendable> _UncoloredSpentCoins = new List<Spendable>();
-        public List<Spendable> UncoloredSpentCoins
+        private List<Coin> _UncoloredSpentCoins = new List<Coin>();
+        public List<Coin> UncoloredSpentCoins
         {
             get
             {
@@ -129,7 +138,7 @@ namespace NBitcoin.Indexer
         }
 
 
-        private void AddReceivedCoin(Asset asset, Spendable receivedCoin, bool isTransfer)
+        private void AddReceivedCoin(Asset asset, Coin receivedCoin, bool isTransfer)
         {
             if (asset == null)
             {
@@ -140,7 +149,7 @@ namespace NBitcoin.Indexer
                 GetAsset(asset.Id, true).AddReceivedCoin(asset, receivedCoin, isTransfer);
             }
         }
-        private void AddSpentCoin(Asset asset, Spendable spentCoin)
+        private void AddSpentCoin(Asset asset, Coin spentCoin)
         {
             if (asset == null)
             {

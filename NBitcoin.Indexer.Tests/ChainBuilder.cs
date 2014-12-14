@@ -70,10 +70,15 @@ namespace NBitcoin.Indexer.Tests
         public void SyncIndexer()
         {
             _Tester.Indexer.IndexMainChain(_Chain);
+            var walletRules = _Tester.Client.GetAllWalletRules();
             foreach (var b in _UnsyncBlocks)
             {
                 var height = _Chain.GetBlock(b.GetHash()).Height;
                 _Tester.Indexer.IndexOrderedBalance(height, b);
+                if (walletRules.Count() != 0)
+                {
+                    _Tester.Indexer.IndexWalletOrderedBalance(height, b, walletRules);
+                }
             }
             _UnsyncBlocks.Clear();
         }

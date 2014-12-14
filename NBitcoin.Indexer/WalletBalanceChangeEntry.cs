@@ -180,10 +180,21 @@ namespace NBitcoin.Indexer
                 }
                 foreach (var wallet in entitiesByWallet)
                 {
-                    wallet.Value.SpentOutpoints.Distinct();
-                    wallet.Value.ReceivedTxOutIndices.Distinct();
+                    Distinct(wallet.Value.SpentOutpoints);
+                    Distinct(wallet.Value.ReceivedTxOutIndices);
                 }
                 return entitiesByWallet;
+            }
+
+            private static void Distinct<T>(List<T> list)
+            {
+                HashSet<T> contains = new HashSet<T>();
+                foreach (var item in list.ToList())
+                {
+                    if (contains.Contains(item))
+                        list.Remove(item);
+                    contains.Add(item);
+                }
             }
 
             private readonly Dictionary<uint, WalletRule> _MatchedRulesByOutputIndex = new Dictionary<uint, WalletRule>();

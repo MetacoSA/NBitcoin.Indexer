@@ -74,7 +74,7 @@ namespace NBitcoin.Indexer
             }
             if (loadedEntity.ColorInformationData != null)
             {
-                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, loadedEntity.ColorInformationData);
+                //ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, loadedEntity.ColorInformationData);
             }
             MempoolDate = entities.Where(e => e.BlockId == null).Select(e => e.Timestamp).FirstOrDefault();
         }

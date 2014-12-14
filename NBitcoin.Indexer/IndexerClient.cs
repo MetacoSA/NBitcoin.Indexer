@@ -394,7 +394,7 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetBalanceTable();
             foreach (var c in QueryBalance(balanceId, table))
             {
-                var change = new OrderedBalanceChange(c);
+                var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId == null)
                     unconfirmed.Enqueue(change);
                 else
@@ -452,7 +452,7 @@ namespace NBitcoin.Indexer
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
             foreach (var c in QueryBalance(OrderedBalanceChange.GetBalanceId(scriptPubKey), table))
             {
-                var change = new OrderedBalanceChange(c);
+                var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId != null)
                     break;
                 if (DateTime.UtcNow - change.SeenUtc < olderThan)
@@ -471,11 +471,20 @@ namespace NBitcoin.Indexer
         public bool EnsurePreviousLoaded(OrderedBalanceChange change)
         {
             if (change.SpentCoins != null)
-                return true;
+            {
+                if (change.ColoredBalanceChangeEntry != null || !ColoredBalance)
+                    return true;
+            }
 
-            var transactions = GetTransactions(false, change.SpentOutpoints.Select(s => s.Hash).ToArray());
-            List<Coin> result = new List<Coin>();
-            for (int i = 0 ; i < transactions.Length ; i++)
+
+
+            var transactions =
+                GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash)
+                 .Concat(new[] { change.TransactionId })
+                 .ToArray());
+            var thisTransaction = transactions[transactions.Length - 1];
+            CoinCollection result = new CoinCollection();
+            for (int i = 0 ; i < transactions.Length - 1 ; i++)
             {
                 var outpoint = change.SpentOutpoints[i];
                 if (outpoint.IsNull)
@@ -483,10 +492,21 @@ namespace NBitcoin.Indexer
                 var prev = transactions[i];
                 if (prev == null)
                     return false;
+                if (ColoredBalance && prev.ColoredTransaction == null)
+                    return false;
                 result.Add(new Coin(outpoint, prev.Transaction.Outputs[change.SpentOutpoints[i].N]));
             }
             change.SpentCoins = result;
-            var entity = change.ToEntity();
+
+
+            if (ColoredBalance && change.ColoredBalanceChangeEntry == null)
+            {
+                if (thisTransaction.ColoredTransaction == null)
+                    return false;
+                change.ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(change, thisTransaction.ColoredTransaction);
+            }
+
+            var entity = change.ToEntity(Configuration.SerializerSettings);
             var data = Helper.GetEntityProperty(entity, "b");
             entity.Properties.Clear();
             Helper.SetEntityProperty(entity, "b", data);

@@ -1,6 +1,8 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.DamienG.Security.Cryptography;
+using NBitcoin.OpenAsset;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -79,11 +81,115 @@ namespace NBitcoin.Indexer
             return changeByScriptPubKey.Values;
         }
 
+        public static IEnumerable<OrderedBalanceChange> ExtractWalletBalances(
+                                                                            uint256 txId,
+                                                                            Transaction tx,
+                                                                            uint256 blockId,
+                                                                            BlockHeader blockHeader,
+                                                                            int height,
+                                                                            WalletRuleEntryCollection walletCollection)
+        {
+            Dictionary<string, OrderedBalanceChange> entitiesByWallet = new Dictionary<string, OrderedBalanceChange>();
+            var scriptBalances = ExtractScriptBalances(txId, tx, blockId, blockHeader, height);
+            foreach (var scriptBalance in scriptBalances)
+            {
+                foreach (var walletRuleEntry in walletCollection.GetRulesFor(scriptBalance.GetScript()))
+                {
+                    OrderedBalanceChange walletEntity = null;
+                    if (!entitiesByWallet.TryGetValue(walletRuleEntry.WalletId, out walletEntity))
+                    {
+                        walletEntity = new OrderedBalanceChange(txId, OrderedBalanceChange.GetBalanceId(walletRuleEntry.WalletId), blockId, blockHeader, height);
+                        walletEntity.HasOpReturn = scriptBalance.HasOpReturn;
+                        walletEntity.IsCoinbase = scriptBalance.IsCoinbase;
+                        entitiesByWallet.Add(walletRuleEntry.WalletId, walletEntity);
+                    }
+                    walletEntity.Merge(scriptBalance, walletRuleEntry.Rule);
+                }
+            }
+            return entitiesByWallet.Values;
+        }
+
+
+        private readonly List<MatchedRule> _MatchedRules = new List<MatchedRule>();
+        public List<MatchedRule> MatchedRules
+        {
+            get
+            {
+                return _MatchedRules;
+            }
+        }
+
+        private void Merge(OrderedBalanceChange other, WalletRule walletRule)
+        {
+            if (other.ReceivedCoins.Count != 0)
+            {
+                ReceivedCoins.AddRange(other.ReceivedCoins);
+                ReceivedCoins = new CoinCollection(ReceivedCoins.Distinct<Coin, OutPoint>(c => c.Outpoint));
+                foreach (var c in other.ReceivedCoins)
+                {
+                    this.MatchedRules.Add(new MatchedRule()
+                    {
+                        Index = c.Outpoint.N,
+                        Rule = walletRule,
+                        MatchType = MatchLocation.Output
+                    });
+                }
+            }
+
+            if (other.SpentIndices.Count != 0)
+            {
+                SpentIndices.AddRange(other.SpentIndices);
+                SpentIndices = SpentIndices.Distinct().ToList();
+
+                SpentOutpoints.AddRange(other.SpentOutpoints);
+                SpentOutpoints = SpentOutpoints.Distinct().ToList();
+
+                if (other.SpentCoins != null)
+                {
+                    if (SpentCoins == null)
+                        SpentCoins = new CoinCollection();
+                    SpentCoins.AddRange(other.SpentCoins);
+                    SpentCoins = new CoinCollection(SpentCoins.Distinct<Coin, OutPoint>(c => c.Outpoint).ToList());
+                }
+
+                foreach (var c in other.SpentIndices)
+                {
+                    this.MatchedRules.Add(new MatchedRule()
+                    {
+                        Index = c,
+                        Rule = walletRule,
+                        MatchType = MatchLocation.Input
+                    });
+                }
+            }
+        }
+
+
+        string _BalanceId;
         public string BalanceId
         {
-            get;
-            set;
+            get
+            {
+                return _BalanceId;
+            }
+            set
+            {
+                _PartitionKey = null;
+                _BalanceId = value;
+            }
         }
+
+        string _PartitionKey;
+        public string PartitionKey
+        {
+            get
+            {
+                if (_PartitionKey == null)
+                    _PartitionKey = OrderedBalanceChange.GetPartitionKey(BalanceId);
+                return _PartitionKey;
+            }
+        }
+
         public int Height
         {
             get;
@@ -121,42 +227,54 @@ namespace NBitcoin.Indexer
         {
             _SpentIndices = new List<uint>();
             _SpentOutpoints = new List<OutPoint>();
-            _ReceivedCoins = new List<Coin>();
+            _ReceivedCoins = new CoinCollection();
         }
-        private readonly List<uint> _SpentIndices;
+        private List<uint> _SpentIndices;
         public List<uint> SpentIndices
         {
             get
             {
                 return _SpentIndices;
             }
+            private set
+            {
+                _SpentIndices = value;
+            }
         }
 
-        private readonly List<OutPoint> _SpentOutpoints;
+        private List<OutPoint> _SpentOutpoints;
         public List<OutPoint> SpentOutpoints
         {
             get
             {
                 return _SpentOutpoints;
             }
+            private set
+            {
+                _SpentOutpoints = value;
+            }
         }
 
-        private readonly List<Coin> _ReceivedCoins;
-        public List<Coin> ReceivedCoins
+        private CoinCollection _ReceivedCoins;
+        public CoinCollection ReceivedCoins
         {
             get
             {
                 return _ReceivedCoins;
             }
+            private set
+            {
+                _ReceivedCoins = value;
+            }
         }
 
 
-        private List<Coin> _SpentCoins;
+        private CoinCollection _SpentCoins;
 
         /// <summary>
         /// Might be null if parent transactions have not yet been indexed
         /// </summary>
-        public List<Coin> SpentCoins
+        public CoinCollection SpentCoins
         {
             get
             {
@@ -181,7 +299,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal OrderedBalanceChange(DynamicTableEntity entity)
+        internal OrderedBalanceChange(DynamicTableEntity entity, JsonSerializerSettings settings)
         {
             var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             Height = Helper.StringToHeight(splitted[1]);
@@ -200,16 +318,16 @@ namespace NBitcoin.Indexer
             _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
 
             if (entity.Properties.ContainsKey("b"))
-                _SpentCoins = Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin(s)).ToList();
+                _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin(s)).ToList());
             else if (_SpentOutpoints.Count == 0)
-                _SpentCoins = new List<Coin>();
+                _SpentCoins = new CoinCollection();
 
             _SpentIndices = Helper.DeserializeList<BalanceChangeEntry.Entity.IntCompactVarInt>(Helper.GetEntityProperty(entity, "ss")).Select(i => (uint)i.ToLong()).ToList();
 
             var receivedIndices = Helper.DeserializeList<BalanceChangeEntry.Entity.IntCompactVarInt>(Helper.GetEntityProperty(entity, "c")).Select(i => (uint)i.ToLong()).ToList();
             var receivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
 
-            _ReceivedCoins = new List<Coin>();
+            _ReceivedCoins = new CoinCollection();
             for (int i = 0 ; i < receivedIndices.Count ; i++)
             {
                 _ReceivedCoins.Add(new Coin()
@@ -222,6 +340,15 @@ namespace NBitcoin.Indexer
             var flags = entity.Properties["e"].StringValue;
             HasOpReturn = flags[0] == 'o';
             IsCoinbase = flags[1] == 'o';
+
+            _MatchedRules = JsonConvert.DeserializeObject<List<MatchedRule>>(entity.Properties["f"].StringValue, settings).ToList();
+
+            if(entity.Properties.ContainsKey("g"))
+            {
+                var ctx = new ColoredTransaction();
+                ctx.FromBytes(entity["g"].BinaryValue);
+                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, ctx);
+            }
         }
 
         public OrderedBalanceChange(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
@@ -234,11 +361,11 @@ namespace NBitcoin.Indexer
             BalanceId = balanceId;
         }
 
-        internal DynamicTableEntity ToEntity()
+        internal DynamicTableEntity ToEntity(JsonSerializerSettings settings)
         {
             DynamicTableEntity entity = new DynamicTableEntity();
             entity.ETag = "*";
-            entity.PartitionKey = GetPartitionKey(BalanceId);
+            entity.PartitionKey = PartitionKey;
             if (BlockId != null)
                 entity.RowKey = BalanceId + "-" + Helper.HeightToString(Height) + "-" + BlockId + "-" + TransactionId;
             else
@@ -256,7 +383,11 @@ namespace NBitcoin.Indexer
             Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedCoins.Select(e => e.TxOut)));
             var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
             entity.Properties.AddOrReplace("e", new EntityProperty(flags));
-
+            entity.Properties.AddOrReplace("f", new EntityProperty(JsonConvert.SerializeObject(MatchedRules, settings)));
+            if (ColoredBalanceChangeEntry != null)
+            {
+                entity.Properties.AddOrReplace("g", new EntityProperty(ColoredBalanceChangeEntry._Colored.ToBytes()));
+            }
             return entity;
         }
 
@@ -281,9 +412,44 @@ namespace NBitcoin.Indexer
             return Helper.EncodeScript(scriptPubKey);
         }
 
+        public Script GetScript()
+        {
+            return Helper.DecodeScript(BalanceId);
+        }
+
         public static string GetBalanceId(string walletId)
         {
             return "w" + Encoders.Hex.EncodeData(Encoding.UTF8.GetBytes(walletId));
+        }
+
+        public IEnumerable<WalletRule> GetMatchedRules(int index, MatchLocation matchType)
+        {
+            return MatchedRules.Where(r => r.Index == index && r.MatchType == matchType).Select(c => c.Rule);
+        }
+
+
+        public IEnumerable<WalletRule> GetMatchedRules(Coin coin)
+        {
+            return GetMatchedRules(coin.Outpoint);
+        }
+
+        public IEnumerable<WalletRule> GetMatchedRules(OutPoint outPoint)
+        {
+            if (outPoint.Hash == TransactionId)
+                return GetMatchedRules((int)outPoint.N, MatchLocation.Output);
+            else
+            {
+                var index = SpentOutpoints.IndexOf(outPoint);
+                if (index == -1)
+                    return new WalletRule[0];
+                return GetMatchedRules((int)SpentIndices[index], MatchLocation.Input);
+            }
+        }
+
+        public ColoredBalanceChangeEntry ColoredBalanceChangeEntry
+        {
+            get;
+            set;
         }
     }
 }

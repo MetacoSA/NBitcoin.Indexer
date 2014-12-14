@@ -8,6 +8,10 @@ namespace NBitcoin.Indexer
 {
     public static class Extensions
     {
+        public static IEnumerable<T> Distinct<T, TComparer>(this IEnumerable<T> input, Func<T, TComparer> comparer)
+        {
+            return input.Distinct(new AnonymousEqualityComparer<T, TComparer>(comparer));
+        }
 
         public static IEnumerable<TBalanceChangeEntry> FetchConfirmedBlocks<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, ChainBase chain)
             where TBalanceChangeEntry : BalanceChangeEntry
