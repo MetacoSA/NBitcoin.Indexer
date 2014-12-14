@@ -317,14 +317,21 @@ namespace NBitcoin.Indexer
         private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId)
         {
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
+            List<OrderedBalanceChange> unconformedList = new List<OrderedBalanceChange>();
             var table = Configuration.GetBalanceTable();
             foreach (var c in QueryBalance(balanceId, table))
             {
                 var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId == null)
-                    unconfirmed.Enqueue(change);
+                    unconformedList.Add(change);
                 else
                 {
+                    if (unconformedList != null)
+                    {
+                        unconfirmed = new Queue<OrderedBalanceChange>(unconformedList.OrderByDescending(o => o.SeenUtc));
+                        unconformedList = null;
+                    }
+
                     while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
                     {
                         var unconfirmedChange = unconfirmed.Dequeue();

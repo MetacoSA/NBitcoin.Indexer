@@ -13,61 +13,34 @@ namespace NBitcoin.Indexer
             return input.Distinct(new AnonymousEqualityComparer<T, TComparer>(comparer));
         }
 
-        public static IEnumerable<TBalanceChangeEntry> FetchConfirmedBlocks<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, ChainBase chain)
-            where TBalanceChangeEntry : BalanceChangeEntry
-        {
-            return entries.Select(e =>
-            {
-                e.FetchConfirmedBlock(chain);
-                return e;
-            });
-        }
 
-        public static TBalanceChangeEntry FromTransactionId<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, uint256 txId)
-            where TBalanceChangeEntry : BalanceChangeEntry
-        {
-            return entries.FirstOrDefault(e => e.TransactionId == txId);
-        }
-
-        public static SpendableCollection SelectSpentCoins<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries)
-           where TBalanceChangeEntry : BalanceChangeEntry
+        public static CoinCollection SelectSpentCoins(this IEnumerable<OrderedBalanceChange> entries)
         {
             return SelectSpentCoins(entries, true);
         }
 
-        public static SpendableCollection SelectUnspentCoins<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries)
-           where TBalanceChangeEntry : BalanceChangeEntry
+        public static CoinCollection SelectUnspentCoins(this IEnumerable<OrderedBalanceChange> entries)
         {
             return SelectSpentCoins(entries, false);
         }
 
-        public static IEnumerable<TBalanceChangeEntry> OrderByReceived<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, ChainBase chain)
-            where TBalanceChangeEntry : BalanceChangeEntry
+        private static CoinCollection SelectSpentCoins(IEnumerable<OrderedBalanceChange> entries, bool spent)
         {
-            return entries
-                .OrderBy(change => change.Confirmations != 0 ? (long)change.Confirmations :
-                                    change.MempoolDate == null ? 0 : 
-                                    -change.MempoolDate.Value.Ticks);
-        }
-
-        private static SpendableCollection SelectSpentCoins<TBalanceChangeEntry>(IEnumerable<TBalanceChangeEntry> entries, bool spent)
-            where TBalanceChangeEntry : BalanceChangeEntry
-        {
-            SpendableCollection result = new SpendableCollection();
-            Dictionary<OutPoint, Spendable> spentCoins = new Dictionary<OutPoint, Spendable>();
-            Dictionary<OutPoint, Spendable> receivedCoins = new Dictionary<OutPoint, Spendable>();
+            CoinCollection result = new CoinCollection();
+            Dictionary<OutPoint, Coin> spentCoins = new Dictionary<OutPoint, Coin>();
+            Dictionary<OutPoint, Coin> receivedCoins = new Dictionary<OutPoint, Coin>();
             foreach (var entry in entries)
             {
                 if (entry.SpentCoins != null)
                 {
                     foreach (var c in entry.SpentCoins)
                     {
-                        spentCoins.AddOrReplace(c.OutPoint, c);
+                        spentCoins.AddOrReplace(c.Outpoint, c);
                     }
                 }
                 foreach (var c in entry.ReceivedCoins)
                 {
-                    receivedCoins.AddOrReplace(c.OutPoint, c);
+                    receivedCoins.AddOrReplace(c.Outpoint, c);
                 }
             }
             if (spent)
@@ -87,8 +60,7 @@ namespace NBitcoin.Indexer
         /// <typeparam name="TBalanceChangeEntry"></typeparam>
         /// <param name="entries"></param>
         /// <returns></returns>
-        public static IEnumerable<TBalanceChangeEntry> WhereNotExpired<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries)
-            where TBalanceChangeEntry : BalanceChangeEntry
+        public static IEnumerable<OrderedBalanceChange> WhereNotExpired(this IEnumerable<OrderedBalanceChange> entries)
         {
             return WhereNotExpired(entries, TimeSpan.FromMinutes(30));
         }
@@ -100,21 +72,35 @@ namespace NBitcoin.Indexer
         /// <param name="entries"></param>
         /// <param name="expiration"></param>
         /// <returns></returns>
-        public static IEnumerable<TBalanceChangeEntry> WhereNotExpired<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, TimeSpan expiration)
-            where TBalanceChangeEntry : BalanceChangeEntry
+        public static IEnumerable<OrderedBalanceChange> WhereNotExpired(this IEnumerable<OrderedBalanceChange> entries, TimeSpan expiration)
         {
             return entries
-                       .Where(e => e.ConfirmedBlock == null &&
-                                    e.MempoolDate != null &&
-                                    (DateTime.UtcNow - e.MempoolDate.Value) > expiration);
+                       .Where(e => e.MempoolEntry
+                                   &&
+                                    (DateTime.UtcNow - e.SeenUtc) > expiration);
         }
 
-        public static IEnumerable<TBalanceChangeEntry> WhereConfirmed<TBalanceChangeEntry>(this IEnumerable<TBalanceChangeEntry> entries, int minConfirmation = 1)
-            where TBalanceChangeEntry : BalanceChangeEntry
+        public static IEnumerable<OrderedBalanceChange> WhereConfirmed(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain, int minConfirmation = 1)
         {
             return
                 entries
-                .Where(e => e.ConfirmedBlock != null && e.Confirmations >= minConfirmation);
+                .Where(e => IsMinConf(e, minConfirmation, chain));
+        }
+
+        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, Chain chain, bool colored = false)
+        {
+            return new BalanceSheet(entries, chain, colored);
+        }
+
+        private static bool IsMinConf(OrderedBalanceChange e, int minConfirmation, ChainBase chain)
+        {
+            if (e.BlockId == null)
+                return minConfirmation == 0;
+
+            var b = chain.GetBlock(e.BlockId);
+            if (b == null)
+                return false;
+            return (chain.Height - b.Height) + 1 >= minConfirmation;
         }
     }
 }

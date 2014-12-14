@@ -306,7 +306,7 @@ namespace NBitcoin.Indexer
             BalanceId = splitted[0];
             if (Height == int.MaxValue)
             {
-                TransactionId = new uint256(splitted[3]);
+                TransactionId = new uint256(splitted[2]);
             }
             else
             {
@@ -322,9 +322,9 @@ namespace NBitcoin.Indexer
             else if (_SpentOutpoints.Count == 0)
                 _SpentCoins = new CoinCollection();
 
-            _SpentIndices = Helper.DeserializeList<BalanceChangeEntry.Entity.IntCompactVarInt>(Helper.GetEntityProperty(entity, "ss")).Select(i => (uint)i.ToLong()).ToList();
+            _SpentIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "ss")).Select(i => (uint)i.ToLong()).ToList();
 
-            var receivedIndices = Helper.DeserializeList<BalanceChangeEntry.Entity.IntCompactVarInt>(Helper.GetEntityProperty(entity, "c")).Select(i => (uint)i.ToLong()).ToList();
+            var receivedIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "c")).Select(i => (uint)i.ToLong()).ToList();
             var receivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
 
             _ReceivedCoins = new CoinCollection();
@@ -360,6 +360,18 @@ namespace NBitcoin.Indexer
             TransactionId = txId;
             BalanceId = balanceId;
         }
+        internal class IntCompactVarInt : CompactVarInt
+        {
+            public IntCompactVarInt(uint value)
+                : base(value, 4)
+            {
+            }
+            public IntCompactVarInt()
+                : base(4)
+            {
+
+            }
+        }
 
         internal DynamicTableEntity ToEntity(JsonSerializerSettings settings)
         {
@@ -370,16 +382,16 @@ namespace NBitcoin.Indexer
                 entity.RowKey = BalanceId + "-" + Helper.HeightToString(Height) + "-" + BlockId + "-" + TransactionId;
             else
             {
-                entity.RowKey = BalanceId + "-" + Helper.HeightToString(int.MaxValue) + "-" + ToString(SeenUtc) + "-" + TransactionId;
+                entity.RowKey = BalanceId + "-" + Helper.HeightToString(int.MaxValue) + "-" + TransactionId;
             }
 
             entity.Properties.Add("s", new EntityProperty(SeenUtc));
-            Helper.SetEntityProperty(entity, "ss", Helper.SerializeList(SpentIndices.Select(e => new BalanceChangeEntry.Entity.IntCompactVarInt(e))));
+            Helper.SetEntityProperty(entity, "ss", Helper.SerializeList(SpentIndices.Select(e => new IntCompactVarInt(e))));
 
             Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
             if (SpentCoins != null)
                 Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentCoins.Select(c => new Spendable(c.Outpoint, c.TxOut))));
-            Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedCoins.Select(e => new BalanceChangeEntry.Entity.IntCompactVarInt(e.Outpoint.N))));
+            Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedCoins.Select(e => new IntCompactVarInt(e.Outpoint.N))));
             Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedCoins.Select(e => e.TxOut)));
             var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
             entity.Properties.AddOrReplace("e", new EntityProperty(flags));
@@ -450,6 +462,14 @@ namespace NBitcoin.Indexer
         {
             get;
             set;
+        }
+
+        public bool MempoolEntry
+        {
+            get
+            {
+                return BlockId == null;
+            }
         }
     }
 }

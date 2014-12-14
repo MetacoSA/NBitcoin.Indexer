@@ -28,7 +28,7 @@ namespace NBitcoin.Indexer.Tests
         public void CanSpreadBytes()
         {
             var bytes =
-                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new BalanceChangeEntry.Entity.IntCompactVarInt((uint)e)).ToArray());
+                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new OrderedBalanceChange.IntCompactVarInt((uint)e)).ToArray());
 
             DynamicTableEntity entity = new DynamicTableEntity();
             Helper.SetEntityProperty(entity, "a", bytes);
@@ -209,102 +209,6 @@ namespace NBitcoin.Indexer.Tests
             store.Append(b);
             return b;
         }
-
-        //[Fact]
-        //public void CanIndexMeempool()
-        //{
-        //    using (var tester = CreateTester())
-        //    {
-        //        var node = tester.CreateLocalNode();
-        //        var sender = new Key().PubKey;
-        //        var receiver = new Key().PubKey;
-
-        //        var t1 = new Transaction()
-        //                {
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("10.0",sender.GetAddress(Network.Main))
-        //                    }
-        //                };
-        //        var t2 = new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint(t1.GetHash(),0))
-        //                        {
-        //                            ScriptSig = new PayToPubkeyHashTemplate()
-        //                                        .GenerateScriptSig(sig,sender)
-        //                        }
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("2.0",receiver.GetAddress(Network.Main)),
-        //                        new TxOut("8.0",sender.GetAddress(Network.Main))
-        //                    }
-        //                };
-
-        //        node.AddToMempool(t1, t2);
-
-        //        Assert.Equal(2, tester.Indexer.IndexMempool());
-
-        //        var tx = tester.Client.GetTransaction(t1.GetHash());
-        //        Assert.NotNull(tx);
-        //        Assert.True(tx.MempoolDate != null);
-        //        Assert.True(tx.BlockIds.Length == 0);
-
-        //        Assert.Equal(0, tester.Indexer.IndexMempool());
-
-        //        var t3 = new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint(t2.GetHash(),1))
-        //                        {
-        //                            ScriptSig = new PayToPubkeyHashTemplate()
-        //                                        .GenerateScriptSig(sig,sender)
-        //                        }
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("2.1",receiver.GetAddress(Network.Main)),
-        //                        new TxOut("5.9",sender.GetAddress(Network.Main))
-        //                    }
-        //                };
-        //        node.AddToMempool(t3);
-        //        Assert.Equal(1, tester.Indexer.IndexMempool());
-
-        //        var entries = tester.Client.GetBalance(sender.Hash);
-        //        AssertContainsMoney("10.0", entries);
-        //        AssertContainsMoney("-2.0", entries);
-        //        AssertContainsMoney("-2.1", entries);
-
-        //        var chain = new Chain(Network.Main);
-        //        Assert.True(entries.All(e => e.BlockIds.Length == 0));
-        //        Assert.Equal(0, entries.FetchConfirmedBlocks(chain).WhereConfirmed().ToArray().Length);
-
-        //        var store = tester.CreateLocalBlockStore();
-        //        var block = new Block(new BlockHeader()
-        //        {
-        //            HashPrevBlock = chain.Tip.HashBlock
-        //        })
-        //        {
-        //            Transactions = new List<Transaction>()
-        //            {
-        //                t1,
-        //                t2,
-        //                t3
-        //            }
-        //        };
-        //        store.Append(block);
-        //        chain.SetTip(block.Header);
-        //        tester.Indexer.IndexAddressBalances();
-        //        entries = tester.Client.GetBalance(sender.Hash);
-        //        Assert.True(entries.All(e => e.BlockIds.Length == 1));
-        //        Assert.Equal(3, entries.FetchConfirmedBlocks(chain).WhereConfirmed().ToArray().Length);
-        //    }
-        //}
-
-
         [Fact]
         public void CanImportMainChain()
         {
@@ -567,6 +471,58 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [Fact]
+        public void CanGetBalanceSheet()
+        {
+            using (var tester = CreateTester())
+            {
+                
+
+                var bob = new Key();
+                var alice = new Key();
+                var satoshi = new Key();
+
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.EmitMoney(bob, "50.0");
+                chainBuilder.EmitMoney(alice, "50.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.EmitMoney(bob, "20.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.SyncIndexer();
+
+                var sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.True(sheet.Confirmed.Count == 2);
+                Assert.True(sheet.Unconfirmed.Count == 0);
+                Assert.True(sheet.Prunable.Count == 0);
+                Assert.True(sheet.All.Count == 2);
+                Assert.True(sheet.All[0].Amount == Money.Parse("20.0"));
+
+                var tx = chainBuilder.EmitMoney(bob, "10.0");
+                tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+                tester.Indexer.IndexOrderedBalance(tx);
+
+                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.True(sheet.Confirmed.Count == 2);
+                Assert.True(sheet.Unconfirmed.Count == 1);
+                Assert.True(sheet.Prunable.Count == 0);
+                Assert.True(sheet.All.Count == 3);
+                Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
+
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.True(sheet.Confirmed.Count == 3);
+                Assert.True(sheet.Unconfirmed.Count == 0);
+                Assert.True(sheet.Prunable.Count == 1);
+                Assert.True(sheet.All.Count == 3);
+                Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
+                Assert.True(sheet.All[0].BlockId != null);
+            }
+        }
+
+        [Fact]
         public void CanGetOrderedBalances()
         {
             using (var tester = CreateTester())
@@ -682,204 +638,6 @@ namespace NBitcoin.Indexer.Tests
         }
 
 
-        //[Fact]
-        //public void CanUploadBalancesToAzure()
-        //{
-        //    using (var tester = CreateTester())
-        //    {
-        //        var node = tester.CreateLocalNode();
-        //        var store = tester.CreateLocalBlockStore();
-        //        var sender = new Key().PubKey;
-        //        var receiver = new Key().PubKey;
-        //        var b1 = new Block()
-        //        {
-        //            Header =
-        //            {
-        //                Nonce = RandomUtils.GetUInt32(),
-        //                HashPrevBlock = Network.Main.GetGenesis().GetHash()
-        //            },
-        //            Transactions =
-        //            {
-        //                new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint())
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("10.0",sender.GetAddress(Network.Main))
-        //                    }
-        //                }
-        //            }
-        //        };
-        //        store.Append(b1);
-        //        var b2 = new Block()
-        //        {
-        //            Header =
-        //            {
-        //                Nonce = RandomUtils.GetUInt32(),
-        //                HashPrevBlock = b1.GetHash()
-        //            },
-        //            Transactions =
-        //            {
-        //                new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint(b1.Transactions[0].GetHash(),0))
-        //                        {
-        //                            ScriptSig = new PayToPubkeyHashTemplate()
-        //                                        .GenerateScriptSig(sig,sender)
-        //                        }
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("2.0",receiver.GetAddress(Network.Main)),
-        //                        new TxOut("8.0",sender.GetAddress(Network.Main))
-        //                    }
-        //                }
-        //            }
-        //        };
-        //        store.Append(b2);
-
-        //        tester.Indexer.Configuration.BlockDirectory = store.Folder.FullName;
-        //        tester.Indexer.TaskCount = 15;
-
-        //        tester.Indexer.IndexBlocks();
-        //        tester.Indexer.IndexTransactions();
-        //        tester.Indexer.IndexAddressBalances();
-
-        //        var entries = tester.Client.GetBalance(sender.Hash);
-        //        Assert.Equal(2, entries.Length);
-        //        Assert.Equal(sender.Hash.ScriptPubKey, entries[0].ScriptPubKey);
-        //        var entry = AssertContainsMoney("10.0", entries);
-        //        Assert.True(entry.IsCoinbase);
-        //        Assert.True(new[] { new OutPoint(b1.Transactions[0].GetHash(), 0) }.SequenceEqual(entry.ReceivedCoins.Select(c => c.OutPoint)));
-        //        Assert.Equal(entry.BlockIds[0], b1.GetHash());
-
-        //        var spentCoins = entries.SelectSpentCoins().ToArray();
-        //        Assert.Equal(1, spentCoins.Length);
-        //        Assert.Equal(Money.Parse("10"), spentCoins[0].TxOut.Value);
-
-        //        var unspentCoins = entries.SelectUnspentCoins().ToArray();
-        //        Assert.Equal(1, unspentCoins.Length);
-        //        Assert.Equal(Money.Parse("8"), unspentCoins[0].TxOut.Value);
-
-        //        entry = AssertContainsMoney("-2.0", entries);
-        //        Assert.False(entry.IsCoinbase);
-        //        Assert.NotNull(entry.SpentCoins);
-        //        Assert.Equal(1, entry.SpentCoins.Count);
-        //        Assert.Equal(b1.Transactions[0].GetHash(), entry.SpentCoins[0].OutPoint.Hash);
-        //        Assert.Equal(0, (int)entry.SpentCoins[0].OutPoint.N);
-
-        //        entries = tester.Client.GetBalance(receiver.Hash);
-        //        Assert.Equal(1, entries.Length);
-        //        AssertContainsMoney("2.0", entries);
-        //        entries = tester.Client.GetBalance(receiver);
-
-        //        var b3 = new Block()
-        //        {
-        //            Header =
-        //            {
-        //                Nonce = RandomUtils.GetUInt32(),
-        //                HashPrevBlock = b2.GetHash()
-        //            },
-        //            Transactions =
-        //            {
-        //                new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint(new uint256("bf6b530a4fd7fb107f52a8c433bc10e9388d129a6bb26567685e8b0674a76a2a"),0))
-        //                        {
-        //                            ScriptSig = new PayToPubkeyHashTemplate()
-        //                                        .GenerateScriptSig(sig,sender)
-        //                        }
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("2.1",receiver.GetAddress(Network.Main)),
-        //                        new TxOut("8.0",sender.GetAddress(Network.Main))
-        //                    }
-        //                }
-        //            }
-        //        };
-        //        store.Append(b3);
-
-        //        tester.Indexer.IndexBlocks();
-
-        //        foreach (var block in store.Enumerate(true, 0))
-        //        {
-        //            node.Generator.Chain.SetTip(block.Item.Header);
-        //        }
-        //        tester.Indexer.IndexMainChain();
-        //        tester.Indexer.IndexTransactions();
-        //        tester.Indexer.IndexAddressBalances();
-
-        //        entries = tester.Client.GetBalance(receiver.Hash);
-        //        AssertContainsMoney("2.1", entries);
-        //        Chain chain = new Chain(Network.Main);
-        //        tester.Client
-        //            .GetChainChangesUntilFork(chain.Tip, false)
-        //            .UpdateChain(chain);
-        //        entries.Select(e => e.FetchConfirmedBlock(chain)).ToArray();
-
-        //        entries = tester.Client.GetBalance(sender.Hash);
-        //        AssertContainsMoney(null, entries);
-
-        //        var b4 = new Block()
-        //        {
-        //            Header =
-        //            {
-        //                Nonce = RandomUtils.GetUInt32(),
-        //                HashPrevBlock = b3.GetHash(),
-        //            },
-        //            Transactions =
-        //            {
-        //                new Transaction()
-        //                {
-        //                    Inputs = 
-        //                    {
-        //                        new TxIn(new OutPoint(b3.Transactions[0].GetHash(),0))
-        //                        {
-        //                            ScriptSig = new PayToPubkeyHashTemplate()
-        //                                        .GenerateScriptSig(sig,receiver)
-        //                        }
-        //                    },
-        //                    Outputs = 
-        //                    {
-        //                        new TxOut("1.5",sender.GetAddress(Network.Main)),
-        //                    }
-        //                }
-        //            }
-        //        };
-        //        store.Append(b4);
-
-        //        tester.Indexer.IndexBlocks();
-        //        tester.Indexer.IndexTransactions();
-        //        tester.Indexer.IndexAddressBalances();
-
-        //        var tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
-        //        Assert.Null(tx.SpentCoins);
-
-        //        tx = tester.Client.GetTransaction(true, b4.Transactions[0].GetHash());
-        //        Assert.NotNull(tx.SpentCoins);
-        //        Assert.Equal(Money.Parse("0.60"), tx.Fees);
-
-        //        Assert.True(tx.SpentCoins[0].TxOut.ToBytes().SequenceEqual(b3.Transactions[0].Outputs[0].ToBytes()));
-        //        tx = tester.Client.GetTransaction(false, b4.Transactions[0].GetHash());
-        //        Assert.NotNull(tx);
-        //    }
-        //}
-
-        [DebuggerHidden]
-        private TEntry AssertContainsMoney<TEntry>(Money expected, TEntry[] entries) where TEntry : BalanceChangeEntry
-        {
-            var entry = entries.FirstOrDefault(e => e.BalanceChange == expected);
-            Assert.True(entry != null);
-            return entry;
-        }
 
         [Fact]
         public void CanGetBlock()

@@ -84,6 +84,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnonymousEqualityComparer.cs" />
+    <Compile Include="BalanceSheet.cs" />
     <Compile Include="CoinCollection.cs" />
     <Compile Include="Crc32.cs" />
     <Compile Include="MatchedRule.cs" />
@@ -92,8 +93,6 @@
     <Compile Include="Converters\ScriptJsonConverter.cs" />
     <Compile Include="ScriptRule.cs" />
     <Compile Include="AzureIndexer.cs" />
-    <Compile Include="BalanceChangeEntry.cs" />
-    <Compile Include="BalanceChangeIndexer.cs" />
     <Compile Include="ChainBlockHeader.cs" />
     <Compile Include="BlockEnumerable.cs" />
     <Compile Include="ChainPartEntry.cs" />

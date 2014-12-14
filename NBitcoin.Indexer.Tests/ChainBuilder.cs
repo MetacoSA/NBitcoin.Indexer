@@ -11,6 +11,13 @@ namespace NBitcoin.Indexer.Tests
         private IndexerTester _Tester;
         Chain _Chain = new Chain(Network.TestNet);
 
+        public Chain Chain
+        {
+            get
+            {
+                return _Chain;
+            }
+        }
         public ChainBuilder(IndexerTester indexerTester)
         {
             this._Tester = indexerTester;
