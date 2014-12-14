@@ -252,80 +252,6 @@ namespace NBitcoin.Indexer
                        };
         }
 
-
-        public WalletBalanceChangeEntry[] GetWalletBalance(string walletId)
-        {
-            return new WalletBalanceChangeIndexer(Configuration).GetBalanceEntries(walletId, this, null, ColoredBalance);
-        }
-
-        public ScriptBalanceChangeEntry[][] GetAllBalances(IDestination[] destinations)
-        {
-            return GetAllBalances(destinations.Select(d => d.ScriptPubKey).ToArray());
-        }
-
-        public ScriptBalanceChangeEntry[][] GetAllBalances(Script[] scriptPubKeys)
-        {
-            Helper.SetThrottling();
-            ScriptBalanceChangeEntry[][] result = new ScriptBalanceChangeEntry[scriptPubKeys.Length][];
-            Parallel.For(0, scriptPubKeys.Length,
-            i =>
-            {
-                result[i] = GetBalance(scriptPubKeys[i]);
-            });
-            return result;
-        }
-
-
-        /// <summary>
-        /// Fetch the spent txout of the balance entry
-        /// </summary>
-        /// <param name="entity">The entity to load</param>
-        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-        public bool LoadAddressBalanceChangeEntity(ScriptBalanceChangeEntry.Entity entity)
-        {
-            return LoadAddressBalanceChangeEntity(entity, null);
-        }
-
-        /// <summary>
-        /// Fetch the spent txout of the balance entry
-        /// </summary>
-        /// <param name="entity">The entity to load</param>
-        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-        public bool LoadAddressBalanceChangeEntity(ScriptBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
-        {
-            return new ScriptBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
-        }
-
-        /// <summary>
-        /// Fetch the spent txout of the balance entry
-        /// </summary>
-        /// <param name="entity">The entity to load</param>
-        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-
-        public bool LoadWalletBalanceChangeEntity(WalletBalanceChangeEntry.Entity entity)
-        {
-            return LoadWalletBalanceChangeEntity(entity, null);
-        }
-
-        /// <summary>
-        /// Fetch the spent txout of the balance entry
-        /// </summary>
-        /// <param name="entity">The entity to load</param>
-        /// <returns>true if spent txout are loaded, false if one of the parent transaction is not yet indexed</returns>
-
-        public bool LoadWalletBalanceChangeEntity(WalletBalanceChangeEntry.Entity entity, IDictionary<uint256, Transaction> transactionsCache)
-        {
-            return new WalletBalanceChangeIndexer(Configuration).LoadBalanceChangeEntity(entity, this, transactionsCache);
-        }
-        public ScriptBalanceChangeEntry[] GetBalance(IDestination destination)
-        {
-            return GetBalance(destination.ScriptPubKey);
-        }
-        public ScriptBalanceChangeEntry[] GetBalance(Script scriptPubKey)
-        {
-            return new ScriptBalanceChangeIndexer(Configuration).GetBalanceEntries(Helper.EncodeScript(scriptPubKey), this, null, ColoredBalance);
-        }
-
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
         public WalletRuleEntry[] GetWalletRules(string walletId)
         {
@@ -479,12 +405,9 @@ namespace NBitcoin.Indexer
 
 
             var transactions =
-                GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash)
-                 .Concat(new[] { change.TransactionId })
-                 .ToArray());
-            var thisTransaction = transactions[transactions.Length - 1];
+                GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray());
             CoinCollection result = new CoinCollection();
-            for (int i = 0 ; i < transactions.Length - 1 ; i++)
+            for (int i = 0 ; i < transactions.Length; i++)
             {
                 var outpoint = change.SpentOutpoints[i];
                 if (outpoint.IsNull)
@@ -501,6 +424,7 @@ namespace NBitcoin.Indexer
 
             if (ColoredBalance && change.ColoredBalanceChangeEntry == null)
             {
+                var thisTransaction = GetTransactions(false, ColoredBalance, new[] { change.TransactionId })[0];
                 if (thisTransaction.ColoredTransaction == null)
                     return false;
                 change.ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(change, thisTransaction.ColoredTransaction);

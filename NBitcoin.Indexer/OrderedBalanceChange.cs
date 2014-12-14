@@ -402,7 +402,7 @@ namespace NBitcoin.Indexer
             return Helper.ToggleChars(date.ToString(DateFormat));
         }
 
-        public static IEnumerable<OrderedBalanceChange> Extract(Transaction tx)
+        public static IEnumerable<OrderedBalanceChange> ExtractScriptBalances(Transaction tx)
         {
             return ExtractScriptBalances(null, tx, null, null, 0);
         }

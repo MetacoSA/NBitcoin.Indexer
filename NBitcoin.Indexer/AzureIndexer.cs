@@ -200,15 +200,7 @@ namespace NBitcoin.Indexer
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-
-        public void Index(params ScriptBalanceChangeEntry.Entity[] entries)
-        {
-            Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)).ToArray(), Configuration.GetBalanceTable());
-        }
-        public void Index(params WalletBalanceChangeEntry.Entity[] entries)
-        {
-            Index(entries.Select(e => e.CreateTableEntity(Configuration.SerializerSettings)).ToArray(), Configuration.GetWalletBalanceTable());
-        }
+      
         public void Index(params TransactionEntry.Entity[] entities)
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
@@ -372,80 +364,6 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public int IndexMempool()
-        {
-            int added = 0;
-            Helper.SetThrottling();
-            using (IndexerTrace.NewCorrelation("Index Mempool").Open())
-            {
-                var table = Configuration.GetTransactionTable();
-                table.CreateIfNotExists();
-                using (var node = Configuration.ConnectToNode())
-                {
-                    var lastUploadedFile = new FileInfo(Configuration.GetFilePath("MempoolUploaded.txt"));
-                    if (!lastUploadedFile.Exists)
-                        lastUploadedFile.Create().Close();
-
-                    Dictionary<string, MempoolUpload> lastUploadedById = new Dictionary<string, MempoolUpload>();
-                    MempoolUpload[] lastUploaded = new MempoolUpload[0];
-                    try
-                    {
-                        lastUploaded = JsonConvert.DeserializeObject<MempoolUpload[]>(File.ReadAllText(lastUploadedFile.FullName));
-                        if (lastUploaded != null)
-                        {
-                            lastUploaded = lastUploaded.Where(u => !u.IsExpired)
-                                        .ToArray();
-                            lastUploadedById = lastUploaded
-                                        .ToDictionary(t => t.TxId);
-                        }
-                        else
-                            lastUploaded = new MempoolUpload[0];
-                    }
-
-                    catch (FileNotFoundException)
-                    {
-                    }
-                    catch (FormatException)
-                    {
-                    }
-
-                    var txIds = node.GetMempool();
-                    var txToUpload =
-                        txIds
-                        .Where(tx => !lastUploadedById.ContainsKey(tx.ToString()))
-                        .ToArray();
-
-                    var transactions = node.GetMempoolTransactions(txToUpload);
-                    IndexerTrace.Information("Indexing " + transactions.Length + " transactions");
-                    Parallel.ForEach(transactions, new ParallelOptions()
-                    {
-                        MaxDegreeOfParallelism = this.TaskCount
-                    },
-                    tx =>
-                    {
-                        var txid = tx.GetHash();
-                        Index(new TransactionEntry.Entity(txid, tx, null));
-                        foreach (var kv in ScriptBalanceChangeEntry.Entity.ExtractFromTransaction(tx, txid))
-                        {
-                            Index(new ScriptBalanceChangeEntry.Entity[] { kv.Value });
-                        }
-                        Interlocked.Increment(ref added);
-                    });
-
-                    var uploaded = lastUploaded.Concat(transactions.Select(tx => new MempoolUpload()
-                        {
-                            Date = DateTimeOffset.UtcNow,
-                            TxId = tx.GetHash().ToString()
-                        })).ToArray();
-
-                    File.WriteAllText(lastUploadedFile.FullName, JsonConvert.SerializeObject(uploaded));
-                    IndexerTrace.Information("Progression saved to " + lastUploadedFile.FullName);
-                }
-            }
-
-            return added;
-        }
-
         private void IndexBalances(string checkpointName, Func<uint256, Transaction, uint256, IEnumerable<OrderedBalanceChange>> extract)
         {
             Helper.SetThrottling();
@@ -541,7 +459,7 @@ namespace NBitcoin.Indexer
         public void IndexOrderedBalance(Transaction tx)
         {
             var table = Configuration.GetBalanceTable();
-            foreach (var group in OrderedBalanceChange.Extract(tx).GroupBy(c => c.BalanceId, c => c.ToEntity(Configuration.SerializerSettings)))
+            foreach (var group in OrderedBalanceChange.ExtractScriptBalances(tx).GroupBy(c => c.BalanceId, c => c.ToEntity(Configuration.SerializerSettings)))
             {
                 Index(group, table);
             }
