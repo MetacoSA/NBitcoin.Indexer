@@ -519,6 +519,16 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.All.Count == 3);
                 Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
                 Assert.True(sheet.All[0].BlockId != null);
+
+                tester.Client.PruneBalances(sheet.Prunable);
+
+                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.True(sheet.Confirmed.Count == 3);
+                Assert.True(sheet.Unconfirmed.Count == 0);
+                Assert.True(sheet.Prunable.Count == 0);
+                Assert.True(sheet.All.Count == 3);
+                Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
+                Assert.True(sheet.All[0].BlockId != null);
             }
         }
 

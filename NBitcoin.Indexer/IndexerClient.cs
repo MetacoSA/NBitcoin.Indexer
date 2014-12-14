@@ -414,7 +414,7 @@ namespace NBitcoin.Indexer
             var transactions =
                 GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray());
             CoinCollection result = new CoinCollection();
-            for (int i = 0 ; i < transactions.Length; i++)
+            for (int i = 0 ; i < transactions.Length ; i++)
             {
                 var outpoint = change.SpentOutpoints[i];
                 if (outpoint.IsNull)
@@ -446,6 +446,15 @@ namespace NBitcoin.Indexer
             Helper.SetEntityProperty(entity, "b", spentCoins);
             Configuration.GetBalanceTable().Execute(TableOperation.Merge(entity));
             return true;
+        }
+
+        public void PruneBalances(IEnumerable<OrderedBalanceChange> balances)
+        {
+            Parallel.ForEach(balances, b =>
+            {
+                var table = Configuration.GetBalanceTable();
+                table.Execute(TableOperation.Delete(b.ToEntity(Configuration.SerializerSettings)));
+            });
         }
     }
 }
