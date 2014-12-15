@@ -28,13 +28,23 @@ namespace NBitcoin.Indexer.Console
                     indexer.FromBlk = options.FromBlk;
                     indexer.BlkCount = options.BlkCount;
                     indexer.TaskCount = options.ThreadCount;
+
+                    ChainBase chain = null;
                     if (options.IndexBlocks)
                     {
                         indexer.IndexBlocks();
                     }
                     if (options.IndexChain)
                     {
-                        indexer.IndexMainChain();
+                        chain = indexer.GetNodeChain();
+                        try
+                        {
+                            indexer.IndexMainChain(chain);
+                        }
+                        finally
+                        {
+                            ((Chain)chain).Changes.Dispose();
+                        }
                     }
                     if (options.IndexTransactions)
                     {
@@ -42,11 +52,13 @@ namespace NBitcoin.Indexer.Console
                     }
                     if (options.IndexAddresses)
                     {
-                        indexer.IndexAddressBalances();
+                        chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
+                        indexer.IndexAddressBalances(chain);
                     }
                     if (options.IndexWallets)
                     {
-                        indexer.IndexWalletBalances();
+                        chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
+                        indexer.IndexWalletBalances(chain);
                     }
                     if (options.CountBlkFiles)
                     {

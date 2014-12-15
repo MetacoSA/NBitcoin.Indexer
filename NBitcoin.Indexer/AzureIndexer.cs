@@ -129,17 +129,6 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        //public void IndexWalletBalances()
-        //{
-        //    IndexBalances("wallets", new WalletBalanceChangeIndexer(Configuration));
-        //}
-
-
-        //public void IndexAddressBalances()
-        //{
-        //    IndexBalances("balances", (blockId,tx,txId)=> OrderedBalanceChange.ExtractScriptBalances(txId,tx,txId) );
-        //}
-
         public long IndexTransactions()
         {
             long txCount = 0;
@@ -200,7 +189,7 @@ namespace NBitcoin.Indexer
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-      
+
         public void Index(params TransactionEntry.Entity[] entities)
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
@@ -335,33 +324,32 @@ namespace NBitcoin.Indexer
             return blkCount;
         }
 
-
-        public class MempoolUpload
+        public void IndexAddressBalances(ChainBase chain = null)
         {
-            public string TxId
+            chain = chain ?? GetMainChain();
+            IndexBalances("balances", (txid, tx, blockid) =>
             {
-                get;
-                set;
-            }
-            public DateTimeOffset Date
+                var b = chain.GetBlock(blockid);
+                var header = b == null ? null : b.Header;
+                return OrderedBalanceChange.ExtractScriptBalances(txid, tx, blockid, header, b == null ? 0 : b.Height);
+            });
+        }
+
+        internal ChainBase GetMainChain()
+        {
+            return Configuration.CreateIndexerClient().GetMainChain();
+        }
+
+        public void IndexWalletBalances(ChainBase chain = null)
+        {
+            chain = chain ?? GetMainChain();
+            var walletRules = Configuration.CreateIndexerClient().GetAllWalletRules();
+            IndexBalances("wallets", (txid, tx, blockid) =>
             {
-                get;
-                set;
-            }
-            public TimeSpan Age
-            {
-                get
-                {
-                    return DateTimeOffset.UtcNow - Date;
-                }
-            }
-            public bool IsExpired
-            {
-                get
-                {
-                    return Age > TimeSpan.FromHours(12);
-                }
-            }
+                var b = chain.GetBlock(blockid);
+                var header = b == null ? null : b.Header;
+                return OrderedBalanceChange.ExtractWalletBalances(txid, tx, blockid, header, b == null ? 0 : b.Height, walletRules);
+            });
         }
 
         private void IndexBalances(string checkpointName, Func<uint256, Transaction, uint256, IEnumerable<OrderedBalanceChange>> extract)
@@ -370,7 +358,7 @@ namespace NBitcoin.Indexer
             BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
 
             var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.ToEntity(Configuration.SerializerSettings)), this.Configuration.GetBalanceTable()), 30);
-            using (IndexerTrace.NewCorrelation("Import balances " + this.GetType().Name + " to azure started").Open())
+            using (IndexerTrace.NewCorrelation("Import balances " + checkpointName + " to azure started").Open())
             {
                 this.Configuration.GetBalanceTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
@@ -465,20 +453,25 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public void IndexMainChain()
+        public Chain GetNodeChain()
         {
             using (var node = Configuration.ConnectToNode())
             {
                 var chain = Configuration.GetLocalChain("ImportMainChain");
                 node.SynchronizeChain(chain);
-                try
-                {
-                    IndexMainChain(chain);
-                }
-                finally
-                {
-                    chain.Changes.Dispose();
-                }
+                return chain;
+            }
+        }
+        public void IndexNodeMainChain()
+        {
+            var chain = GetNodeChain();
+            try
+            {
+                IndexMainChain(chain);
+            }
+            finally
+            {
+                chain.Changes.Dispose();
             }
         }
 
@@ -567,6 +560,8 @@ namespace NBitcoin.Indexer
 
         public void IndexMainChain(ChainBase chain)
         {
+            if (chain == null)
+                throw new ArgumentNullException("chain");
             Helper.SetThrottling();
 
             using (IndexerTrace.NewCorrelation("Index Main chain").Open())
@@ -598,6 +593,8 @@ namespace NBitcoin.Indexer
 
             }
         }
+
+
 
 
     }

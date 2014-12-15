@@ -220,7 +220,7 @@ namespace NBitcoin.Indexer.Tests
                 node.Generator.Generate();
                 var fork = node.Generator.Generate();
                 var firstTip = node.Generator.Generate();
-                tester.Indexer.IndexMainChain();
+                tester.Indexer.IndexNodeMainChain();
 
                 var result = tester.Client.GetChainChangesUntilFork(chain.Tip, true).ToList();
                 Assert.Equal(result[0].BlockId, firstTip.GetHash());
@@ -244,7 +244,7 @@ namespace NBitcoin.Indexer.Tests
                 node.Generator.Generate();
                 var secondTip = node.Generator.Generate();
 
-                tester.Indexer.IndexMainChain();
+                tester.Indexer.IndexNodeMainChain();
                 Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
 
                 result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
@@ -252,7 +252,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
 
                 var ultimateTip = node.Generator.Generate(100);
-                tester.Indexer.IndexMainChain();
+                tester.Indexer.IndexNodeMainChain();
                 result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
 
                 Assert.Equal(ultimateTip.Header.GetHash(), result[0].BlockId);

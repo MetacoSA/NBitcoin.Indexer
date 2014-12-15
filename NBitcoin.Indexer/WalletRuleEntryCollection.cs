@@ -26,6 +26,14 @@ namespace NBitcoin.Indexer
             _WalletRules = new List<WalletRuleEntry>(walletRules);
         }
 
+        public int Count
+        {
+            get
+            {
+                return _WalletRules.Count;
+            }
+        }
+
         public void Add(WalletRuleEntry entry)
         {
             _WalletRules.Add(entry);
