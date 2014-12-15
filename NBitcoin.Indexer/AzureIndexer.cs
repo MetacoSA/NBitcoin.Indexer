@@ -457,7 +457,10 @@ namespace NBitcoin.Indexer
         {
             using (var node = Configuration.ConnectToNode())
             {
+                node.VersionHandshake();
+                IndexerTrace.Information("Loading local chain");
                 var chain = Configuration.GetLocalChain("ImportMainChain");
+                IndexerTrace.Information("Synchronizing with local node");
                 node.SynchronizeChain(chain);
                 return chain;
             }
