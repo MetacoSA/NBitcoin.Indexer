@@ -52,7 +52,7 @@ namespace NBitcoin.Indexer
             int i = 0;
             foreach (var entity in entities)
             {
-                builder.AppendLine("[" + i + "] " + entity.ToString());
+                builder.AppendLine("[" + i + "] " + entity.RowKey);
                 i++;
             }
             _Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing entities (len:" + entities.Length + ") : " + Utils.ExceptionToString(ex) + "\r\n" + builder.ToString());
