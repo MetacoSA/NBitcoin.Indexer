@@ -38,7 +38,7 @@ namespace NBitcoin.Indexer
                     OrderedBalanceChange entry = null;
                     if (!changeByScriptPubKey.TryGetValue(signer.ScriptPubKey, out entry))
                     {
-                        entry = new OrderedBalanceChange(txId, OrderedBalanceChange.GetBalanceId(signer.ScriptPubKey), blockId, blockHeader, height);
+                        entry = new OrderedBalanceChange(txId, signer.ScriptPubKey, blockId, blockHeader, height);
                         changeByScriptPubKey.Add(signer.ScriptPubKey, entry);
                     }
                     entry.SpentOutpoints.Add(input.PrevOut);
@@ -61,7 +61,7 @@ namespace NBitcoin.Indexer
                 OrderedBalanceChange entry = null;
                 if (!changeByScriptPubKey.TryGetValue(output.ScriptPubKey, out entry))
                 {
-                    entry = new OrderedBalanceChange(txId, GetBalanceId(output.ScriptPubKey), blockId, blockHeader, height);
+                    entry = new OrderedBalanceChange(txId, output.ScriptPubKey, blockId, blockHeader, height);
                     changeByScriptPubKey.Add(output.ScriptPubKey, entry);
                 }
                 entry.ReceivedCoins.Add(new Coin()
@@ -343,15 +343,32 @@ namespace NBitcoin.Indexer
 
             _MatchedRules = JsonConvert.DeserializeObject<List<MatchedRule>>(entity.Properties["f"].StringValue, settings).ToList();
 
-            if(entity.Properties.ContainsKey("g"))
+            if (entity.Properties.ContainsKey("g"))
             {
                 var ctx = new ColoredTransaction();
                 ctx.FromBytes(entity["g"].BinaryValue);
                 ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, ctx);
             }
+
+            if (entity.Properties.ContainsKey("h"))
+            {
+                _Script = new Script(entity.Properties["h"].BinaryValue);
+            }
         }
 
-        public OrderedBalanceChange(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
+        internal OrderedBalanceChange(uint256 txId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
+            : this(txId, GetBalanceId(scriptPubKey), blockId, blockHeader, height)
+        {
+            var scriptBytes = scriptPubKey.ToBytes(true);
+            if (scriptPubKey.Length > MaxScriptSize)
+            {
+                _Script = scriptPubKey;
+            }
+        }
+
+        Script _Script;
+
+        internal OrderedBalanceChange(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
             : this()
         {
             BlockId = blockId;
@@ -400,6 +417,10 @@ namespace NBitcoin.Indexer
             {
                 entity.Properties.AddOrReplace("g", new EntityProperty(ColoredBalanceChangeEntry._Colored.ToBytes()));
             }
+            if (_Script != null)
+            {
+                entity.Properties.Add("h", new EntityProperty(_Script.ToBytes(true)));
+            }
             return entity;
         }
 
@@ -419,19 +440,24 @@ namespace NBitcoin.Indexer
             return ExtractScriptBalances(null, tx, null, null, 0);
         }
 
+        const int MaxScriptSize = 512;
         public static string GetBalanceId(Script scriptPubKey)
         {
-            return Helper.EncodeScript(scriptPubKey);
+            var pubKey = scriptPubKey.ToBytes(true);
+            if (pubKey.Length > MaxScriptSize)
+                return FastEncoder.Instance.EncodeData(scriptPubKey.Hash.ToBytes(true));
+            return FastEncoder.Instance.EncodeData(scriptPubKey.ToBytes(true));
         }
 
         public Script GetScript()
         {
-            return Helper.DecodeScript(BalanceId);
+            if (_Script != null)
+                return _Script;
+            return Script.FromBytesUnsafe(FastEncoder.Instance.DecodeData(BalanceId));
         }
-
         public static string GetBalanceId(string walletId)
         {
-            return "w" + Encoders.Hex.EncodeData(Encoding.UTF8.GetBytes(walletId));
+            return "w" + FastEncoder.Instance.EncodeData(Encoding.UTF8.GetBytes(walletId));
         }
 
         public IEnumerable<WalletRule> GetMatchedRules(int index, MatchLocation matchType)

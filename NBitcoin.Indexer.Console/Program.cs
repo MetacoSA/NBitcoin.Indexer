@@ -53,7 +53,7 @@ namespace NBitcoin.Indexer.Console
                     if (options.IndexAddresses)
                     {
                         chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
-                        indexer.IndexAddressBalances(chain);
+                        indexer.IndexOrderedBalances(chain);
                     }
                     if (options.IndexWallets)
                     {

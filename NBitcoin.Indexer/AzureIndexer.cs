@@ -196,7 +196,7 @@ namespace NBitcoin.Indexer
         }
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
-            bool firstException = false;
+            int exceptionCount = 0;
             while (true)
             {
                 try
@@ -224,15 +224,17 @@ namespace NBitcoin.Indexer
                             table.Execute(batch[0], options);
                     }
 
-                    if (firstException)
+                    if (exceptionCount != 0)
                         IndexerTrace.RetryWorked();
                     break;
                 }
                 catch (Exception ex)
                 {
                     IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities.ToArray(), ex);
-                    Thread.Sleep(5000);
-                    firstException = true;
+                    exceptionCount++;
+                    if (exceptionCount > 5)
+                        throw;
+                    Thread.Sleep(exceptionCount * 1000);
                 }
             }
         }
@@ -324,7 +326,7 @@ namespace NBitcoin.Indexer
             return blkCount;
         }
 
-        public void IndexAddressBalances(ChainBase chain = null)
+        public void IndexOrderedBalances(ChainBase chain = null)
         {
             chain = chain ?? GetMainChain();
             IndexBalances("balances", (txid, tx, blockid) =>

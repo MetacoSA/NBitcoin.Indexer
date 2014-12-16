@@ -343,7 +343,11 @@ namespace NBitcoin.Indexer
                     yield return change;
                 }
             }
-
+            if (unconformedList != null)
+            {
+                unconfirmed = new Queue<OrderedBalanceChange>(unconformedList.OrderByDescending(o => o.SeenUtc));
+                unconformedList = null;
+            }
             while (unconfirmed.Count != 0)
             {
                 var change = unconfirmed.Dequeue();

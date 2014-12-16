@@ -87,6 +87,7 @@
     <Compile Include="BalanceSheet.cs" />
     <Compile Include="CoinCollection.cs" />
     <Compile Include="Crc32.cs" />
+    <Compile Include="FastEncoder.cs" />
     <Compile Include="MatchedRule.cs" />
     <Compile Include="OrderedBalanceChange.cs" />
     <Compile Include="Converters\CustomDataJsonConverter.cs" />

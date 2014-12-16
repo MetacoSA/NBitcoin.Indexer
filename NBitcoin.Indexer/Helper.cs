@@ -134,15 +134,6 @@ namespace NBitcoin.Indexer
             customDataConverter.AddKnownType<ScriptRule>();
         }
 
-        public static string EncodeScript(Script scriptPubKey)
-        {
-            return Encoders.Hex.EncodeData(scriptPubKey.ToBytes(true));
-        }
-
-        public static Script DecodeScript(string scriptPubKey)
-        {
-            return Script.FromBytesUnsafe(Encoders.Hex.DecodeData(scriptPubKey));
-        }
 
         static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
         static char[] Digit = Enumerable.Range(0, 10).Select(c => c.ToString()[0]).ToArray();
