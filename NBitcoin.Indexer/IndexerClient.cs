@@ -221,18 +221,16 @@ namespace NBitcoin.Indexer
                 {
                     if (height > currentTip.Height)
                         yield return CreateChainChange(height, block);
-                    else if (height < currentTip.Height)
-                    {
-                        currentTip = currentTip.FindAncestorOrSelf(height);
-                    }
                     else
                     {
+                        if (height < currentTip.Height)
+                            currentTip = currentTip.FindAncestorOrSelf(height);
                         var chainChange = CreateChainChange(height, block);
                         if (chainChange.BlockId == currentTip.HashBlock)
                         {
                             if (forkIncluded)
                                 yield return chainChange;
-                            break;
+                            yield break;
                         }
                         yield return chainChange;
                         currentTip = currentTip.Previous;
