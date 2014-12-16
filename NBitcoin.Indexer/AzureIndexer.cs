@@ -582,7 +582,7 @@ namespace NBitcoin.Indexer
                 var height = 0;
                 if (changes.Count != 0)
                 {
-                    IndexerTrace.RemoteMainChainTip(changes[0].BlockId, changes[0].Height);
+                    IndexerTrace.StoredMainChainTip(changes[0].BlockId, changes[0].Height);
                     if (changes[0].Height > chain.Tip.Height)
                     {
                         IndexerTrace.LocalMainChainIsLate();
@@ -591,9 +591,13 @@ namespace NBitcoin.Indexer
                     height = changes[changes.Count - 1].Height + 1;
                     if (height > chain.Height)
                     {
-                        IndexerTrace.LocalMainChainIsUpToDate(chain.Tip);
+                        IndexerTrace.StoredMainChainIsUpToDate(chain.Tip);
                         return;
                     }
+                }
+                else
+                {
+                    IndexerTrace.NoForkFoundWithStored();
                 }
 
                 IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);

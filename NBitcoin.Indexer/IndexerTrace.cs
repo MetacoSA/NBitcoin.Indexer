@@ -128,9 +128,9 @@ namespace NBitcoin.Indexer
             return "Height : " + height + ", BlockId : " + blockId;
         }
 
-        internal static void RemoteMainChainTip(uint256 blockId, int height)
+        internal static void StoredMainChainTip(uint256 blockId, int height)
         {
-            _Trace.TraceInformation("Remote main tip " + ToString(blockId, height));
+            _Trace.TraceInformation("Stored main tip " + ToString(blockId, height));
         }
 
         internal static void LocalMainChainIsLate()
@@ -159,14 +159,19 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal static void LocalMainChainIsUpToDate(ChainedBlock block)
+        internal static void StoredMainChainIsUpToDate(ChainedBlock block)
         {
-            _Trace.TraceInformation("Local main chain is up to date " + ToString(block));
+            _Trace.TraceInformation("Stored main chain is up to date " + ToString(block));
         }
 
         public static void Information(string message)
         {
             _Trace.TraceInformation(message);
+        }
+
+        internal static void NoForkFoundWithStored()
+        {
+            _Trace.TraceInformation("No fork found with the stored chain");
         }
     }
 }
