@@ -426,7 +426,7 @@ namespace NBitcoin.Indexer
 
         public static string GetPartitionKey(string balanceId)
         {
-            return Helper.GetPartitionKey(12, Crc32.Compute(balanceId));
+            return Helper.GetPartitionKey(8, Crc32.Compute(balanceId));
         }
 
         const string DateFormat = "yyyyMMddhhmmssff";

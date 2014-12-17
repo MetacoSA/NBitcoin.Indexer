@@ -53,11 +53,11 @@ namespace NBitcoin.Indexer
             return new AzureIndexer(this);
         }
 
-        public Node ConnectToNode()
+        public Node ConnectToNode(bool isRelay)
         {
             if (String.IsNullOrEmpty(Node))
                 throw new ConfigurationErrorsException("Node setting is not configured");
-            return NBitcoin.Protocol.Node.Connect(Network, Node);
+            return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
         }
 
         public string Node
@@ -117,7 +117,7 @@ namespace NBitcoin.Indexer
         public long IndexTransactions(ChainBase chain = null)
         {
             long txCount = 0;
-            Helper.SetThrottling();
+            SetThrottling();
 
             BlockingCollection<TransactionEntry.Entity[]> transactions = new BlockingCollection<TransactionEntry.Entity[]>(20);
 
@@ -161,6 +161,13 @@ namespace NBitcoin.Indexer
                 storedBlocks.SaveCheckpoint();
             }
             return txCount;
+        }
+
+        private void SetThrottling()
+        {
+            SetThrottling();
+            ServicePoint tableServicePoint = ServicePointManager.FindServicePoint(Configuration.CreateTableClient().BaseUri);
+            tableServicePoint.ConnectionLimit = 1000;
         }
 
         private void PushTransactions(MultiValueDictionary<string, TransactionEntry.Entity> buckets,
@@ -286,7 +293,7 @@ namespace NBitcoin.Indexer
         public long IndexBlocks(ChainBase chain = null)
         {
             long blkCount = 0;
-            Helper.SetThrottling();
+            SetThrottling();
             BlockingCollection<Block> blocks = new BlockingCollection<Block>(20);
             var tasks = CreateTaskPool(blocks, Index, 15);
 
@@ -315,7 +322,7 @@ namespace NBitcoin.Indexer
         {
             blockHeaders = blockHeaders ?? GetNodeChain();
 
-            var node = Configuration.ConnectToNode();
+            var node = Configuration.ConnectToNode(false);
             node.VersionHandshake();
             return new BlockFetcher(new Checkpoint(Configuration.GetFilePath(checkpoint), Configuration.Network), node, blockHeaders)
             {
@@ -351,7 +358,7 @@ namespace NBitcoin.Indexer
 
         private void IndexBalances(ChainBase chain, string checkpointName, Func<uint256, Transaction, uint256, BlockHeader, int, IEnumerable<OrderedBalanceChange>> extract)
         {
-            Helper.SetThrottling();
+            SetThrottling();
             BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
 
             var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.ToEntity(Configuration.SerializerSettings)), this.Configuration.GetBalanceTable()), 30);
@@ -452,7 +459,7 @@ namespace NBitcoin.Indexer
         public ChainBase GetNodeChain()
         {
             IndexerTrace.Information("Connecting to node " + Configuration.Node);
-            using (var node = Configuration.ConnectToNode())
+            using (var node = Configuration.ConnectToNode(false))
             {
                 IndexerTrace.Information("Handshaking");
                 node.VersionHandshake();
@@ -542,7 +549,7 @@ namespace NBitcoin.Indexer
         {
             if (chain == null)
                 throw new ArgumentNullException("chain");
-            Helper.SetThrottling();
+            SetThrottling();
 
             using (IndexerTrace.NewCorrelation("Index Main chain").Open())
             {
