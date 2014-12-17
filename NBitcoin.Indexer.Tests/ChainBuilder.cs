@@ -80,7 +80,7 @@ namespace NBitcoin.Indexer.Tests
         List<Block> _UnsyncBlocks = new List<Block>();
         public void SyncIndexer()
         {
-            _Tester.Indexer.IndexMainChain(_Chain);
+            _Tester.Indexer.IndexChain(_Chain);
             var walletRules = _Tester.Client.GetAllWalletRules();
             foreach (var b in _UnsyncBlocks)
             {

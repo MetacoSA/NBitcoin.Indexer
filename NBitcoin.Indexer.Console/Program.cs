@@ -39,7 +39,7 @@ namespace NBitcoin.Indexer.Console
                         chain = indexer.GetNodeChain();
                         try
                         {
-                            indexer.IndexMainChain(chain);
+                            indexer.IndexChain(chain);
                         }
                         finally
                         {

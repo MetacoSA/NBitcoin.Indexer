@@ -467,12 +467,12 @@ namespace NBitcoin.Indexer
         public void IndexNodeMainChain()
         {
             var chain = GetNodeChain();
-            IndexMainChain(chain);
+            IndexChain(chain);
         }
 
 
         internal const int BlockHeaderPerRow = 6;
-        public void Index(ChainBase chain, int startHeight)
+        internal void Index(ChainBase chain, int startHeight)
         {
             List<ChainPartEntry> entries = new List<ChainPartEntry>(((chain.Height - startHeight) / BlockHeaderPerRow) + 5);
             startHeight = startHeight - (startHeight % BlockHeaderPerRow);
@@ -538,7 +538,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public void IndexMainChain(ChainBase chain)
+        public void IndexChain(ChainBase chain)
         {
             if (chain == null)
                 throw new ArgumentNullException("chain");
