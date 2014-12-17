@@ -32,32 +32,27 @@ namespace NBitcoin.Indexer.Console
                     ChainBase chain = null;
                     if (options.IndexBlocks)
                     {
-                        indexer.IndexBlocks();
+                        chain = chain ?? indexer.GetNodeChain();
+                        indexer.IndexBlocks(chain);
                     }
                     if (options.IndexChain)
                     {
-                        chain = indexer.GetNodeChain();
-                        try
-                        {
-                            indexer.IndexChain(chain);
-                        }
-                        finally
-                        {
-                            ((Chain)chain).Changes.Dispose();
-                        }
+                        chain = chain ?? indexer.GetNodeChain();
+                        indexer.IndexChain(chain);
                     }
                     if (options.IndexTransactions)
                     {
-                        indexer.IndexTransactions();
+                        chain = chain ?? indexer.GetNodeChain();
+                        indexer.IndexTransactions(chain);
                     }
                     if (options.IndexAddresses)
                     {
-                        chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
+                        chain = chain ?? indexer.GetNodeChain();
                         indexer.IndexOrderedBalances(chain);
                     }
                     if (options.IndexWallets)
                     {
-                        chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
+                        chain = chain ?? indexer.GetNodeChain();
                         indexer.IndexWalletBalances(chain);
                     }
                 }
