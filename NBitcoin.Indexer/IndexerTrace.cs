@@ -160,7 +160,10 @@ namespace NBitcoin.Indexer
         public static void Processed(int height, int totalHeight)
         {
             if (DateTimeOffset.Now - _LastLog > TimeSpan.FromSeconds(5))
+            {
+                _LastLog = DateTime.UtcNow;
                 _Trace.TraceInformation("Block processed : {0}/{1}", height, totalHeight);
+            }
         }
     }
 }
