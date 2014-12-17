@@ -102,7 +102,7 @@ namespace NBitcoin.Indexer
                     BlockId = header.HashBlock,
                     Height = header.Height
                 };
-
+                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height);
                 height++;
             }
         }

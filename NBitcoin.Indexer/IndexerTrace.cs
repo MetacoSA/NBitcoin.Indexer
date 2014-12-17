@@ -61,7 +61,7 @@ namespace NBitcoin.Indexer
         internal static void RetryWorked()
         {
             _Trace.TraceInformation("Retry worked");
-        }       
+        }
 
         public static string Pretty(TimeSpan span)
         {
@@ -87,12 +87,6 @@ namespace NBitcoin.Indexer
         internal static void StartAtPosition(DiskBlockPos startPosition)
         {
             _Trace.TraceInformation("Start at position " + startPosition.ToString());
-        }
-
-        internal static void ProcessingSize(long size)
-        {
-            double inMb = (double)size / 1024.0 / 1024.0;
-            _Trace.TraceInformation("MB to process : " + inMb.ToString("0.00"));
         }
 
         internal static void ErrorWhileImportingBalancesToAzure(Exception ex, uint256 txid)
@@ -160,6 +154,13 @@ namespace NBitcoin.Indexer
         internal static void NoForkFoundWithStored()
         {
             _Trace.TraceInformation("No fork found with the stored chain");
+        }
+
+        static DateTime _LastLog = new DateTime(0, DateTimeKind.Utc);
+        public static void Processed(int height, int totalHeight)
+        {
+            if (DateTimeOffset.Now - _LastLog > TimeSpan.FromSeconds(5))
+                _Trace.TraceInformation("Block processed : {0}/{1}", height, totalHeight);
         }
     }
 }
