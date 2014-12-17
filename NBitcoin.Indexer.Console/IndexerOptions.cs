@@ -43,26 +43,26 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
-        [Option("FromBlk",
-            HelpText = "The blk file where processing will start",
+        [Option("From",
+            HelpText = "The height of the first block to index",
             DefaultValue = 0,
             Required = false)]
-        public int FromBlk
+        public int From
+        {
+            get;
+            set;
+        }
+        [Option("To",
+            HelpText = "The height of the last block (included)",
+            DefaultValue = 99999999,
+            Required = false)]
+        public int To
         {
             get;
             set;
         }
 
-        [Option("CountBlk",
-            Required = false,
-            DefaultValue = 999999,
-            HelpText = "The number of blk file that must be processed")]
-        public int BlkCount
-        {
-            get;
-            set;
-        }
-
+      
         [Option('t', "IndexTransactions", DefaultValue = false, Required = false, HelpText = "Index transactions into azure table")]
         public bool IndexTransactions
         {

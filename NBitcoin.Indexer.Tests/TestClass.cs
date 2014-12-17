@@ -51,12 +51,24 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
-                tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
+                var node = tester.CreateLocalNode();
+                node.ChainBuilder.Load("../../Data/blocks");
+
                 tester.Indexer.TaskCount = 15;
-                tester.Indexer.BlkCount = 1;
-                tester.Indexer.FromHeight = 0;
                 Assert.Equal(138, tester.Indexer.IndexBlocks());
                 Assert.Equal(0, tester.Indexer.IndexBlocks());
+
+                tester.Indexer.DeleteCheckpoints();
+
+                tester.Indexer.FromHeight = 10;
+                tester.Indexer.ToHeight = 12;
+                Assert.Equal(3, tester.Indexer.IndexBlocks()); //10,11,12
+                tester.Indexer.ToHeight = 14;
+                Assert.Equal(2, tester.Indexer.IndexBlocks()); //13,14
+
+                tester.Indexer.FromHeight = 19;
+                tester.Indexer.ToHeight = 20;
+                Assert.Equal(2, tester.Indexer.IndexBlocks()); //19,20
             }
         }
         [Fact]
@@ -66,8 +78,6 @@ namespace NBitcoin.Indexer.Tests
             {
                 tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
                 tester.Indexer.TaskCount = 15;
-                tester.Indexer.BlkCount = 1;
-                tester.Indexer.FromHeight = 0;
                 Assert.Equal(138, tester.Indexer.IndexTransactions());
                 Assert.Equal(0, tester.Indexer.IndexTransactions());
             }

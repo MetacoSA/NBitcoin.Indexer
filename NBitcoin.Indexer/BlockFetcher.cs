@@ -81,13 +81,17 @@ namespace NBitcoin.Indexer
         {
             var fork = _BlockHeaders.FindFork(_Checkpoint.BlockLocator);
             var headers = _BlockHeaders.EnumerateAfter(fork);
-            var height = fork.Height + 1;
-            if (fork.Height == 0)
+            headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
+            var first = headers.FirstOrDefault();
+            if (first == null)
+                yield break;
+            var height = first.Height;
+            if (first.Height == 1)
             {
                 headers = new[] { fork }.Concat(headers);
                 height = 0;
             }
-
+           
             foreach (var block in _Node.GetBlocks(headers.Select(b => b.HashBlock)))
             {
                 var header = _BlockHeaders.GetBlock(height);
@@ -141,6 +145,18 @@ namespace NBitcoin.Indexer
             {
                 _LastSaved = DateTime.Now;
             }
+        }
+
+        public int FromHeight
+        {
+            get;
+            set;
+        }
+
+        public int ToHeight
+        {
+            get;
+            set;
         }
     }
 }

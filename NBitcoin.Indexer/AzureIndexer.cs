@@ -65,12 +65,6 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-
-        public Chain GetLocalChain(string name)
-        {
-            var path = GetFilePath(name + ".dat");
-            return new Chain(Network, new StreamObjectStream<ChainChange>(File.Open(path, FileMode.OpenOrCreate)));
-        }
     }
 
 
@@ -104,7 +98,7 @@ namespace NBitcoin.Indexer
             _Configuration = configuration;
             TaskCount = -1;
             FromHeight = 0;
-            BlkCount = 9999999;
+            ToHeight = 99999999;
         }
 
         public TaskPool<TItem> CreateTaskPool<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, int defaultTaskCount)
@@ -117,6 +111,8 @@ namespace NBitcoin.Indexer
             IndexerTrace.TaskCount(pool.Tasks.Length);
             return pool;
         }
+
+        string[] _Checkpoints = new[] { "transactions", "blocks", "wallets", "balances" };
 
         public long IndexTransactions(ChainBase chain = null)
         {
@@ -131,7 +127,7 @@ namespace NBitcoin.Indexer
             {
                 Configuration.GetTransactionTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, TransactionEntry.Entity>();
-                var storedBlocks = Enumerate("tx", chain);
+                var storedBlocks = Enumerate("transactions", chain);
                 foreach (var block in storedBlocks)
                 {
                     foreach (var transaction in block.Block.Transactions)
@@ -317,23 +313,18 @@ namespace NBitcoin.Indexer
 
         private BlockFetcher Enumerate(string checkpoint, ChainBase blockHeaders)
         {
-            var shouldDispose = blockHeaders == null;
             blockHeaders = blockHeaders ?? GetNodeChain();
-            try
+
+            var node = Configuration.ConnectToNode();
+            node.VersionHandshake();
+            return new BlockFetcher(new Checkpoint(Configuration.GetFilePath(checkpoint), Configuration.Network), node, blockHeaders)
             {
-                var node = Configuration.ConnectToNode();
-                node.VersionHandshake();
-                return new BlockFetcher(new Checkpoint(Configuration.GetFilePath(checkpoint), Configuration.Network), node, blockHeaders)
-                {
-                    CheckpointInterval = CheckpointInterval,
-                    DisableSaving = NoSave
-                };
-            }
-            finally
-            {
-                if (shouldDispose)
-                    ((Chain)blockHeaders).Changes.Dispose();
-            }
+                CheckpointInterval = CheckpointInterval,
+                DisableSaving = NoSave,
+                FromHeight = FromHeight,
+                ToHeight = ToHeight
+            };
+
         }
 
         public void IndexOrderedBalances(ChainBase chain)
@@ -458,15 +449,15 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public Chain GetNodeChain()
+        public ChainBase GetNodeChain()
         {
             IndexerTrace.Information("Connecting to node " + Configuration.Node);
             using (var node = Configuration.ConnectToNode())
             {
                 IndexerTrace.Information("Handshaking");
                 node.VersionHandshake();
-                IndexerTrace.Information("Loading local chain");
-                var chain = Configuration.GetLocalChain("ImportMainChain");
+                var chain = new ConcurrentChain();
+                chain.SetTip(new ChainedBlock(Configuration.Network.GetGenesis().Header, 0));
                 IndexerTrace.Information("Synchronizing with local node");
                 node.SynchronizeChain(chain);
                 IndexerTrace.Information("Chain loaded with height " + chain.Height);
@@ -476,14 +467,7 @@ namespace NBitcoin.Indexer
         public void IndexNodeMainChain()
         {
             var chain = GetNodeChain();
-            try
-            {
-                IndexMainChain(chain);
-            }
-            finally
-            {
-                chain.Changes.Dispose();
-            }
+            IndexMainChain(chain);
         }
 
 
@@ -548,12 +532,6 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public int BlkCount
-        {
-            get;
-            set;
-        }
-
         public bool NoSave
         {
             get;
@@ -600,8 +578,20 @@ namespace NBitcoin.Indexer
             }
         }
 
+        public int ToHeight
+        {
+            get;
+            set;
+        }
 
-
-
+        public void DeleteCheckpoints()
+        {
+            foreach (var checkpoint in _Checkpoints)
+            {
+                var file = Configuration.GetFilePath(checkpoint);
+                File.Delete(file);
+                IndexerTrace.Information(file + " Deleted");
+            }
+        }
     }
 }

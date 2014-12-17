@@ -25,8 +25,8 @@ namespace NBitcoin.Indexer.Console
                     var indexer = AzureIndexer.CreateIndexer();
                     indexer.CheckpointInterval = TimeSpan.Parse(options.CheckpointInterval);
                     indexer.NoSave = options.NoSave;
-                    indexer.FromHeight = options.FromBlk;
-                    indexer.BlkCount = options.BlkCount;
+                    indexer.FromHeight = options.From;
+                    indexer.ToHeight = options.To;
                     indexer.TaskCount = options.ThreadCount;
 
                     ChainBase chain = null;
@@ -59,20 +59,6 @@ namespace NBitcoin.Indexer.Console
                     {
                         chain = chain ?? indexer.Configuration.CreateIndexerClient().GetMainChain();
                         indexer.IndexWalletBalances(chain);
-                    }
-                    if (options.CountBlkFiles)
-                    {
-                        var dir = new DirectoryInfo(indexer.Configuration.BlockDirectory);
-                        if (!dir.Exists)
-                        {
-                            System.Console.WriteLine(dir.FullName + " does not exists");
-                            return;
-                        }
-                        System.Console.WriteLine("Blk files count : " +
-                            dir
-                            .GetFiles()
-                            .Where(f => f.Name.EndsWith(".dat"))
-                            .Where(f => f.Name.StartsWith("blk")).Count());
                     }
                 }
             }
