@@ -124,12 +124,12 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        private DateTime _LastSaved;
+        private DateTime _LastSaved = DateTime.UtcNow;
         public bool NeedSave
         {
             get
             {
-                return (DateTime.Now - _LastSaved) > CheckpointInterval && !DisableSaving;
+                return (DateTime.UtcNow - _LastSaved) > CheckpointInterval && !DisableSaving;
             }
         }
 

@@ -58,6 +58,11 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(138, tester.Indexer.IndexBlocks());
                 Assert.Equal(0, tester.Indexer.IndexBlocks());
 
+                node.ChainBuilder.Generate();
+                node.ChainBuilder.Generate();
+
+                Assert.Equal(2, tester.Indexer.IndexBlocks());
+
                 tester.Indexer.DeleteCheckpoints();
 
                 tester.Indexer.FromHeight = 10;
@@ -551,7 +556,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanFastEncode()
         {
-            byte[] bytes = new byte[] { 0xFF, 1, 2, 3, 0};
+            byte[] bytes = new byte[] { 0xFF, 1, 2, 3, 0 };
             var str = FastEncoder.Instance.EncodeData(bytes);
             byte[] actual = FastEncoder.Instance.DecodeData(str);
             Assert.True(bytes.SequenceEqual(actual));
