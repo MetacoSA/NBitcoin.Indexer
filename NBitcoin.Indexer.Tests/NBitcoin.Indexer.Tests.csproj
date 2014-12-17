@@ -93,7 +93,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BlockGenerator.cs" />
     <Compile Include="ChainBuilder.cs" />
     <Compile Include="IndexerTester.cs" />
     <Compile Include="MiniNode.cs" />
@@ -106,17 +105,6 @@
     <None Include="App.config" />
     <None Include="Data\blocks2\blk00000.dat" />
     <None Include="Data\blocks\blk00000.dat" />
-    <None Include="Data\blocks\blk00001.dat" />
-    <None Include="Data\blocks\blk00002.dat" />
-    <None Include="Data\blocks\blk00003.dat" />
-    <None Include="Data\blocks\blk00004.dat" />
-    <None Include="Data\blocks\blk00005.dat" />
-    <None Include="Data\blocks\blk00006.dat" />
-    <None Include="Data\blocks\blk00007.dat" />
-    <None Include="Data\blocks\blk00008.dat" />
-    <None Include="Data\blocks\blk00009.dat" />
-    <None Include="Data\blocks\blk00010.dat" />
-    <None Include="Data\blocks\blk00011.dat" />
     <None Include="Data\openasset-known-tx.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -142,6 +130,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

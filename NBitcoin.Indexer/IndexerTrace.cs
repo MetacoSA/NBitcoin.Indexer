@@ -35,14 +35,14 @@ namespace NBitcoin.Indexer
             return new TraceCorrelation(_Trace, activityName);
         }
 
-        internal static void CheckpointLoaded(DiskBlockPos lastPosition, string file)
+        internal static void CheckpointLoaded(ChainedBlock block, string file)
         {
-            _Trace.TraceInformation("Checkpoint loaded " + "(" + file + ")");
+            _Trace.TraceInformation("Checkpoint loaded at " + ToString(block) + " (" + file + ")");
         }
 
-        internal static void CheckpointSaved(DiskBlockPos diskBlockPos, string file)
+        internal static void CheckpointSaved(ChainedBlock block, string file)
         {
-            _Trace.TraceInformation("New checkpoint : " + diskBlockPos.ToString() + " (" + file + ")");
+            _Trace.TraceInformation("New checkpoint : " + ToString(block) + " (" + file + ")");
         }
 
 
@@ -61,19 +61,7 @@ namespace NBitcoin.Indexer
         internal static void RetryWorked()
         {
             _Trace.TraceInformation("Retry worked");
-        }
-
-        internal static void LogProgress(ProgressTracker progress, long medianSpeed, TimeSpan interval)
-        {
-            var info = "Progress : " + progress.CurrentProgress.ToString("0.000");
-            if (medianSpeed != 0)
-            {
-                var remaining = progress.TotalBytes - progress.ProcessedBytes;
-                var remainingTime = TimeSpan.FromTicks((long)((double)interval.Ticks * ((double)remaining / (double)medianSpeed)));
-                info += " (" + Pretty(remainingTime) + ")";
-            }
-            _Trace.TraceInformation(info);
-        }
+        }       
 
         public static string Pretty(TimeSpan span)
         {

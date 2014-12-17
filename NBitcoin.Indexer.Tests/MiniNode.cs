@@ -10,9 +10,9 @@ namespace NBitcoin.Indexer.Tests
 	public class MiniNode
 	{
 
-		public MiniNode(BlockStore blockStore, NodeServer server)
+		public MiniNode(IndexerTester tester, NodeServer server)
 		{
-			_Generator = new BlockGenerator(blockStore);
+			_Generator = new ChainBuilder(tester);
 			_Server = server;
 			server.AllMessages.AddMessageListener(new NewThreadMessageListener<IncomingMessage>(ProcessMessage));
 		}
@@ -25,8 +25,8 @@ namespace NBitcoin.Indexer.Tests
 				return _Server;
 			}
 		}
-		private readonly BlockGenerator _Generator;
-		public BlockGenerator Generator
+        private readonly ChainBuilder _Generator;
+        public ChainBuilder ChainBuilder
 		{
 			get
 			{
@@ -44,7 +44,7 @@ namespace NBitcoin.Indexer.Tests
 				int height = 0;
 				foreach(var blk in getheader.BlockLocators.Blocks)
 				{
-					forkPos = Generator.Chain.GetBlock(blk);
+					forkPos = ChainBuilder.Chain.GetBlock(blk);
 					if(forkPos != null)
 						break;
 				}
@@ -52,9 +52,9 @@ namespace NBitcoin.Indexer.Tests
 					height = forkPos.Height + 1;
 
 				HeadersPayload getData = new HeadersPayload();
-				while(height <= Generator.Chain.Height)
+				while(height <= ChainBuilder.Chain.Height)
 				{
-					var block = Generator.Chain.GetBlock(height);
+					var block = ChainBuilder.Chain.GetBlock(height);
 					getData.Headers.Add(block.Header);
 					if(block.HashBlock == getheader.HashStop)
 						break;
@@ -66,7 +66,7 @@ namespace NBitcoin.Indexer.Tests
 			var mempool = message.Message.Payload as MempoolPayload;
 			if(mempool != null)
 			{
-				var inv = _Mempool.Select(kv => new InventoryVector()
+				var inv = ChainBuilder.Mempool.Select(kv => new InventoryVector()
 									{
 										Type = InventoryType.MSG_TX,
 										Hash = kv.Key
@@ -83,20 +83,14 @@ namespace NBitcoin.Indexer.Tests
 				{
 					if(inv.Type == InventoryType.MSG_TX)
 					{
-						message.Node.SendMessage(new TxPayload(_Mempool[inv.Hash]));
+                        message.Node.SendMessage(new TxPayload(ChainBuilder.Mempool[inv.Hash]));
 					}
+                    if (inv.Type == InventoryType.MSG_BLOCK)
+                    {
+                        message.Node.SendMessage(new BlockPayload(ChainBuilder.Blocks[inv.Hash]));
+                    }
 				}
 			}
 		}
-
-		public void AddToMempool(params Transaction[] transactions)
-		{
-			foreach(var tx in transactions)
-			{
-				_Mempool.Add(tx.GetHash(), tx);
-			}
-		}
-
-		Dictionary<uint256, Transaction> _Mempool = new Dictionary<uint256, Transaction>();
 	}
 }

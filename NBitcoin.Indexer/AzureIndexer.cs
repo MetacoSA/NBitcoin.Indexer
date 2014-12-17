@@ -29,18 +29,12 @@ namespace NBitcoin.Indexer
         {
             IndexerServerConfiguration config = new IndexerServerConfiguration();
             Fill(config);
-            config.BlockDirectory = GetValue("BlockDirectory", true);
             config.MainDirectory = GetValue("MainDirectory", false);
             config.Node = GetValue("Node", false);
             return config;
         }
         public IndexerServerConfiguration()
         {
-        }
-        public string BlockDirectory
-        {
-            get;
-            set;
         }
         public string MainDirectory
         {
@@ -49,16 +43,11 @@ namespace NBitcoin.Indexer
         }
         public string GetFilePath(string name)
         {
-            var fileName = StorageNamespace + name;
+            var fileName = StorageNamespace + "-" + name;
             if (!String.IsNullOrEmpty(MainDirectory))
                 return Path.Combine(MainDirectory, fileName);
             return fileName;
         }
-        public BlockStore CreateBlockStore()
-        {
-            return new BlockStore(BlockDirectory, Network);
-        }
-
         public AzureIndexer CreateIndexer()
         {
             return new AzureIndexer(this);
@@ -114,7 +103,7 @@ namespace NBitcoin.Indexer
             CheckpointInterval = TimeSpan.FromMinutes(15.0);
             _Configuration = configuration;
             TaskCount = -1;
-            FromBlk = 0;
+            FromHeight = 0;
             BlkCount = 9999999;
         }
 
@@ -129,7 +118,7 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        public long IndexTransactions()
+        public long IndexTransactions(ChainBase chain = null)
         {
             long txCount = 0;
             Helper.SetThrottling();
@@ -142,13 +131,13 @@ namespace NBitcoin.Indexer
             {
                 Configuration.GetTransactionTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, TransactionEntry.Entity>();
-                var storedBlocks = Enumerate("tx");
+                var storedBlocks = Enumerate("tx", chain);
                 foreach (var block in storedBlocks)
                 {
-                    foreach (var transaction in block.Item.Transactions)
+                    foreach (var transaction in block.Block.Transactions)
                     {
                         txCount++;
-                        var indexed = new TransactionEntry.Entity(null, transaction, block.Item.Header.GetHash());
+                        var indexed = new TransactionEntry.Entity(null, transaction, block.BlockId);
                         buckets.Add(indexed.PartitionKey, indexed);
                         var collection = buckets[indexed.PartitionKey];
                         if (collection.Count == 100)
@@ -298,7 +287,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public long IndexBlocks()
+        public long IndexBlocks(ChainBase chain = null)
         {
             long blkCount = 0;
             Helper.SetThrottling();
@@ -308,11 +297,11 @@ namespace NBitcoin.Indexer
             using (IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
             {
                 Configuration.GetBlocksContainer().CreateIfNotExists();
-                var storedBlocks = Enumerate();
+                var storedBlocks = Enumerate("blocks", chain);
                 foreach (var block in storedBlocks)
                 {
                     blkCount++;
-                    blocks.Add(block.Item);
+                    blocks.Add(block.Block);
                     if (storedBlocks.NeedSave)
                     {
                         tasks.Stop();
@@ -326,14 +315,32 @@ namespace NBitcoin.Indexer
             return blkCount;
         }
 
-        public void IndexOrderedBalances(ChainBase chain = null)
+        private BlockFetcher Enumerate(string checkpoint, ChainBase blockHeaders)
         {
-            chain = chain ?? GetMainChain();
-            IndexBalances("balances", (txid, tx, blockid) =>
+            var shouldDispose = blockHeaders == null;
+            blockHeaders = blockHeaders ?? GetNodeChain();
+            try
             {
-                var b = chain.GetBlock(blockid);
-                var header = b == null ? null : b.Header;
-                return OrderedBalanceChange.ExtractScriptBalances(txid, tx, blockid, header, b == null ? 0 : b.Height);
+                var node = Configuration.ConnectToNode();
+                node.VersionHandshake();
+                return new BlockFetcher(new Checkpoint(Configuration.GetFilePath(checkpoint), Configuration.Network), node, blockHeaders)
+                {
+                    CheckpointInterval = CheckpointInterval,
+                    DisableSaving = NoSave
+                };
+            }
+            finally
+            {
+                if (shouldDispose)
+                    ((Chain)blockHeaders).Changes.Dispose();
+            }
+        }
+
+        public void IndexOrderedBalances(ChainBase chain)
+        {
+            IndexBalances(chain, "balances", (txid, tx, blockid, header, height) =>
+            {
+                return OrderedBalanceChange.ExtractScriptBalances(txid, tx, blockid, header, height);
             });
         }
 
@@ -342,19 +349,16 @@ namespace NBitcoin.Indexer
             return Configuration.CreateIndexerClient().GetMainChain();
         }
 
-        public void IndexWalletBalances(ChainBase chain = null)
+        public void IndexWalletBalances(ChainBase chain)
         {
-            chain = chain ?? GetMainChain();
             var walletRules = Configuration.CreateIndexerClient().GetAllWalletRules();
-            IndexBalances("wallets", (txid, tx, blockid) =>
+            IndexBalances(chain, "wallets", (txid, tx, blockid, header, height) =>
             {
-                var b = chain.GetBlock(blockid);
-                var header = b == null ? null : b.Header;
-                return OrderedBalanceChange.ExtractWalletBalances(txid, tx, blockid, header, b == null ? 0 : b.Height, walletRules);
+                return OrderedBalanceChange.ExtractWalletBalances(txid, tx, blockid, header, height, walletRules);
             });
         }
 
-        private void IndexBalances(string checkpointName, Func<uint256, Transaction, uint256, IEnumerable<OrderedBalanceChange>> extract)
+        private void IndexBalances(ChainBase chain, string checkpointName, Func<uint256, Transaction, uint256, BlockHeader, int, IEnumerable<OrderedBalanceChange>> extract)
         {
             Helper.SetThrottling();
             BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
@@ -365,16 +369,15 @@ namespace NBitcoin.Indexer
                 this.Configuration.GetBalanceTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
 
-                var storedBlocks = Enumerate(checkpointName);
+                var storedBlocks = Enumerate(checkpointName, chain);
                 foreach (var block in storedBlocks)
                 {
-                    var blockId = block.Item.Header.GetHash();
-                    foreach (var tx in block.Item.Transactions)
+                    foreach (var tx in block.Block.Transactions)
                     {
                         var txId = tx.GetHash();
                         try
                         {
-                            var entries = extract(blockId, tx, txId);
+                            var entries = extract(txId, tx, block.BlockId, block.Block.Header, block.Height);
 
                             foreach (var entry in entries)
                             {
@@ -533,22 +536,13 @@ namespace NBitcoin.Indexer
         }
 
 
-
-        private BlockEnumerable Enumerate(string checkpointName = null)
-        {
-            return new BlockEnumerable(this, checkpointName)
-            {
-                CheckpointInterval = CheckpointInterval
-            };
-        }
-
         public TimeSpan CheckpointInterval
         {
             get;
             set;
         }
 
-        public int FromBlk
+        public int FromHeight
         {
             get;
             set;

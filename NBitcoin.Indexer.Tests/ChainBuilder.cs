@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer.Tests
 {
-    class ChainBuilder
+    public class ChainBuilder
     {
         private IndexerTester _Tester;
         Chain _Chain = new Chain(Network.TestNet);
@@ -21,6 +21,8 @@ namespace NBitcoin.Indexer.Tests
         public ChainBuilder(IndexerTester indexerTester)
         {
             this._Tester = indexerTester;
+            var genesis = indexerTester.Indexer.Configuration.Network.GetGenesis();
+            _Blocks.Add(genesis.GetHash(), genesis);
         }
 
         Block _Current;
@@ -70,6 +72,8 @@ namespace NBitcoin.Indexer.Tests
             _Chain.SetTip(b.Header);
             _Current = null;
             _UnsyncBlocks.Add(b);
+            _Blocks.Add(b.Header.GetHash(), b);
+            _Mempool.Clear();
             return b;
         }
 
@@ -93,7 +97,60 @@ namespace NBitcoin.Indexer.Tests
         public Transaction Emit(Transaction transaction)
         {
             Add(transaction);
+            _Mempool.Add(transaction.GetHash(), transaction);
             return transaction;
         }
+
+        public Block Generate(int count = 1)
+        {
+            Block b = null;
+            for (int i = 0 ; i < count ; i++)
+                b = SubmitBlock();
+            return b;
+        }
+
+
+        public void Emit(IEnumerable<Transaction> transactions)
+        {
+            foreach (var tx in transactions)
+                Emit(tx);
+        }
+
+        private readonly Dictionary<uint256,Block> _Blocks = new Dictionary<uint256,Block>();
+        public Dictionary<uint256,Block> Blocks
+        {
+            get
+            {
+                return _Blocks;
+            }
+        }
+
+        private readonly Dictionary<uint256,Transaction> _Mempool = new Dictionary<uint256,Transaction>();
+        public Dictionary<uint256,Transaction> Mempool
+        {
+            get
+            {
+                return _Mempool;
+            }
+        }
+
+        public void Load(string blockFolder)
+        {
+            var store = new BlockStore(blockFolder, this._Tester.Client.Configuration.Network);
+            foreach (var block in store.Enumerate(false))
+            {
+                SubmitBlock(block.Item);
+            }
+        }
+
+        public void SubmitBlock(Block block)
+        {
+            if (!Blocks.ContainsKey(block.GetHash()))
+            {
+                _Current = block;
+                SubmitBlock();
+            }
+        }
+
     }
 }

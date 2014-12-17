@@ -51,9 +51,10 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
+                tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
                 tester.Indexer.TaskCount = 15;
                 tester.Indexer.BlkCount = 1;
-                tester.Indexer.FromBlk = 0;
+                tester.Indexer.FromHeight = 0;
                 Assert.Equal(138, tester.Indexer.IndexBlocks());
                 Assert.Equal(0, tester.Indexer.IndexBlocks());
             }
@@ -63,10 +64,10 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
-
+                tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
                 tester.Indexer.TaskCount = 15;
                 tester.Indexer.BlkCount = 1;
-                tester.Indexer.FromBlk = 0;
+                tester.Indexer.FromHeight = 0;
                 Assert.Equal(138, tester.Indexer.IndexTransactions());
                 Assert.Equal(0, tester.Indexer.IndexTransactions());
             }
@@ -212,14 +213,19 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanImportMainChain()
         {
+            //var output = new BlockStore(@"C:\Users\NICO\Documents\Visual Studio 2012\Projects\NBitcoin.Indexer\NBitcoin.Indexer.Tests\Data\blocks", Network.TestNet);
+            //foreach (var b in new BlockStore(@"E:\TestBitcoin\testnet3\blocks", Network.TestNet).Enumerate(false).Take(138))
+            //{
+            //    output.Append(b.Item);
+            //}
             using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
-                var chain = new Chain(Network.Main);
+                var chain = new Chain(tester.Client.Configuration.Network);
 
-                node.Generator.Generate();
-                var fork = node.Generator.Generate();
-                var firstTip = node.Generator.Generate();
+                node.ChainBuilder.Generate();
+                var fork = node.ChainBuilder.Generate();
+                var firstTip = node.ChainBuilder.Generate();
                 tester.Indexer.IndexNodeMainChain();
 
                 var result = tester.Client.GetChainChangesUntilFork(chain.Tip, true).ToList();
@@ -239,10 +245,10 @@ namespace NBitcoin.Indexer.Tests
 
                 Assert.Equal(firstTip.GetHash(), chain.Tip.HashBlock);
 
-                node.Generator.Chain.SetTip(fork.Header);
-                node.Generator.Generate();
-                node.Generator.Generate();
-                var secondTip = node.Generator.Generate();
+                node.ChainBuilder.Chain.SetTip(fork.Header);
+                node.ChainBuilder.Generate();
+                node.ChainBuilder.Generate();
+                var secondTip = node.ChainBuilder.Generate();
 
                 tester.Indexer.IndexNodeMainChain();
                 Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
@@ -251,7 +257,7 @@ namespace NBitcoin.Indexer.Tests
                 result.UpdateChain(chain);
                 Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
 
-                var ultimateTip = node.Generator.Generate(100);
+                var ultimateTip = node.ChainBuilder.Generate(100);
                 tester.Indexer.IndexNodeMainChain();
                 result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
 
@@ -717,10 +723,10 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
-                var blockStore = tester.CreateLocalBlockStore();
-                tester.Indexer.Configuration.BlockDirectory = blockStore.Folder.FullName;
+                var node = tester.CreateLocalNode();
                 var ccTester = new ColoredCoinTester("CanColorizeTransferTransaction");
-                blockStore.Append(CreateBlock(ccTester));
+                node.ChainBuilder.Emit(ccTester.Transactions);
+                node.ChainBuilder.SubmitBlock();
                 tester.Indexer.IndexBlocks();
                 tester.Indexer.IndexTransactions();
                 var txRepo = new IndexerTransactionRepository(tester.Indexer.Configuration);
@@ -739,14 +745,6 @@ namespace NBitcoin.Indexer.Tests
                 Assert.NotNull(colored);
             }
         }
-
-        private Block CreateBlock(ColoredCoinTester ccTester)
-        {
-            var block = new Block();
-            block.Transactions.AddRange(ccTester.Transactions);
-            return block;
-        }
-
 
 
         private IndexerTester CreateTester([CallerMemberName]string folder = null)
