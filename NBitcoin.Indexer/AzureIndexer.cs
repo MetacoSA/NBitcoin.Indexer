@@ -463,8 +463,7 @@ namespace NBitcoin.Indexer
             {
                 IndexerTrace.Information("Handshaking");
                 node.VersionHandshake();
-                var chain = new ConcurrentChain();
-                chain.SetTip(new ChainedBlock(Configuration.Network.GetGenesis().Header, 0));
+                var chain = new ConcurrentChain(Configuration.Network);
                 IndexerTrace.Information("Synchronizing with local node");
                 node.SynchronizeChain(chain);
                 IndexerTrace.Information("Chain loaded with height " + chain.Height);
