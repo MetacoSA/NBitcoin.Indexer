@@ -165,7 +165,7 @@ namespace NBitcoin.Indexer
 
         private void SetThrottling()
         {
-            SetThrottling();
+            Helper.SetThrottling();
             ServicePoint tableServicePoint = ServicePointManager.FindServicePoint(Configuration.CreateTableClient().BaseUri);
             tableServicePoint.ConnectionLimit = 1000;
         }
