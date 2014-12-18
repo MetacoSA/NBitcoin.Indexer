@@ -228,11 +228,6 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanImportMainChain()
         {
-            //var output = new BlockStore(@"C:\Users\NICO\Documents\Visual Studio 2012\Projects\NBitcoin.Indexer\NBitcoin.Indexer.Tests\Data\blocks", Network.TestNet);
-            //foreach (var b in new BlockStore(@"E:\TestBitcoin\testnet3\blocks", Network.TestNet).Enumerate(false).Take(138))
-            //{
-            //    output.Append(b.Item);
-            //}
             using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();

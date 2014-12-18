@@ -78,14 +78,14 @@ namespace NBitcoin.Indexer.Tests
         }
 
 
-        public uint256 KnownBlockId = new uint256("0000000064cc28514d6152b3c1c111424ad227fadff41da947a99535a83a824a");
-        public uint256 UnknownBlockId = new uint256("0000000064cc28514d6152b3c1c111424ad227fadff41da947a99535a83a824b");
+        public uint256 KnownBlockId = new uint256("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943");
+        public uint256 UnknownBlockId = new uint256("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4942");
 
         internal void ImportCachedBlocks()
         {
+            CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
             if (Client.GetBlock(KnownBlockId) == null)
             {
-                CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
                 Indexer.NoSave = true;
                 Indexer.TaskCount = 15;
                 Indexer.FromHeight = 0;
@@ -95,6 +95,7 @@ namespace NBitcoin.Indexer.Tests
 
         internal void ImportCachedTransactions()
         {
+            CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
             if (Client.GetTransaction(KnownTransactionId) == null)
             {
                 Indexer.NoSave = true;
@@ -105,8 +106,8 @@ namespace NBitcoin.Indexer.Tests
         }
 
         public IndexerClient _Client;
-        public uint256 KnownTransactionId = new uint256("882b98507359823f93cf9830ee90e192c62d4964c16297c6dc3bf525d27a53cb");
-        public uint256 UnknownTransactionId = new uint256("882b98507359823f93cf9830ee90e192c62d4964c16297c6dc3bf525d27a53cd");
+        public uint256 KnownTransactionId = new uint256("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
+        public uint256 UnknownTransactionId = new uint256("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33c");
         public IndexerClient Client
         {
             get
