@@ -156,14 +156,38 @@ namespace NBitcoin.Indexer
             _Trace.TraceInformation("No fork found with the stored chain");
         }
 
-        static DateTime _LastLog = new DateTime(0, DateTimeKind.Utc);
-        public static void Processed(int height, int totalHeight)
+        public static void Processed(int height, int totalHeight, ref DateTime lastLog, ref int lastHeight)
         {
-            if (DateTimeOffset.Now - _LastLog > TimeSpan.FromSeconds(5))
+            if (DateTime.UtcNow - lastLog > TimeSpan.FromSeconds(10))
             {
-                _LastLog = DateTime.UtcNow;
-                _Trace.TraceInformation("Block processed : {0}/{1}", height, totalHeight);
+                var downloadedSize = GetSize(lastHeight, height);
+                var remainingSize = GetSize(height, totalHeight);
+                var time = DateTime.UtcNow - lastLog;
+                var estimatedTime = downloadedSize == 0.0m ? TimeSpan.FromDays(999.0)
+                    : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
+                _Trace.TraceInformation("Blocks {0}/{1} (estimated time : {2})", height, totalHeight, Pretty(estimatedTime));
+                lastLog = DateTime.UtcNow;
+                lastHeight = height;
             }
         }
+
+        private static decimal GetSize(int t1, int t2)
+        {
+            decimal cumul = 0.0m;
+            for (int i = t1 ; i < t2 ; i++)
+            {
+                var size = Math.Exp((double)(a * i + b));
+                cumul += (decimal)size;
+            }
+            return cumul;
+        }
+
+        private static decimal EstimateSize(decimal height)
+        {
+            return (decimal)Math.Exp((double)(a * height + b));
+        }
+
+        static decimal a = 0.0000221438236661323m;
+        static decimal b = -8.492328726823666132321613096m;
     }
 }

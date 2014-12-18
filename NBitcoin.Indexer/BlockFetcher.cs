@@ -26,7 +26,7 @@ namespace NBitcoin.Indexer
             set;
         }
     }
-    public class BlockFetcher : IEnumerable<BlockInfo>
+    public class BlockFetcher : IEnumerable<BlockInfo>, IDisposable
     {
 
         private readonly Checkpoint _Checkpoint;
@@ -79,6 +79,8 @@ namespace NBitcoin.Indexer
         ChainedBlock _LastProcessed;
         public IEnumerator<BlockInfo> GetEnumerator()
         {
+            var lastLog = DateTime.UtcNow;
+            var lastHeight = 0;
             var fork = _BlockHeaders.FindFork(_Checkpoint.BlockLocator);
             var headers = _BlockHeaders.EnumerateAfter(fork);
             headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
@@ -102,7 +104,8 @@ namespace NBitcoin.Indexer
                     BlockId = header.HashBlock,
                     Height = header.Height
                 };
-                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height);
+
+                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height, ref lastLog, ref lastHeight);
                 height++;
             }
         }
@@ -158,5 +161,14 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+
+        #region IDisposable Members
+
+        public void Dispose()
+        {
+            _Node.Dispose();
+        }
+
+        #endregion
     }
 }
