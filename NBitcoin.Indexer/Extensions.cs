@@ -87,7 +87,7 @@ namespace NBitcoin.Indexer
                 .Where(e => IsMinConf(e, minConfirmation, chain));
         }
 
-        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, Chain chain, bool colored = false)
+        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain, bool colored = false)
         {
             return new BalanceSheet(entries, chain, colored);
         }

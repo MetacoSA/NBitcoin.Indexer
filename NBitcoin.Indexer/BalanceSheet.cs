@@ -8,15 +8,15 @@ namespace NBitcoin.Indexer
 {
     public class BalanceSheet
     {
-        private readonly Chain _Chain;
-        public Chain Chain
+        private readonly ChainBase _Chain;
+        public ChainBase Chain
         {
             get
             {
                 return _Chain;
             }
         }
-        public BalanceSheet(IEnumerable<OrderedBalanceChange> changes, Chain chain, bool colored)
+        public BalanceSheet(IEnumerable<OrderedBalanceChange> changes, ChainBase chain, bool colored)
         {
             if (chain == null)
                 throw new ArgumentNullException("chain");
