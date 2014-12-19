@@ -75,8 +75,10 @@ namespace NBitcoin.Indexer
                 sb.AppendFormat("{0}h ", span.Hours);
             if (span.Minutes > 0)
                 sb.AppendFormat("{0}m", span.Minutes);
-            return sb.ToString();
-
+            var result =  sb.ToString();
+            if (result == string.Empty)
+                return "< 1min";
+            return result;
         }
 
         internal static void TaskCount(int count)
@@ -156,18 +158,29 @@ namespace NBitcoin.Indexer
             _Trace.TraceInformation("No fork found with the stored chain");
         }
 
-        public static void Processed(int height, int totalHeight, ref DateTime lastLog, ref int lastHeight)
+        public static void Processed(int height, int totalHeight, Queue<DateTime> lastLogs, Queue<int> lastHeights)
         {
+            var lastLog = lastLogs.LastOrDefault();
             if (DateTime.UtcNow - lastLog > TimeSpan.FromSeconds(10))
             {
-                var downloadedSize = GetSize(lastHeight, height);
-                var remainingSize = GetSize(height, totalHeight);
-                var time = DateTime.UtcNow - lastLog;
-                var estimatedTime = downloadedSize == 0.0m ? TimeSpan.FromDays(999.0)
-                    : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
-                _Trace.TraceInformation("Blocks {0}/{1} (estimated time : {2})", height, totalHeight, Pretty(estimatedTime));
-                lastLog = DateTime.UtcNow;
-                lastHeight = height;
+                if (lastHeights.Count > 0)
+                {
+                    var lastHeight = lastHeights.Peek();
+                    var time = DateTimeOffset.UtcNow - lastLogs.Peek();
+
+                    var downloadedSize = GetSize(lastHeight, height);
+                    var remainingSize = GetSize(height, totalHeight);
+                    var estimatedTime = downloadedSize == 0.0m ? TimeSpan.FromDays(999.0)
+                        : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
+                    _Trace.TraceInformation("Blocks {0}/{1} (estimate : {2})", height, totalHeight, Pretty(estimatedTime));
+                }
+                lastLogs.Enqueue(DateTime.UtcNow);
+                lastHeights.Enqueue(height);
+                while (lastLogs.Count > 20)
+                {
+                    lastLogs.Dequeue();
+                    lastHeights.Dequeue();
+                }
             }
         }
 

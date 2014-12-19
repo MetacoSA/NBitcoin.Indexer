@@ -79,8 +79,8 @@ namespace NBitcoin.Indexer
         ChainedBlock _LastProcessed;
         public IEnumerator<BlockInfo> GetEnumerator()
         {
-            var lastLog = DateTime.UtcNow;
-            var lastHeight = 0;
+            Queue<DateTime> lastLogs = new Queue<DateTime>();
+            Queue<int> lastHeights = new Queue<int>();
             var fork = _BlockHeaders.FindFork(_Checkpoint.BlockLocator);
             var headers = _BlockHeaders.EnumerateAfter(fork);
             headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
@@ -93,7 +93,7 @@ namespace NBitcoin.Indexer
                 headers = new[] { fork }.Concat(headers);
                 height = 0;
             }
-           
+
             foreach (var block in _Node.GetBlocks(headers.Select(b => b.HashBlock)))
             {
                 var header = _BlockHeaders.GetBlock(height);
@@ -105,7 +105,7 @@ namespace NBitcoin.Indexer
                     Height = header.Height
                 };
 
-                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height, ref lastLog, ref lastHeight);
+                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height, lastLogs, lastHeights);
                 height++;
             }
         }
