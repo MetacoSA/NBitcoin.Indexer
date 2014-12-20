@@ -143,7 +143,9 @@ namespace NBitcoin.Indexer
                 SpentOutpoints.AddRange(other.SpentOutpoints);
                 SpentOutpoints = SpentOutpoints.Distinct().ToList();
 
-                SpentCoins = null; //Remove cached value, no longer correct
+                //Remove cached value, no longer correct
+                ColoredBalanceChangeEntry = null;
+                SpentCoins = null; 
 
                 if (walletRule != null)
                     foreach (var c in other.SpentIndices)
