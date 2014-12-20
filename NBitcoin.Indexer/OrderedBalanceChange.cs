@@ -458,7 +458,7 @@ namespace NBitcoin.Indexer
             return FastEncoder.Instance.EncodeData(scriptPubKey.ToBytes(true));
         }
 
-        public Script ScriptPubKey
+        internal Script ScriptPubKey
         {
             get
             {
