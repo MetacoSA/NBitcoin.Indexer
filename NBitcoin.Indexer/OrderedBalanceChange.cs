@@ -93,14 +93,12 @@ namespace NBitcoin.Indexer
             var scriptBalances = ExtractScriptBalances(txId, tx, blockId, blockHeader, height);
             foreach (var scriptBalance in scriptBalances)
             {
-                foreach (var walletRuleEntry in walletCollection.GetRulesFor(scriptBalance.GetScript()))
+                foreach (var walletRuleEntry in walletCollection.GetRulesFor(scriptBalance.ScriptPubKey))
                 {
                     OrderedBalanceChange walletEntity = null;
                     if (!entitiesByWallet.TryGetValue(walletRuleEntry.WalletId, out walletEntity))
                     {
-                        walletEntity = new OrderedBalanceChange(txId, OrderedBalanceChange.GetBalanceId(walletRuleEntry.WalletId), blockId, blockHeader, height);
-                        walletEntity.HasOpReturn = scriptBalance.HasOpReturn;
-                        walletEntity.IsCoinbase = scriptBalance.IsCoinbase;
+                        walletEntity = new OrderedBalanceChange(walletRuleEntry.WalletId, scriptBalance);
                         entitiesByWallet.Add(walletRuleEntry.WalletId, walletEntity);
                     }
                     walletEntity.Merge(scriptBalance, walletRuleEntry.Rule);
@@ -119,21 +117,22 @@ namespace NBitcoin.Indexer
             }
         }
 
-        private void Merge(OrderedBalanceChange other, WalletRule walletRule)
+        internal void Merge(OrderedBalanceChange other, WalletRule walletRule)
         {
             if (other.ReceivedCoins.Count != 0)
             {
                 ReceivedCoins.AddRange(other.ReceivedCoins);
                 ReceivedCoins = new CoinCollection(ReceivedCoins.Distinct<Coin, OutPoint>(c => c.Outpoint));
-                foreach (var c in other.ReceivedCoins)
-                {
-                    this.MatchedRules.Add(new MatchedRule()
+                if (walletRule != null)
+                    foreach (var c in other.ReceivedCoins)
                     {
-                        Index = c.Outpoint.N,
-                        Rule = walletRule,
-                        MatchType = MatchLocation.Output
-                    });
-                }
+                        this.MatchedRules.Add(new MatchedRule()
+                        {
+                            Index = c.Outpoint.N,
+                            Rule = walletRule,
+                            MatchType = MatchLocation.Output
+                        });
+                    }
             }
 
             if (other.SpentIndices.Count != 0)
@@ -144,29 +143,24 @@ namespace NBitcoin.Indexer
                 SpentOutpoints.AddRange(other.SpentOutpoints);
                 SpentOutpoints = SpentOutpoints.Distinct().ToList();
 
-                if (other.SpentCoins != null)
-                {
-                    if (SpentCoins == null)
-                        SpentCoins = new CoinCollection();
-                    SpentCoins.AddRange(other.SpentCoins);
-                    SpentCoins = new CoinCollection(SpentCoins.Distinct<Coin, OutPoint>(c => c.Outpoint).ToList());
-                }
+                SpentCoins = null; //Remove cached value, no longer correct
 
-                foreach (var c in other.SpentIndices)
-                {
-                    this.MatchedRules.Add(new MatchedRule()
+                if (walletRule != null)
+                    foreach (var c in other.SpentIndices)
                     {
-                        Index = c,
-                        Rule = walletRule,
-                        MatchType = MatchLocation.Input
-                    });
-                }
+                        this.MatchedRules.Add(new MatchedRule()
+                        {
+                            Index = c,
+                            Rule = walletRule,
+                            MatchType = MatchLocation.Input
+                        });
+                    }
             }
         }
 
 
         string _BalanceId;
-        public string BalanceId
+        internal string BalanceId
         {
             get
             {
@@ -357,8 +351,9 @@ namespace NBitcoin.Indexer
         }
 
         internal OrderedBalanceChange(uint256 txId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
-            : this(txId, GetBalanceId(scriptPubKey), blockId, blockHeader, height)
+            : this()
         {
+            Init(txId, GetBalanceId(scriptPubKey), blockId, blockHeader, height);
             var scriptBytes = scriptPubKey.ToBytes(true);
             if (scriptPubKey.Length > MaxScriptSize)
             {
@@ -366,16 +361,30 @@ namespace NBitcoin.Indexer
             }
         }
 
-        Script _Script;
-
-        internal OrderedBalanceChange(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
-            : this()
+        private void Init(uint256 txId, string balanceId, uint256 blockId, BlockHeader blockHeader, int height)
         {
             BlockId = blockId;
             SeenUtc = blockHeader == null ? DateTime.UtcNow : blockHeader.BlockTime.UtcDateTime;
-            Height = blockHeader == null ? int.MaxValue : height;
+            Height = blockId == null ? int.MaxValue : height;
             TransactionId = txId;
             BalanceId = balanceId;
+        }
+
+        Script _Script;
+
+        internal OrderedBalanceChange(uint256 txId, string walletId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
+            : this()
+        {
+            Init(txId, GetBalanceId(walletId), blockId, blockHeader, height);
+            _Script = scriptPubKey;
+        }
+
+        internal OrderedBalanceChange(string walletId, OrderedBalanceChange source)
+            : this(source.TransactionId, walletId, source.ScriptPubKey, source.BlockId, null, source.Height)
+        {
+            SeenUtc = source.SeenUtc;
+            IsCoinbase = source.IsCoinbase;
+            HasOpReturn = source.HasOpReturn;
         }
         internal class IntCompactVarInt : CompactVarInt
         {
@@ -449,11 +458,14 @@ namespace NBitcoin.Indexer
             return FastEncoder.Instance.EncodeData(scriptPubKey.ToBytes(true));
         }
 
-        public Script GetScript()
+        public Script ScriptPubKey
         {
-            if (_Script != null)
+            get
+            {
+                if (_Script == null)
+                    _Script = Script.FromBytesUnsafe(FastEncoder.Instance.DecodeData(BalanceId));
                 return _Script;
-            return Script.FromBytesUnsafe(FastEncoder.Instance.DecodeData(BalanceId));
+            }
         }
         public static string GetBalanceId(string walletId)
         {

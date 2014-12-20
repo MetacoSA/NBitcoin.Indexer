@@ -189,6 +189,11 @@ namespace NBitcoin.Indexer
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
         }
+
+        public void Index(IEnumerable<OrderedBalanceChange> balances)
+        {
+            Index(balances.Select(b => b.ToEntity(Configuration.SerializerSettings)), Configuration.GetBalanceTable());
+        }
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
             int exceptionCount = 0;

@@ -14,6 +14,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
+using NBitcoin;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
@@ -474,6 +475,53 @@ namespace NBitcoin.Indexer
                 chain.SetTip(new ChainedBlock(Configuration.Network.GetGenesis().Header, 0));
             GetChainChangesUntilFork(chain.Tip, false)
                 .UpdateChain(chain);
+        }
+
+        public void MergeIntoWallet(string walletId, IDestination destination)
+        {
+            MergeIntoWallet(walletId, destination.ScriptPubKey);
+        }
+
+        public void MergeIntoWallet(string walletId, string walletSource)
+        {
+            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(walletSource));
+        }
+
+        private void MergeIntoWalletCore(string walletId, string balanceId)
+        {
+            var indexer = Configuration.AsServer().CreateIndexer();
+            var sourcesByKey = GetOrderedBalanceCore(balanceId)
+                .ToDictionary(i => GetKey(i));
+            var destByKey =
+                GetOrderedBalance(walletId)
+                .ToDictionary(i => GetKey(i));
+
+            List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
+            foreach (var kv in sourcesByKey)
+            {
+                var source = kv.Value;
+                var existing = destByKey.TryGet(kv.Key);
+                if (existing == null)
+                {
+                    existing = new OrderedBalanceChange(walletId, source);
+                }
+                existing.Merge(kv.Value, null);
+                entities.Add(existing);
+                if (entities.Count == 100)
+                    indexer.Index(entities);
+            }
+            if (entities.Count != 0)
+                indexer.Index(entities);
+        }
+
+        private string GetKey(OrderedBalanceChange change)
+        {
+            return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId;
+        }
+
+        public void MergeIntoWallet(string walletId, Script scriptPubKey)
+        {
+            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(scriptPubKey));
         }
     }
 }

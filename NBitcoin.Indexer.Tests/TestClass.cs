@@ -351,6 +351,148 @@ namespace NBitcoin.Indexer.Tests
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
 
 
+
+        [Fact]
+        public void CanMergeBalance()
+        {
+            using (var tester = CreateTester())
+            {
+                var bob = new Key();
+                var alice1 = new Key();
+                var alice2 = new Key();
+                var satoshi = new Key();
+                
+                var settings = tester.Client.Configuration.SerializerSettings;
+
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.EmitMoney(bob, "50.0");
+                var tx = chainBuilder.EmitMoney(alice1, "10.0");
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                //Can merge address balance into wallet
+                tester.Client.MergeIntoWallet("Alice", alice1);
+
+                var aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 1);
+                Assert.True(aliceBalance[0].Amount == Money.Parse("10.0"));
+                Assert.True(aliceBalance[0].IsCoinbase);
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+                Assert.True(!aliceBalance[0].HasOpReturn);
+                ////
+
+                //Merging duplicate order balance should not change anything
+                tester.Client.AddWalletRule("Alice", new ScriptRule(alice1));
+
+                chainBuilder.EmitMoney(alice1, "9.0");
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 2);
+                Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+
+                tester.Client.MergeIntoWallet("Alice", alice1); 
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 2);
+                Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+                Assert.True(aliceBalance[1].Amount == Money.Parse("10.0"));
+                Assert.True(aliceBalance[1].ScriptPubKey == alice1.ScriptPubKey);
+                ////
+
+                //Merge alice2 into Alice with a tx involving alice1
+                tx
+                   = new TransactionBuilder()
+                       .AddKeys(alice1)
+                       .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey)) //Alice1 10
+                       .Send(alice2, "2.0")
+                       .Send(alice1, "3.9")
+                       .Send(bob, "2.1")
+                       .Send(alice1, "0.1")
+                       .SendFees("1.9")
+                       .BuildTransaction(true);
+
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 3);
+                Assert.True(aliceBalance[0].Amount == 
+                    -Money.Parse("10.0") 
+                    + Money.Parse("3.9") 
+                    + Money.Parse("0.1"));
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+
+                tester.Client.MergeIntoWallet("Alice", alice2);
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 3);
+                Assert.True(aliceBalance[0].Amount == 
+                    -Money.Parse("10.0") 
+                    + Money.Parse("3.9") 
+                    + Money.Parse("0.1") 
+                    + Money.Parse("2.0"));
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+
+                var newtx = new Transaction()
+                {
+                    Inputs =
+                    {
+                        new TxIn(new OutPoint(tx,0)), //alice2 2
+                        new TxIn(new OutPoint(tx,1)), //alice1 3.9
+                        new TxIn(new OutPoint(tx,2)), //bob 2.1
+                        new TxIn(new OutPoint(tx,3)), //alice1 0.1
+                    }
+                };
+
+                tx = new TransactionBuilder()
+                        .ContinueToBuild(newtx)
+                        .AddKeys(alice1, alice2)
+                        .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey))
+                        .AddCoins(new Coin(tx.GetHash(), 1, tx.Outputs[1].Value, tx.Outputs[1].ScriptPubKey))
+                        .AddCoins(new Coin(tx.GetHash(), 3, tx.Outputs[3].Value, tx.Outputs[3].ScriptPubKey))
+                        .Then()
+                        .AddKeys(bob)
+                        .AddCoins(new Coin(tx.GetHash(), 2, tx.Outputs[2].Value, tx.Outputs[2].ScriptPubKey))
+                        .Send(alice1, "0.10")
+                        .Send(alice2, "0.22")
+                        .Send(bob, "1.0")
+                        .Send(alice2, "0.23")
+                        .SetChange(satoshi)
+                        .BuildTransaction(true);
+
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 4);
+                Assert.True(aliceBalance[0].Amount == 
+                    - Money.Parse("3.9") 
+                    - Money.Parse("0.1")
+                    + Money.Parse("0.10")
+                    );
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+
+                tester.Client.MergeIntoWallet("Alice", alice2);
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance.Length == 4);
+                Assert.True(aliceBalance[0].Amount ==
+                    -Money.Parse("3.9")
+                    - Money.Parse("0.1")
+                    + Money.Parse("0.10")
+                    - Money.Parse("2.0")
+                    + Money.Parse("0.22")
+                    + Money.Parse("0.23")
+                    );
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+                ////
+            }
+        }
+
+
         [Fact]
         public void CanGetWalletOrderedBalances()
         {
@@ -384,6 +526,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(aliceBalance.Length == 1);
                 Assert.True(aliceBalance[0].Amount == Money.Parse("10.0"));
                 Assert.True(aliceBalance[0].IsCoinbase);
+                Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
                 Assert.True(!aliceBalance[0].HasOpReturn);
                 Assert.Equal(
                     aliceR1.ToString(settings)
@@ -486,6 +629,7 @@ namespace NBitcoin.Indexer.Tests
 
         }
 
+
         [Fact]
         public void CanGetBalanceSheet()
         {
@@ -574,7 +718,7 @@ namespace NBitcoin.Indexer.Tests
                 var tx = new Transaction("010000000127d57276f1026a95b4af3b03b6aba859a001861682342af19825e8a2408ae008010000008c493046022100cd92b992d4bde3b44471677081c5ece6735d6936480ff74659ac1824d8a1958e022100b08839f167532aea10acecc9d5f7044ddd9793ef2989d090127a6e626dc7c9ce014104cac6999d6c3feaba7cdd6c62bce174339190435cffd15af7cb70c33b82027deba06e6d5441eb401c0f8f92d4ffe6038d283d2b2dd59c4384b66b7b8f038a7cf5ffffffff0200093d0000000000434104636d69f81d685f6f58054e17ac34d16db869bba8b3562aabc38c35b065158d360f087ef7bd8b0bcbd1be9a846a8ed339bf0131cdb354074244b0a9736beeb2b9ac40420f0000000000fdba0f76a9144838a081d73cf134e8ff9cfd4015406c73beceb388acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac00000000");
                 tester.Indexer.IndexOrderedBalance(tx);
                 var result = tester.Client.GetOrderedBalance(tx.Outputs[1].ScriptPubKey).ToArray()[0];
-                Assert.Equal(result.GetScript(), tx.Outputs[1].ScriptPubKey);
+                Assert.Equal(result.ScriptPubKey, tx.Outputs[1].ScriptPubKey);
             }
         }
 
@@ -727,6 +871,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Null(tx);
             }
         }
+
 
         [Fact]
         public void CanGetColoredTransaction()
