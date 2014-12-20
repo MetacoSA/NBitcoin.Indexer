@@ -47,7 +47,7 @@ namespace NBitcoin.Indexer.Tests
             }
         }
         [Fact]
-        public void CanUploadBlobDirectoryToAzure()
+        public void CanIndexBlocks()
         {
             using (var tester = CreateTester())
             {
@@ -74,6 +74,10 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.FromHeight = 19;
                 tester.Indexer.ToHeight = 20;
                 Assert.Equal(2, tester.Indexer.IndexBlocks()); //19,20
+
+                tester.Indexer.FromHeight = 23;
+                tester.Indexer.ToHeight = 25;
+                Assert.Equal(3, tester.Indexer.IndexBlocks()); //23,24,25
             }
         }
         [Fact]
