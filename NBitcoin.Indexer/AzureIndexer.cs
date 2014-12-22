@@ -23,56 +23,11 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public class IndexerServerConfiguration : IndexerConfiguration
-    {
-        public new static IndexerServerConfiguration FromConfiguration()
-        {
-            IndexerServerConfiguration config = new IndexerServerConfiguration();
-            Fill(config);
-            config.MainDirectory = GetValue("MainDirectory", false);
-            config.Node = GetValue("Node", false);
-            return config;
-        }
-        public IndexerServerConfiguration()
-        {
-        }
-        public string MainDirectory
-        {
-            get;
-            set;
-        }
-        public string GetFilePath(string name)
-        {
-            var fileName = StorageNamespace + "-" + name;
-            if (!String.IsNullOrEmpty(MainDirectory))
-                return Path.Combine(MainDirectory, fileName);
-            return fileName;
-        }
-        public AzureIndexer CreateIndexer()
-        {
-            return new AzureIndexer(this);
-        }
-
-        public Node ConnectToNode(bool isRelay)
-        {
-            if (String.IsNullOrEmpty(Node))
-                throw new ConfigurationErrorsException("Node setting is not configured");
-            return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
-        }
-
-        public string Node
-        {
-            get;
-            set;
-        }
-    }
-
-
     public class AzureIndexer
     {
         public static AzureIndexer CreateIndexer()
         {
-            var config = IndexerServerConfiguration.FromConfiguration();
+            var config = IndexerConfiguration.FromConfiguration();
             return config.CreateIndexer();
         }
 
@@ -82,15 +37,15 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        private readonly IndexerServerConfiguration _Configuration;
-        public IndexerServerConfiguration Configuration
+        private readonly IndexerConfiguration _Configuration;
+        public IndexerConfiguration Configuration
         {
             get
             {
                 return _Configuration;
             }
         }
-        public AzureIndexer(IndexerServerConfiguration configuration)
+        public AzureIndexer(IndexerConfiguration configuration)
         {
             if (configuration == null)
                 throw new ArgumentNullException("configuration");

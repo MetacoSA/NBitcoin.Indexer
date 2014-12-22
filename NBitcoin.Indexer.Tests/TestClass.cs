@@ -81,7 +81,7 @@ namespace NBitcoin.Indexer.Tests
             }
         }
         [Fact]
-        public void CanUploadTransactionsToAzure()
+        public void CanIndexTransactions()
         {
             using (var tester = CreateTester())
             {

@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Indexer.Converters;
+using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -61,6 +62,9 @@ namespace NBitcoin.Indexer
 							 Network.TestNet : null;
 			if(config.Network == null)
 				throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
+
+            config.MainDirectory = GetValue("MainDirectory", false);
+            config.Node = GetValue("Node", false);
 		}
 
 		protected static string GetValue(string config, bool required)
@@ -81,6 +85,39 @@ namespace NBitcoin.Indexer
 			get;
 			set;
 		}
+
+        public AzureIndexer CreateIndexer()
+        {
+            return new AzureIndexer(this);
+        }
+
+        public Node ConnectToNode(bool isRelay)
+        {
+            if (String.IsNullOrEmpty(Node))
+                throw new ConfigurationErrorsException("Node setting is not configured");
+            return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
+        }
+
+
+        public string MainDirectory
+        {
+            get;
+            set;
+        }
+
+        public string Node
+        {
+            get;
+            set;
+        }
+
+        internal string GetFilePath(string name)
+        {
+            var fileName = StorageNamespace + "-" + name;
+            if (!String.IsNullOrEmpty(MainDirectory))
+                return Path.Combine(MainDirectory, fileName);
+            return fileName;
+        }
 
 		string _Container = "indexer";
 		string _TransactionTable = "transactions";
@@ -159,17 +196,5 @@ namespace NBitcoin.Indexer
             yield return GetWalletRulesTable();
             yield return GetWalletBalanceTable();
 		}
-
-
-        public IndexerServerConfiguration AsServer()
-        {
-            return new IndexerServerConfiguration()
-            {
-                StorageCredentials = StorageCredentials,
-                StorageNamespace = StorageNamespace,
-                Network = Network,
-                SerializerSettings = SerializerSettings
-            };
-        }
     }
 }

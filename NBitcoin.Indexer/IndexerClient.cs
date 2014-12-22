@@ -132,7 +132,7 @@ namespace NBitcoin.Indexer
 
                         if (fetchColor && result[i].ColoredTransaction == null)
                         {
-                            result[i].ColoredTransaction = ColoredTransaction.FetchColors(txIds[i], result[i].Transaction, new IndexerColoredTransactionRepository(Configuration.AsServer()));
+                            result[i].ColoredTransaction = ColoredTransaction.FetchColors(txIds[i], result[i].Transaction, new IndexerColoredTransactionRepository(Configuration));
                             entities[0].ColoredTransaction = result[i].ColoredTransaction;
                             if (entities[0].ColoredTransaction != null)
                             {
@@ -489,7 +489,7 @@ namespace NBitcoin.Indexer
 
         private void MergeIntoWalletCore(string walletId, string balanceId)
         {
-            var indexer = Configuration.AsServer().CreateIndexer();
+            var indexer = Configuration.CreateIndexer();
             var sourcesByKey = GetOrderedBalanceCore(balanceId)
                 .ToDictionary(i => GetKey(i));
             var destByKey =

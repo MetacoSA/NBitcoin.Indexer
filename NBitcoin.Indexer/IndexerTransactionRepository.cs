@@ -8,15 +8,15 @@ namespace NBitcoin.Indexer
 {
     public class IndexerTransactionRepository : ITransactionRepository
     {
-        private readonly IndexerServerConfiguration _Configuration;
-        public IndexerServerConfiguration Configuration
+        private readonly IndexerConfiguration _Configuration;
+        public IndexerConfiguration Configuration
         {
             get
             {
                 return _Configuration;
             }
         }
-        public IndexerTransactionRepository(IndexerServerConfiguration config)
+        public IndexerTransactionRepository(IndexerConfiguration config)
         {
             if (config == null)
                 throw new ArgumentNullException("config");

@@ -9,8 +9,8 @@ namespace NBitcoin.Indexer
 {
     public class IndexerColoredTransactionRepository : IColoredTransactionRepository
     {
-        private readonly IndexerServerConfiguration _Configuration;
-        public IndexerServerConfiguration Configuration
+        private readonly IndexerConfiguration _Configuration;
+        public IndexerConfiguration Configuration
         {
             get
             {
@@ -18,7 +18,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public IndexerColoredTransactionRepository(IndexerServerConfiguration config)
+        public IndexerColoredTransactionRepository(IndexerConfiguration config)
         {
             if (config == null)
                 throw new ArgumentNullException("config");
