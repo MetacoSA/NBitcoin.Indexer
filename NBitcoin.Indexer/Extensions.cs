@@ -79,7 +79,7 @@ namespace NBitcoin.Indexer
                            e.BlockId != null ||
                            (e.BlockId == null
                                    &&
-                                    (DateTime.UtcNow - e.SeenUtc) > expiration));
+                                    (DateTime.UtcNow - e.SeenUtc) < expiration));
         }
 
         public static IEnumerable<OrderedBalanceChange> WhereConfirmed(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain, int minConfirmation = 1)
