@@ -47,6 +47,7 @@ namespace NBitcoin.Indexer
             {
                 table.CreateIfNotExists();
             }
+            GetBlocksContainer().CreateIfNotExists();
         }
 
 		protected static void Fill(IndexerConfiguration config)
