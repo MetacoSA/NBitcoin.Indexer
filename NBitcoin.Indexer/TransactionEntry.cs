@@ -233,6 +233,8 @@ namespace NBitcoin.Indexer
             {
                 if (SpentCoins == null || Transaction == null)
                     return null;
+                if (Transaction.IsCoinBase)
+                    return Money.Zero;
                 return SpentCoins.Select(o => o.TxOut.Value).Sum() - Transaction.TotalOut;
             }
         }
