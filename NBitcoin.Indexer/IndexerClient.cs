@@ -298,28 +298,29 @@ namespace NBitcoin.Indexer
         }
 
 
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId)
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId));
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId), cancel);
         }
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination)
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalance(destination.ScriptPubKey);
-        }
-
-
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey)
-        {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey));
+            return GetOrderedBalance(destination.ScriptPubKey, cancel);
         }
 
-        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId)
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey, CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey), cancel);
+        }
+
+        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, CancellationToken cancel)
         {
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
             List<OrderedBalanceChange> unconformedList = new List<OrderedBalanceChange>();
             var table = Configuration.GetBalanceTable();
             foreach (var c in QueryBalance(balanceId, table))
             {
+                cancel.ThrowIfCancellationRequested();
                 var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId == null)
                     unconformedList.Add(change);
@@ -477,23 +478,28 @@ namespace NBitcoin.Indexer
                 .UpdateChain(chain);
         }
 
-        public void MergeIntoWallet(string walletId, IDestination destination)
+        public void MergeIntoWallet(string walletId, IDestination destination, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWallet(walletId, destination.ScriptPubKey);
+            MergeIntoWallet(walletId, destination.ScriptPubKey, cancel);
         }
 
-        public void MergeIntoWallet(string walletId, string walletSource)
+        public void MergeIntoWallet(string walletId, Script scriptPubKey, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(walletSource));
+            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(scriptPubKey), cancel);
         }
 
-        private void MergeIntoWalletCore(string walletId, string balanceId)
+        public void MergeIntoWallet(string walletId, string walletSource, CancellationToken cancel = default(CancellationToken))
+        {
+            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(walletSource), cancel);
+        }
+
+        private void MergeIntoWalletCore(string walletId, string balanceId, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
-            var sourcesByKey = GetOrderedBalanceCore(balanceId)
+            var sourcesByKey = GetOrderedBalanceCore(balanceId, cancel)
                 .ToDictionary(i => GetKey(i));
             var destByKey =
-                GetOrderedBalance(walletId)
+                GetOrderedBalance(walletId, cancel)
                 .ToDictionary(i => GetKey(i));
 
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
@@ -517,11 +523,6 @@ namespace NBitcoin.Indexer
         private string GetKey(OrderedBalanceChange change)
         {
             return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId;
-        }
-
-        public void MergeIntoWallet(string walletId, Script scriptPubKey)
-        {
-            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(scriptPubKey));
         }
     }
 }
