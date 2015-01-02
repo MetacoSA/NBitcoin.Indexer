@@ -35,6 +35,13 @@ namespace NBitcoin.Indexer
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
+            ThrowOnCancel = true;
+        }
+
+        public bool ThrowOnCancel
+        {
+            get;
+            set;
         }
 
 
@@ -316,20 +323,25 @@ namespace NBitcoin.Indexer
         private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, CancellationToken cancel)
         {
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
-            List<OrderedBalanceChange> unconformedList = new List<OrderedBalanceChange>();
+            List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
             var table = Configuration.GetBalanceTable();
             foreach (var c in QueryBalance(balanceId, table))
             {
-                cancel.ThrowIfCancellationRequested();
+                if (cancel.IsCancellationRequested)
+                {
+                    if (ThrowOnCancel)
+                        cancel.ThrowIfCancellationRequested();
+                    yield break;
+                }
                 var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId == null)
-                    unconformedList.Add(change);
+                    unconfirmedList.Add(change);
                 else
                 {
-                    if (unconformedList != null)
+                    if (unconfirmedList != null)
                     {
-                        unconfirmed = new Queue<OrderedBalanceChange>(unconformedList.OrderByDescending(o => o.SeenUtc));
-                        unconformedList = null;
+                        unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
+                        unconfirmedList = null;
                     }
 
                     while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
@@ -343,10 +355,10 @@ namespace NBitcoin.Indexer
                     yield return change;
                 }
             }
-            if (unconformedList != null)
+            if (unconfirmedList != null)
             {
-                unconfirmed = new Queue<OrderedBalanceChange>(unconformedList.OrderByDescending(o => o.SeenUtc));
-                unconformedList = null;
+                unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
+                unconfirmedList = null;
             }
             while (unconfirmed.Count != 0)
             {
