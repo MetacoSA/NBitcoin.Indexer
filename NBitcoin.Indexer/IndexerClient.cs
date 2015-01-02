@@ -38,12 +38,6 @@ namespace NBitcoin.Indexer
             ThrowOnCancel = true;
         }
 
-        public bool ThrowOnCancel
-        {
-            get;
-            set;
-        }
-
 
         public Block GetBlock(uint256 blockId)
         {
@@ -327,12 +321,8 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetBalanceTable();
             foreach (var c in QueryBalance(balanceId, table))
             {
-                if (cancel.IsCancellationRequested)
-                {
-                    if (ThrowOnCancel)
-                        cancel.ThrowIfCancellationRequested();
-                    yield break;
-                }
+                cancel.ThrowIfCancellationRequested();
+
                 var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId == null)
                     unconfirmedList.Add(change);
