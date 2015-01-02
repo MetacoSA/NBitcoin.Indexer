@@ -35,7 +35,6 @@ namespace NBitcoin.Indexer
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
-            ThrowOnCancel = true;
         }
 
 
