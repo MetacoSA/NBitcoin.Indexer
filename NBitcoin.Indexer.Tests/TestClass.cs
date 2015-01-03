@@ -668,14 +668,89 @@ namespace NBitcoin.Indexer.Tests
 
         }
 
+        [Fact]
+        public void CanQueryBalanceRange()
+        {
+            using (var tester = CreateTester())
+            {
+                Key bob = new BitcoinSecret("L4JinGSmHxKJJrjbeFx3zxf9Vr3VD6jmq5wXpDm6ywUewcWoXEAy").Key;
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.NoRandom = true;
+
+                Dictionary<string, Transaction> txs = new Dictionary<string, Transaction>();
+                txs.Add("tx1", chainBuilder.EmitMoney(bob, "1.0"));
+                chainBuilder.SubmitBlock();
+
+                txs.Add("tx21", chainBuilder.EmitMoney(bob, "2.1"));
+                txs.Add("tx22", chainBuilder.EmitMoney(bob, "2.2"));
+                chainBuilder.SubmitBlock();
+
+                txs.Add("tx31", chainBuilder.EmitMoney(bob, "3.3"));
+                txs.Add("tx32", chainBuilder.EmitMoney(bob, "3.1"));
+                txs.Add("tx33", chainBuilder.EmitMoney(bob, "3.2"));
+                chainBuilder.SubmitBlock();
+
+                txs.Add("tx41", chainBuilder.EmitMoney(bob, "4.1"));
+                txs.Add("tx42", chainBuilder.EmitMoney(bob, "4.2"));
+                txs.Add("tx43", chainBuilder.EmitMoney(bob, "4.3"));
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.SyncIndexer();
+
+                var tests = new String[][]
+                {
+                     new string[]{"2in", "4in", "tx21,tx22,tx31,tx32,tx33,tx41,tx42,tx43"},
+                     new string[]{"4in", "2in", "tx21,tx22,tx31,tx32,tx33,tx41,tx42,tx43"}, //Does not care about order
+                     new string[]{"2ex", "4in", "tx31,tx32,tx33,tx41,tx42,tx43"},
+                     new string[]{"2in", "4ex", "tx21,tx22,tx31,tx32,tx33"},
+                     new string[]{"2ex", "4ex", "tx31,tx32,tx33"}
+                };
+
+                foreach (var test in tests)
+                {
+                    var data = test;
+                    BalanceQuery query = new BalanceQuery();
+                    query.From = Parse(data[0]);
+                    query.FromIncluded = ParseIncl(data[0]);
+                    query.To = Parse(data[1]);
+                    query.ToIncluded = ParseIncl(data[1]);
+
+                    var result = tester.Client.GetOrderedBalance(bob, query).ToArray();
+                    var expected = data[2].Split(',').Reverse().ToArray();
+
+                    var expectedResult = String.Join(",", expected);
+                    var actualResult = String.Join(",", result.Select(o => GetName(txs, o)));
+                    Assert.Equal(expectedResult, actualResult);
+                }
+            }
+        }
+
+        private string GetName(Dictionary<string, Transaction> txs, OrderedBalanceChange change)
+        {
+            var name = txs.FirstOrDefault(t => t.Value.GetHash() == change.TransactionId).Key;
+            var unconf1 = name.StartsWith("u");
+            var unconf2 = change.BlockId == null;
+            if (unconf1 != unconf2)
+                Assert.False(true, "A confirmed or unconfirmed transaction should not have been returned");
+            return name;
+        }
+
+        private bool ParseIncl(string included)
+        {
+            return included.EndsWith("in");
+        }
+
+        private BalanceLocator Parse(string loc)
+        {
+            return BalanceLocator.Parse(loc.Substring(0, loc.Length - 2));
+        }
+
 
         [Fact]
         public void CanGetBalanceSheet()
         {
             using (var tester = CreateTester())
             {
-
-
                 var bob = new Key();
                 var alice = new Key();
                 var satoshi = new Key();

@@ -34,13 +34,20 @@ namespace NBitcoin.Indexer.Tests
             return b;
         }
 
+        public bool NoRandom
+        {
+            get;
+            set;
+        }
+
         public Transaction EmitMoney(IDestination destination, Money amount)
         {
             Transaction transaction = new Transaction();
-            transaction.AddInput(new TxIn()
-            {
-                ScriptSig = new Script(RandomUtils.GetBytes(32)),
-            });
+            if (!NoRandom)
+                transaction.AddInput(new TxIn()
+                {
+                    ScriptSig = new Script(RandomUtils.GetBytes(32)),
+                });
             transaction.AddOutput(new TxOut()
             {
                 ScriptPubKey = destination.ScriptPubKey,
@@ -56,19 +63,21 @@ namespace NBitcoin.Indexer.Tests
             b.Transactions.Add(tx);
             _Tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
         }
-
+        uint nonce = 0;
         private Block CreateNewBlock()
         {
             var b = new Block();
-            b.Header.Nonce = RandomUtils.GetUInt32();
+            b.Header.Nonce = nonce;
+            nonce++;
             b.Header.HashPrevBlock = _Chain.Tip.HashBlock;
-            b.Header.BlockTime = DateTimeOffset.UtcNow;
+            b.Header.BlockTime = NoRandom ? new DateTimeOffset(1988, 07, 18, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromHours(nonce) : DateTimeOffset.UtcNow;
             return b;
         }
 
         public Block SubmitBlock()
         {
             var b = GetCurrentBlock();
+            b.Header.HashMerkleRoot = b.ComputeMerkleRoot();
             _Chain.SetTip(b.Header);
             _Current = null;
             _UnsyncBlocks.Add(b);
@@ -116,8 +125,8 @@ namespace NBitcoin.Indexer.Tests
                 Emit(tx);
         }
 
-        private readonly Dictionary<uint256,Block> _Blocks = new Dictionary<uint256,Block>();
-        public Dictionary<uint256,Block> Blocks
+        private readonly Dictionary<uint256, Block> _Blocks = new Dictionary<uint256, Block>();
+        public Dictionary<uint256, Block> Blocks
         {
             get
             {
@@ -125,8 +134,8 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
-        private readonly Dictionary<uint256,Transaction> _Mempool = new Dictionary<uint256,Transaction>();
-        public Dictionary<uint256,Transaction> Mempool
+        private readonly Dictionary<uint256, Transaction> _Mempool = new Dictionary<uint256, Transaction>();
+        public Dictionary<uint256, Transaction> Mempool
         {
             get
             {

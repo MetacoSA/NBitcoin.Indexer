@@ -91,16 +91,23 @@ namespace NBitcoin.Indexer
     }
     public class BalanceQuery
     {
+        static uint256 _MinUInt256;
         static uint256 _MaxUInt256;
         static BalanceQuery()
         {
-            _MaxUInt256 = new uint256(new byte[32]);
+            _MinUInt256 = new uint256(new byte[32]);
+            var b = new byte[32];
+            for (int i = 0 ; i < b.Length ; i++)
+            {
+                b[i] = 0xFF;
+            }
+            _MaxUInt256 = new uint256(b);
         }
         public BalanceQuery()
         {
+            From = new BalanceLocator(int.MaxValue);
             To = new BalanceLocator(0);
             ToIncluded = true;
-            From = new BalanceLocator(_MaxUInt256);
             FromIncluded = true;
         }
         public BalanceLocator To
@@ -128,6 +135,39 @@ namespace NBitcoin.Indexer
 
         public TableQuery CreateEntityQuery(string balanceId)
         {
+
+            var from = From ?? new BalanceLocator(int.MaxValue);
+            var to = To ?? new BalanceLocator(0);
+            var toIncluded = ToIncluded;
+            var fromIncluded = FromIncluded;
+
+            //Fix automatically if wrong order
+            if (from.Height < to.Height)
+            {
+                var temp = to;
+                var temp2 = toIncluded;
+                to = from;
+                toIncluded = FromIncluded;
+                from = temp;
+                fromIncluded = temp2;
+            }
+            ////
+
+            //Complete the balance locator if partial
+            if (from.TransactionId == null)
+                from = new BalanceLocator(from.Height, transactionId: new uint256(fromIncluded ? _MinUInt256 : _MaxUInt256));
+
+            if (from.BlockHash == null)
+                from = new BalanceLocator(from.Height, from.TransactionId, new uint256(fromIncluded ? _MinUInt256 : _MaxUInt256));
+
+            if (to.TransactionId == null)
+                to = new BalanceLocator(to.Height, transactionId: new uint256(toIncluded ? _MaxUInt256 : _MinUInt256));
+
+            if (to.BlockHash == null)
+                to = new BalanceLocator(to.Height, to.TransactionId, new uint256(toIncluded ? _MaxUInt256 : _MinUInt256));
+            /////
+
+
             var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
             return new TableQuery()
             {
@@ -138,13 +178,14 @@ namespace NBitcoin.Indexer
                                             TableQuery.CombineFilters(
                                             TableQuery.GenerateFilterCondition("RowKey",
                                                     FromIncluded ? QueryComparisons.GreaterThanOrEqual : QueryComparisons.GreaterThan,
-                                                    balanceId + "-" + From.ToString(true)),
+                                                    balanceId + "-" + from.ToString(true)),
                                                 TableOperators.And,
                                                 TableQuery.GenerateFilterCondition("RowKey",
                                                         ToIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
-                                                        balanceId + "-" + To.ToString(true))
+                                                        balanceId + "-" + to.ToString(true))
                                             ))
             };
         }
+
     }
 }
