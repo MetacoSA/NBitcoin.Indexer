@@ -104,6 +104,8 @@ namespace NBitcoin.Indexer
                     walletEntity.Merge(scriptBalance, walletRuleEntry.Rule);
                 }
             }
+            foreach (var b in entitiesByWallet.Values)
+                b.AddRedeemInfo();
             return entitiesByWallet.Values;
         }
 
@@ -145,7 +147,7 @@ namespace NBitcoin.Indexer
 
                 //Remove cached value, no longer correct
                 ColoredBalanceChangeEntry = null;
-                SpentCoins = null; 
+                SpentCoins = null;
 
                 if (walletRule != null)
                     foreach (var c in other.SpentIndices)
@@ -160,6 +162,23 @@ namespace NBitcoin.Indexer
             }
         }
 
+        internal void AddRedeemInfo()
+        {
+            foreach (var match in MatchedRules)
+            {
+                var scriptRule = match.Rule as ScriptRule;
+                if (scriptRule != null && scriptRule.RedeemScript != null)
+                {
+                    CoinCollection collection = match.MatchType == MatchLocation.Input ? SpentCoins : ReceivedCoins;
+                    if (collection != null)
+                    {
+                        var outpoint = new OutPoint(TransactionId,match.Index);
+                        var coin = collection[outpoint];
+                        collection[outpoint] = new ScriptCoin(coin.Outpoint, coin.TxOut, scriptRule.RedeemScript);
+                    }
+                }
+            }
+        }
 
         string _BalanceId;
         internal string BalanceId

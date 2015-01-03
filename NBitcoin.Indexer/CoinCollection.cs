@@ -32,7 +32,10 @@ namespace NBitcoin.Indexer
                 for (int i = 0 ; i < this.Count ; i++)
                 {
                     if (this[i].Outpoint == index)
+                    {
                         this[i] = value;
+                        return;
+                    }
                 }
                 throw new KeyNotFoundException();
             }

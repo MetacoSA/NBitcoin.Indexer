@@ -411,11 +411,11 @@ namespace NBitcoin.Indexer
             if (change.SpentCoins != null)
             {
                 if (change.ColoredBalanceChangeEntry != null || !ColoredBalance)
+                {
+                    change.AddRedeemInfo();
                     return true;
+                }
             }
-
-
-
             var transactions =
                 GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray());
             CoinCollection result = new CoinCollection();
@@ -450,6 +450,7 @@ namespace NBitcoin.Indexer
                 entity.Properties.Add("g", new EntityProperty(coloredTx));
             Helper.SetEntityProperty(entity, "b", spentCoins);
             Configuration.GetBalanceTable().Execute(TableOperation.Merge(entity));
+            change.AddRedeemInfo();
             return true;
         }
 

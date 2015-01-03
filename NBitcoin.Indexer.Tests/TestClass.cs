@@ -365,7 +365,7 @@ namespace NBitcoin.Indexer.Tests
                 var alice1 = new Key();
                 var alice2 = new Key();
                 var satoshi = new Key();
-                
+
                 var settings = tester.Client.Configuration.SerializerSettings;
 
                 var chainBuilder = tester.CreateChainBuilder();
@@ -397,7 +397,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
-                tester.Client.MergeIntoWallet("Alice", alice1); 
+                tester.Client.MergeIntoWallet("Alice", alice1);
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 2);
                 Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
@@ -424,19 +424,19 @@ namespace NBitcoin.Indexer.Tests
 
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 3);
-                Assert.True(aliceBalance[0].Amount == 
-                    -Money.Parse("10.0") 
-                    + Money.Parse("3.9") 
+                Assert.True(aliceBalance[0].Amount ==
+                    -Money.Parse("10.0")
+                    + Money.Parse("3.9")
                     + Money.Parse("0.1"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
                 tester.Client.MergeIntoWallet("Alice", alice2);
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 3);
-                Assert.True(aliceBalance[0].Amount == 
-                    -Money.Parse("10.0") 
-                    + Money.Parse("3.9") 
-                    + Money.Parse("0.1") 
+                Assert.True(aliceBalance[0].Amount ==
+                    -Money.Parse("10.0")
+                    + Money.Parse("3.9")
+                    + Money.Parse("0.1")
                     + Money.Parse("2.0"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
@@ -473,8 +473,8 @@ namespace NBitcoin.Indexer.Tests
 
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 4);
-                Assert.True(aliceBalance[0].Amount == 
-                    - Money.Parse("3.9") 
+                Assert.True(aliceBalance[0].Amount ==
+                    -Money.Parse("3.9")
                     - Money.Parse("0.1")
                     + Money.Parse("0.10")
                     );
@@ -598,12 +598,12 @@ namespace NBitcoin.Indexer.Tests
                 tx = new TransactionBuilder()
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
-                        .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey))
-                        .AddCoins(new Coin(tx.GetHash(), 1, tx.Outputs[1].Value, tx.Outputs[1].ScriptPubKey))
-                        .AddCoins(new Coin(tx.GetHash(), 3, tx.Outputs[3].Value, tx.Outputs[3].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 1, prevTx.Outputs[1].Value, prevTx.Outputs[1].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 3, prevTx.Outputs[3].Value, prevTx.Outputs[3].ScriptPubKey))
                         .Then()
                         .AddKeys(bob)
-                        .AddCoins(new Coin(tx.GetHash(), 2, tx.Outputs[2].Value, tx.Outputs[2].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 2, prevTx.Outputs[2].Value, prevTx.Outputs[2].ScriptPubKey))
                         .Send(alice1, "0.10")
                         .Send(alice2, "0.22")
                         .Send(bob, "1.0")
@@ -629,6 +629,41 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 2)).First().ToString(settings), aliceR2.ToString(settings));
                 Assert.Null(entry.GetMatchedRules(new OutPoint(tx, 3)).FirstOrDefault());
                 Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 4)).First().ToString(settings), aliceR2.ToString(settings));
+                ////
+
+                //Send money to P2SH address, should receive script coins
+
+                tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey, true));
+                tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, false));
+
+                tx = new TransactionBuilder()
+                        .ContinueToBuild(newtx)
+                        .AddKeys(alice1, alice2)
+                        .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 1, prevTx.Outputs[1].Value, prevTx.Outputs[1].ScriptPubKey))
+                        .AddCoins(new Coin(prevTx.GetHash(), 3, prevTx.Outputs[3].Value, prevTx.Outputs[3].ScriptPubKey))
+                        .Then()
+                        .AddKeys(bob)
+                        .AddCoins(new Coin(prevTx.GetHash(), 2, prevTx.Outputs[2].Value, prevTx.Outputs[2].ScriptPubKey))
+                        .Send(alice1.PubKey.ScriptPubKey.Hash, "0.10")
+                        .Send(alice2.PubKey.ScriptPubKey.Hash, "0.22")
+                        .Send(bob, "1.0")
+                        .Send(alice2.PubKey.ScriptPubKey.Hash, "0.23")
+                        .SetChange(satoshi)
+                        .BuildTransaction(true);
+
+
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(aliceBalance[0].ReceivedCoins[0] is ScriptCoin);
+                Assert.True(aliceBalance[0].ReceivedCoins[0].ScriptPubKey == alice1.PubKey.ScriptPubKey.Hash.ScriptPubKey);
+                Assert.True(((ScriptCoin)(aliceBalance[0].ReceivedCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
+                Assert.False(aliceBalance[0].ReceivedCoins[1] is ScriptCoin);
+                Assert.False(aliceBalance[0].ReceivedCoins[2] is ScriptCoin);
+                /////
             }
 
         }

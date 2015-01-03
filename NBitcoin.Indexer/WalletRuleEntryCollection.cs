@@ -50,7 +50,7 @@ namespace NBitcoin.Indexer
             {
                 var rule = entry.Rule as ScriptRule;
                 if (rule != null)
-                    _EntriesByAddress.Add(rule.Script, entry);
+                    _EntriesByAddress.Add(rule.ScriptPubKey, entry);
             }
         }
         public void AddRange(IEnumerable<WalletRuleEntry> entries)
@@ -90,7 +90,7 @@ namespace NBitcoin.Indexer
                     var rule = entry.Rule as ScriptRule;
                     if (rule != null)
                     {
-                        _EntriesByAddress.Add(rule.Script, entry);
+                        _EntriesByAddress.Add(rule.ScriptPubKey, entry);
                     }
                 }
                 _EntriesByAddressLookup = _EntriesByAddress.AsLookup();
