@@ -172,7 +172,7 @@ namespace NBitcoin.Indexer
                     CoinCollection collection = match.MatchType == MatchLocation.Input ? SpentCoins : ReceivedCoins;
                     if (collection != null)
                     {
-                        var outpoint = new OutPoint(TransactionId,match.Index);
+                        var outpoint = new OutPoint(TransactionId, match.Index);
                         var coin = collection[outpoint];
                         collection[outpoint] = new ScriptCoin(coin.Outpoint, coin.TxOut, scriptRule.RedeemScript);
                     }
@@ -319,15 +319,12 @@ namespace NBitcoin.Indexer
             var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             Height = Helper.StringToHeight(splitted[1]);
             BalanceId = splitted[0];
-            if (Height == int.MaxValue)
-            {
-                TransactionId = new uint256(splitted[2]);
-            }
-            else
-            {
-                BlockId = new uint256(splitted[2]);
-                TransactionId = new uint256(splitted[3]);
-            }
+
+            var locator = BalanceLocator.Parse(string.Join("-", splitted.Skip(1).ToArray()), true);
+            Height = locator.Height;
+            TransactionId = locator.TransactionId;
+            BlockId = locator.BlockHash;
+
             SeenUtc = entity.Properties["s"].DateTime.Value;
 
             _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
@@ -420,17 +417,19 @@ namespace NBitcoin.Indexer
             }
         }
 
+        public BalanceLocator CreateBalanceLocator()
+        {
+            return new BalanceLocator(this);
+        }
+
         internal DynamicTableEntity ToEntity(JsonSerializerSettings settings)
         {
             DynamicTableEntity entity = new DynamicTableEntity();
             entity.ETag = "*";
             entity.PartitionKey = PartitionKey;
-            if (BlockId != null)
-                entity.RowKey = BalanceId + "-" + Helper.HeightToString(Height) + "-" + BlockId + "-" + TransactionId;
-            else
-            {
-                entity.RowKey = BalanceId + "-" + Helper.HeightToString(int.MaxValue) + "-" + TransactionId;
-            }
+
+            var locator = CreateBalanceLocator();
+            entity.RowKey = BalanceId + "-" + locator.ToString(true);
 
             entity.Properties.Add("s", new EntityProperty(SeenUtc));
             Helper.SetEntityProperty(entity, "ss", Helper.SerializeList(SpentIndices.Select(e => new IntCompactVarInt(e))));

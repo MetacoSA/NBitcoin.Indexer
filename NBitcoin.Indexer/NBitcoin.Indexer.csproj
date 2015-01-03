@@ -84,6 +84,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnonymousEqualityComparer.cs" />
+    <Compile Include="BalanceQuery.cs" />
     <Compile Include="BalanceSheet.cs" />
     <Compile Include="BlockFetcher.cs" />
     <Compile Include="Checkpoint.cs" />
