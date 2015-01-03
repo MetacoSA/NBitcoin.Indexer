@@ -719,6 +719,35 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
                 Assert.True(sheet.All[0].BlockId != null);
 
+                var latest = sheet.All[0];
+                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                {
+                    From = sheet.All[0].CreateBalanceLocator(),
+                    FromIncluded = false
+                }).AsBalanceSheet(chainBuilder.Chain);
+
+                Assert.True(sheet.Confirmed.Count == 2);
+
+                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                {
+                    From = latest.CreateBalanceLocator(),
+                    FromIncluded = true,
+                    To = sheet.All[1].CreateBalanceLocator(),
+                    ToIncluded = true
+                }).AsBalanceSheet(chainBuilder.Chain);
+
+                Assert.True(sheet.Confirmed.Count == 3);
+                Assert.True(sheet.Prunable.Count == 0); //No mempool balance
+
+                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                {
+                    To = sheet.All[2].CreateBalanceLocator(),
+                    ToIncluded = true
+                }).AsBalanceSheet(chainBuilder.Chain);
+
+                Assert.True(sheet.Confirmed.Count == 3);
+                Assert.True(sheet.Prunable.Count == 1);
+
                 tester.Client.PruneBalances(sheet.Prunable);
 
                 sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);

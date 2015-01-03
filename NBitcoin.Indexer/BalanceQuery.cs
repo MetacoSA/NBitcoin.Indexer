@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.WindowsAzure.Storage.Table;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,6 +23,7 @@ namespace NBitcoin.Indexer
 
         public BalanceLocator(uint256 unconfTransactionId)
         {
+            TransactionId = unconfTransactionId;
             Height = int.MaxValue;
         }
 
@@ -90,15 +92,60 @@ namespace NBitcoin.Indexer
     }
     public class BalanceQuery
     {
-        public BalanceLocator From
+        static uint256 _MaxUInt256;
+        static BalanceQuery()
         {
-            get;
-            set;
+            _MaxUInt256 = new uint256(new byte[32]);
+        }
+        public BalanceQuery()
+        {
+            To = new BalanceLocator(0);
+            ToIncluded = true;
+            From = new BalanceLocator(_MaxUInt256);
+            FromIncluded = true;
         }
         public BalanceLocator To
         {
             get;
             set;
+        }
+        public bool ToIncluded
+        {
+            get;
+            set;
+        }
+
+        public BalanceLocator From
+        {
+            get;
+            set;
+        }
+
+        public bool FromIncluded
+        {
+            get;
+            set;
+        }
+
+        public TableQuery CreateEntityQuery(string balanceId)
+        {
+            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
+            return new TableQuery()
+            {
+                FilterString =
+                TableQuery.CombineFilters(
+                                            TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, partition),
+                                            TableOperators.And,
+                                            TableQuery.CombineFilters(
+                                            TableQuery.GenerateFilterCondition("RowKey",
+                                                    FromIncluded ? QueryComparisons.GreaterThanOrEqual : QueryComparisons.GreaterThan,
+                                                    balanceId + "-" + From.ToString(true)),
+                                                TableOperators.And,
+                                                TableQuery.GenerateFilterCondition("RowKey",
+                                                        ToIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
+                                                        balanceId + "-" + To.ToString(true))
+                                            ))
+            };
         }
     }
 }

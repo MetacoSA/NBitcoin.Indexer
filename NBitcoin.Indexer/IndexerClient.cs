@@ -298,27 +298,34 @@ namespace NBitcoin.Indexer
         }
 
 
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId, CancellationToken cancel = default(CancellationToken))
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId,
+                                                                   BalanceQuery query = null,
+                                                                   CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId), cancel);
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId), query, cancel);
         }
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, CancellationToken cancel = default(CancellationToken))
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalance(destination.ScriptPubKey, cancel);
-        }
-
-
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey, CancellationToken cancel = default(CancellationToken))
-        {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey), cancel);
+            return GetOrderedBalance(destination.ScriptPubKey, query, cancel);
         }
 
-        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, CancellationToken cancel)
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
+            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey), query, cancel);
+        }
+
+        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, BalanceQuery query, CancellationToken cancel)
+        {
+            if (query == null)
+                query = new BalanceQuery();
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
             List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
             var table = Configuration.GetBalanceTable();
-            foreach (var c in QueryBalance(balanceId, table))
+
+            var entityQuery = query.CreateEntityQuery(balanceId);
+
+            foreach (var c in table.ExecuteQuery(entityQuery))
             {
                 cancel.ThrowIfCancellationRequested();
 
@@ -357,28 +364,6 @@ namespace NBitcoin.Indexer
             }
         }
 
-        private static IEnumerable<DynamicTableEntity> QueryBalance(string balanceId, CloudTable table)
-        {
-            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
-            return table.ExecuteQuery(CreateQuery(partition, balanceId));
-        }
-
-        private static TableQuery CreateQuery(string partition, string startWith)
-        {
-            return new TableQuery()
-            {
-                FilterString =
-                TableQuery.CombineFilters(
-                                            TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, partition),
-                                            TableOperators.And,
-                                            TableQuery.CombineFilters(
-                                                TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, startWith + "-"),
-                                                TableOperators.And,
-                                                TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, startWith + "|")
-                                            ))
-            };
-        }
-
         public void CleanUnconfirmedChanges(IDestination destination, TimeSpan olderThan)
         {
             CleanUnconfirmedChanges(destination.ScriptPubKey, olderThan);
@@ -388,7 +373,7 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetBalanceTable();
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
-            foreach (var c in QueryBalance(OrderedBalanceChange.GetBalanceId(scriptPubKey), table))
+            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateEntityQuery(OrderedBalanceChange.GetBalanceId(scriptPubKey))))
             {
                 var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
                 if (change.BlockId != null)
@@ -498,10 +483,10 @@ namespace NBitcoin.Indexer
         private void MergeIntoWalletCore(string walletId, string balanceId, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
-            var sourcesByKey = GetOrderedBalanceCore(balanceId, cancel)
+            var sourcesByKey = GetOrderedBalanceCore(balanceId, null, cancel)
                 .ToDictionary(i => GetKey(i));
             var destByKey =
-                GetOrderedBalance(walletId, cancel)
+                GetOrderedBalance(walletId, null, cancel)
                 .ToDictionary(i => GetKey(i));
 
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
