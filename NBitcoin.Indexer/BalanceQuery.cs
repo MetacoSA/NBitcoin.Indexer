@@ -62,14 +62,14 @@ namespace NBitcoin.Indexer
             uint256 blockId = null;
             if (height == int.MaxValue)
             {
-                if (splitted.Length >= 1)
+                if (splitted.Length >= 2)
                     transactionId = new uint256(splitted[1]);
             }
             else
             {
-                if (splitted.Length >= 1)
-                    blockId = new uint256(splitted[1]);
                 if (splitted.Length >= 2)
+                    blockId = new uint256(splitted[1]);
+                if (splitted.Length >= 3)
                     transactionId = new uint256(splitted[2]);
             }
             return new BalanceLocator(height, blockId, transactionId);
