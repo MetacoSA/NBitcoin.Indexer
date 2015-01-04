@@ -23,24 +23,6 @@ namespace NBitcoin.Indexer
             return config;
         }
 
-        private JsonSerializerSettings _SerializerSettings = new JsonSerializerSettings();
-        public JsonSerializerSettings SerializerSettings
-        {
-            get
-            {
-                return _SerializerSettings;
-            }
-            private set
-            {
-                _SerializerSettings = value;
-            }
-        }
-        public void AddKnownType<T>() where T : ICustomData
-        {
-            var converter = SerializerSettings.Converters.OfType<CustomDataConverter>().FirstOrDefault();
-            converter.AddKnownType<T>();
-        }
-
         public void EnsureSetup()
         {
             foreach (var table in EnumerateTables())
@@ -79,7 +61,6 @@ namespace NBitcoin.Indexer
         public IndexerConfiguration()
         {
             Network = Network.Main;
-            Helper.InitializeSerializer(SerializerSettings);
         }
         public Network Network
         {

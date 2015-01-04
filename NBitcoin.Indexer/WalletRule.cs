@@ -8,27 +8,21 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public abstract class WalletRule : ICustomData
+    public abstract class WalletRule
     {
         public WalletRule()
         {
-            Type = this.GetType().Name;
         }
-        public string Type
+        [JsonProperty(DefaultValueHandling=DefaultValueHandling.Ignore)]
+        public JToken CustomData
         {
             get;
             set;
         }
 
-        public ICustomData AttachedData
+        public override string ToString()
         {
-            get;
-            set;
-        }
-
-        public string ToString(JsonSerializerSettings serializerSettings)
-        {
-            return JsonConvert.SerializeObject(this, serializerSettings);
+            return Helper.Serialize(this);
         }
     }
 }

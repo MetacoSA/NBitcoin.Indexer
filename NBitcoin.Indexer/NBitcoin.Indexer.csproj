@@ -89,11 +89,11 @@
     <Compile Include="BlockFetcher.cs" />
     <Compile Include="Checkpoint.cs" />
     <Compile Include="CoinCollection.cs" />
+    <Compile Include="Converters\WalletRuleConverter.cs" />
     <Compile Include="Crc32.cs" />
     <Compile Include="FastEncoder.cs" />
     <Compile Include="MatchedRule.cs" />
     <Compile Include="OrderedBalanceChange.cs" />
-    <Compile Include="Converters\CustomDataJsonConverter.cs" />
     <Compile Include="Converters\ScriptJsonConverter.cs" />
     <Compile Include="ScriptRule.cs" />
     <Compile Include="AzureIndexer.cs" />
@@ -102,7 +102,6 @@
     <Compile Include="ColoredBalanceChangeEntry.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Helper.cs" />
-    <Compile Include="ICustomData.cs" />
     <Compile Include="IndexerColoredTransactionRepository.cs" />
     <Compile Include="IndexerTransactionRepository.cs" />
     <Compile Include="MultiValueDictionary.cs" />

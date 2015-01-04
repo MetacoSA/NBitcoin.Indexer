@@ -29,13 +29,13 @@ namespace NBitcoin.Indexer
         {
 
         }
-
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public Script ScriptPubKey
         {
             get;
             set;
         }
-
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public Script RedeemScript
         {
             get;

@@ -1,6 +1,7 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.Converters;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -126,14 +127,28 @@ namespace NBitcoin.Indexer
             return result.ToString("X2");
         }
 
-        internal static void InitializeSerializer(Newtonsoft.Json.JsonSerializerSettings serializerSettings)
+        static JsonSerializerSettings _Settings;
+        internal static JsonSerializerSettings Settings
         {
-            serializerSettings.Converters.Add(new ScriptJsonConverter());
-            var customDataConverter = new CustomDataConverter();
-            serializerSettings.Converters.Add(customDataConverter);
-            customDataConverter.AddKnownType<ScriptRule>();
+            get
+            {
+                if (_Settings == null)
+                {
+                    _Settings = new JsonSerializerSettings();
+                    _Settings.Converters.Add(new ScriptJsonConverter());
+                    _Settings.Converters.Add(new WalletRuleConverter());
+                }
+                return _Settings;
+            }
         }
-
+        internal static string Serialize(object obj)
+        {
+            return JsonConvert.SerializeObject(obj, Settings);
+        }
+        internal static T DeserializeObject<T>(string str)
+        {
+            return JsonConvert.DeserializeObject<T>(str, Settings);
+        }
 
         static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
         static char[] Digit = Enumerable.Range(0, 10).Select(c => c.ToString()[0]).ToArray();
@@ -167,5 +182,7 @@ namespace NBitcoin.Indexer
             var bytes = BitConverter.GetBytes(nbr);
             return GetPartitionKey(bits, bytes, 0, 4);
         }
+
+       
     }
 }

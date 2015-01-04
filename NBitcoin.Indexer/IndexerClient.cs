@@ -273,7 +273,7 @@ namespace NBitcoin.Indexer
         public WalletRuleEntry[] GetWalletRules(string walletId)
         {
             var table = Configuration.GetWalletRulesTable();
-            var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity(Configuration.SerializerSettings);
+            var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity();
             var query = new TableQuery()
                                     .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
             return
@@ -288,7 +288,7 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetWalletRulesTable();
             var entry = new WalletRuleEntry(walletId, walletRule);
-            var entity = entry.CreateTableEntity(Configuration.SerializerSettings);
+            var entity = entry.CreateTableEntity();
             table.Execute(TableOperation.InsertOrReplace(entity));
             return entry;
         }
@@ -308,11 +308,6 @@ namespace NBitcoin.Indexer
         {
             get;
             set;
-        }
-
-        internal WalletRule Deserialize(string rule)
-        {
-            return (WalletRule)JsonConvert.DeserializeObject<ICustomData>(rule, Configuration.SerializerSettings);
         }
 
 
@@ -374,7 +369,7 @@ namespace NBitcoin.Indexer
 
             var partitions =
                 table.ExecuteQuery(entityQuery)
-                 .Select(c => new OrderedBalanceChange(c, Configuration.SerializerSettings))
+                 .Select(c => new OrderedBalanceChange(c))
                  .Select(c => new
                       {
                           Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
@@ -441,7 +436,7 @@ namespace NBitcoin.Indexer
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
             foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateEntityQuery(OrderedBalanceChange.GetBalanceId(scriptPubKey))))
             {
-                var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
+                var change = new OrderedBalanceChange(c);
                 if (change.BlockId != null)
                     break;
                 if (DateTime.UtcNow - change.SeenUtc < olderThan)
@@ -500,7 +495,7 @@ namespace NBitcoin.Indexer
                 change.ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(change, thisTransaction.ColoredTransaction);
             }
 
-            var entity = change.ToEntity(Configuration.SerializerSettings);
+            var entity = change.ToEntity();
             var spentCoins = Helper.GetEntityProperty(entity, "b");
             var coloredTx = ColoredBalance ? entity.Properties["g"].BinaryValue : null;
             entity.Properties.Clear();
@@ -517,7 +512,7 @@ namespace NBitcoin.Indexer
             Parallel.ForEach(balances, b =>
             {
                 var table = Configuration.GetBalanceTable();
-                table.Execute(TableOperation.Delete(b.ToEntity(Configuration.SerializerSettings)));
+                table.Execute(TableOperation.Delete(b.ToEntity()));
             });
         }
 

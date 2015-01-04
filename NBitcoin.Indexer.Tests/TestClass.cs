@@ -43,7 +43,7 @@ namespace NBitcoin.Indexer.Tests
             var result = OrderedBalanceChange.ExtractScriptBalances(txId, tx, null, null, 0);
             foreach (var e in result)
             {
-                var entity = e.ToEntity(new JsonSerializerSettings());
+                var entity = e.ToEntity();
             }
         }
         [Fact]
@@ -329,34 +329,6 @@ namespace NBitcoin.Indexer.Tests
         }
 
 
-        class DummyAttachedData : ICustomData
-        {
-            public DummyAttachedData()
-            {
-                Type = "DummyAttachedData";
-            }
-            public DummyAttachedData(string blabla)
-            {
-                Blabla = blabla;
-                Type = "DummyAttachedData";
-            }
-            #region ICustomData Members
-
-            public string Type
-            {
-                get;
-                set;
-            }
-
-            public string Blabla
-            {
-                get;
-                set;
-            }
-
-            #endregion
-        }
-
         TransactionSignature sig = new TransactionSignature(Encoders.Hex.DecodeData("304602210095050cbad0bc3bad2436a651810e83f21afb1cdf75d74a13049114958942067d02210099b591d52665597fd88c4a205fe3ef82715e5a125e0f2ae736bf64dc634fba9f01"));
 
 
@@ -370,8 +342,6 @@ namespace NBitcoin.Indexer.Tests
                 var alice1 = new Key();
                 var alice2 = new Key();
                 var satoshi = new Key();
-
-                var settings = tester.Client.Configuration.SerializerSettings;
 
                 var chainBuilder = tester.CreateChainBuilder();
                 chainBuilder.EmitMoney(bob, "50.0");
@@ -512,11 +482,9 @@ namespace NBitcoin.Indexer.Tests
                 var alice2 = new Key();
                 var satoshi = new Key();
 
-                tester.Indexer.Configuration.AddKnownType<DummyAttachedData>();
-                var settings = tester.Client.Configuration.SerializerSettings;
                 var expectedRule = tester.Client.AddWalletRule("Alice", new ScriptRule(alice1)
                 {
-                    AttachedData = new DummyAttachedData("hello")
+                    CustomData = new JObject(new JProperty("hello"))
                 });
 
                 var rules = tester.Client.GetWalletRules("Alice");
@@ -538,8 +506,8 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
                 Assert.True(!aliceBalance[0].HasOpReturn);
                 Assert.Equal(
-                    aliceR1.ToString(settings)
-                   , aliceBalance[0].GetMatchedRules(0, MatchLocation.Output).First().ToString(settings));
+                    aliceR1.ToString()
+                   , aliceBalance[0].GetMatchedRules(0, MatchLocation.Output).First().ToString());
 
                 var aliceR2 = tester.Client.AddWalletRule("Alice", new ScriptRule(alice2)).Rule;
                 rules = tester.Client.GetWalletRules("Alice");
@@ -571,20 +539,20 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(aliceBalance[0].Amount == Money.Parse("-4.0"));
 
                 Assert.Equal(
-                   aliceR1.ToString(settings)
-                  , aliceBalance[0].GetMatchedRules(aliceBalance[0].SpentCoins[0]).First().ToString(settings));
+                   aliceR1.ToString()
+                  , aliceBalance[0].GetMatchedRules(aliceBalance[0].SpentCoins[0]).First().ToString());
 
                 Assert.Equal(
-                   aliceR2.ToString(settings)
-                  , aliceBalance[0].GetMatchedRules(0, MatchLocation.Output).First().ToString(settings));
+                   aliceR2.ToString()
+                  , aliceBalance[0].GetMatchedRules(0, MatchLocation.Output).First().ToString());
 
                 Assert.Equal(
-                   aliceR1.ToString(settings)
-                  , aliceBalance[0].GetMatchedRules(1, MatchLocation.Output).First().ToString(settings));
+                   aliceR1.ToString()
+                  , aliceBalance[0].GetMatchedRules(1, MatchLocation.Output).First().ToString());
 
                 Assert.Equal(
-                aliceR1.ToString(settings)
-               , aliceBalance[0].GetMatchedRules(3, MatchLocation.Output).First().ToString(settings));
+                aliceR1.ToString()
+               , aliceBalance[0].GetMatchedRules(3, MatchLocation.Output).First().ToString());
 
                 Assert.True(aliceBalance[0].GetMatchedRules(2, MatchLocation.Output).Count() == 0);
 
@@ -624,16 +592,16 @@ namespace NBitcoin.Indexer.Tests
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 var entry = aliceBalance[0];
 
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 0)).First().ToString(settings), aliceR2.ToString(settings));
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 1)).First().ToString(settings), aliceR1.ToString(settings));
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 0)).First().ToString(), aliceR2.ToString());
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 1)).First().ToString(), aliceR1.ToString());
                 Assert.Null(entry.GetMatchedRules(new OutPoint(prevTx, 2)).FirstOrDefault());
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 3)).First().ToString(settings), aliceR1.ToString(settings));
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 3)).First().ToString(), aliceR1.ToString());
 
                 var receivedOutpoints = tx.Outputs.Select((o, i) => new OutPoint(tx.GetHash(), i)).ToArray();
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 1)).First().ToString(settings), aliceR1.ToString(settings));
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 2)).First().ToString(settings), aliceR2.ToString(settings));
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 1)).First().ToString(), aliceR1.ToString());
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 2)).First().ToString(), aliceR2.ToString());
                 Assert.Null(entry.GetMatchedRules(new OutPoint(tx, 3)).FirstOrDefault());
-                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 4)).First().ToString(settings), aliceR2.ToString(settings));
+                Assert.Equal(entry.GetMatchedRules(new OutPoint(tx, 4)).First().ToString(), aliceR2.ToString());
                 ////
 
                 //Send money to P2SH address, should receive script coins

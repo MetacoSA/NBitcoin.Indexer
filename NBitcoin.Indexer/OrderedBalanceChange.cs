@@ -314,7 +314,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal OrderedBalanceChange(DynamicTableEntity entity, JsonSerializerSettings settings)
+        internal OrderedBalanceChange(DynamicTableEntity entity)
         {
             var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             Height = Helper.StringToHeight(splitted[1]);
@@ -353,7 +353,7 @@ namespace NBitcoin.Indexer
             HasOpReturn = flags[0] == 'o';
             IsCoinbase = flags[1] == 'o';
 
-            _MatchedRules = JsonConvert.DeserializeObject<List<MatchedRule>>(entity.Properties["f"].StringValue, settings).ToList();
+            _MatchedRules = Helper.DeserializeObject<List<MatchedRule>>(entity.Properties["f"].StringValue).ToList();
 
             if (entity.Properties.ContainsKey("g"))
             {
@@ -422,7 +422,7 @@ namespace NBitcoin.Indexer
             return new BalanceLocator(this);
         }
 
-        internal DynamicTableEntity ToEntity(JsonSerializerSettings settings)
+        internal DynamicTableEntity ToEntity()
         {
             DynamicTableEntity entity = new DynamicTableEntity();
             entity.ETag = "*";
@@ -441,7 +441,7 @@ namespace NBitcoin.Indexer
             Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedCoins.Select(e => e.TxOut)));
             var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
             entity.Properties.AddOrReplace("e", new EntityProperty(flags));
-            entity.Properties.AddOrReplace("f", new EntityProperty(JsonConvert.SerializeObject(MatchedRules, settings)));
+            entity.Properties.AddOrReplace("f", new EntityProperty(Helper.Serialize(MatchedRules)));
             if (ColoredBalanceChangeEntry != null)
             {
                 entity.Properties.AddOrReplace("g", new EntityProperty(ColoredBalanceChangeEntry._Colored.ToBytes()));
