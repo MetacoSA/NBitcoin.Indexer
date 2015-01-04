@@ -26,7 +26,7 @@ namespace NBitcoin.Indexer
 
         public Transaction Get(uint256 txId)
         {
-            var tx = _Configuration.CreateIndexerClient().GetTransaction(txId);
+            var tx = _Configuration.CreateIndexerClient().GetTransactionAsync(txId).Result;
             if (tx == null)
                 return null;
             return tx.Transaction;

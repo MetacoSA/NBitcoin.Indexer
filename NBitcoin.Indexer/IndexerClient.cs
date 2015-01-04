@@ -63,21 +63,118 @@ namespace NBitcoin.Indexer
 
         public TransactionEntry GetTransaction(bool lazyLoadSpentOutput, uint256 txId)
         {
-            return GetTransactions(lazyLoadSpentOutput, new uint256[] { txId }).First();
+            return GetTransactionAsync(lazyLoadSpentOutput, txId).Result;
+        }
+        public Task<TransactionEntry> GetTransactionAsync(bool lazyLoadSpentOutput, uint256 txId)
+        {
+            return GetTransactionAsync(lazyLoadSpentOutput, false, txId);
         }
         public TransactionEntry GetTransaction(uint256 txId)
         {
-            return GetTransactions(true, new[] { txId }).First();
+            return GetTransactionAsync(txId).Result;
+        }
+        public Task<TransactionEntry> GetTransactionAsync(uint256 txId)
+        {
+            return GetTransactionAsync(true, false, txId);
         }
 
         public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, uint256[] txIds)
         {
-            return GetTransactions(lazyLoadPreviousOutput, false, txIds);
+            return GetTransactionsAsync(lazyLoadPreviousOutput, txIds).Result;
+        }
+        public Task<TransactionEntry[]> GetTransactionsAsync(bool lazyLoadPreviousOutput, uint256[] txIds)
+        {
+            return GetTransactionsAsync(lazyLoadPreviousOutput, false, txIds);
         }
 
-        public TransactionEntry GetTransaction(bool lazyLoadPreviousOutput, bool fetchColor, uint256 txId)
+        public async Task<TransactionEntry> GetTransactionAsync(bool lazyLoadPreviousOutput, bool fetchColor, uint256 txId)
         {
-            return GetTransactions(lazyLoadPreviousOutput, fetchColor, new[] { txId }).First();
+            if (txId == null)
+                return null;
+            TransactionEntry result = null;
+
+            var table = Configuration.GetTransactionTable();
+            var searchedEntity = new TransactionEntry.Entity(txId);
+            var query = new TableQuery()
+                            .Where(
+                                    TableQuery.CombineFilters(
+                                        TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey),
+                                        TableOperators.And,
+                                        TableQuery.CombineFilters(
+                                            TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txId.ToString() + "-"),
+                                            TableOperators.And,
+                                            TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, txId.ToString() + "|")
+                                        )
+                                  ));
+            query.TakeCount = 10; //Should not have more
+            var entities = (await table.ExecuteQuerySegmentedAsync(query, null).ConfigureAwait(false))
+                               .Select(e => new TransactionEntry.Entity(e)).ToArray();
+            if (entities.Length == 0)
+                result = null;
+            else
+            {
+                result = new TransactionEntry(entities);
+                if (result.Transaction == null)
+                {
+                    foreach (var block in result.BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
+                    {
+                        result.Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txId);
+                        entities[0].Transaction = result.Transaction;
+                        if (entities[0].Transaction != null)
+                        {
+                            await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+                }
+
+                if (fetchColor && result.ColoredTransaction == null)
+                {
+                    result.ColoredTransaction = ColoredTransaction.FetchColors(txId, result.Transaction, new IndexerColoredTransactionRepository(Configuration));
+                    entities[0].ColoredTransaction = result.ColoredTransaction;
+                    if (entities[0].ColoredTransaction != null)
+                    {
+                        await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                    }
+                }
+
+                var needTxOut = result.SpentCoins == null && lazyLoadPreviousOutput && result.Transaction != null;
+                if (needTxOut)
+                {
+                    var tasks =
+                        result.Transaction
+                             .Inputs
+                             .Select(async txin =>
+                             {
+                                 var parentTx = await GetTransactionAsync(false, false, txin.PrevOut.Hash).ConfigureAwait(false);
+                                 if (parentTx == null)
+                                 {
+                                     IndexerTrace.MissingTransactionFromDatabase(txin.PrevOut.Hash);
+                                     return null;
+                                 }
+                                 return parentTx.Transaction.Outputs[(int)txin.PrevOut.N];
+                             })
+                             .ToArray();
+
+                    await Task.WhenAll(tasks).ConfigureAwait(false);
+                    if (tasks.All(t => t.Result != null))
+                    {
+                        var outputs = tasks.Select(t => t.Result).ToArray();
+                        result.SpentCoins = outputs.Select((o, n) => new Spendable(result.Transaction.Inputs[n].PrevOut, o)).ToList();
+                        entities[0].PreviousTxOuts.Clear();
+                        entities[0].PreviousTxOuts.AddRange(outputs);
+                        if (entities[0].IsLoaded)
+                        {
+                            await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                if (result.Transaction == null)
+                    result = null;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -85,102 +182,17 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="txIds"></param>
         /// <returns>All transactions (with null entries for unfound transactions)</returns>
-        public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, bool fetchColor, uint256[] txIds)
+        public async Task<TransactionEntry[]> GetTransactionsAsync(bool lazyLoadPreviousOutput, bool fetchColor, uint256[] txIds)
         {
             var result = new TransactionEntry[txIds.Length];
             var queries = new TableQuery[txIds.Length];
-            try
-            {
-                Parallel.For(0, txIds.Length, i =>
+            var tasks = Enumerable.Range(0, txIds.Length)
+                .Select(async (i) =>
                 {
-                    if (txIds[0] == 0)
-                        return;
-                    var table = Configuration.GetTransactionTable();
-                    var searchedEntity = new TransactionEntry.Entity(txIds[i]);
-                    queries[i] = new TableQuery()
-                                    .Where(
-                                            TableQuery.CombineFilters(
-                                                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey),
-                                                TableOperators.And,
-                                                TableQuery.CombineFilters(
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, txIds[i].ToString() + "-"),
-                                                    TableOperators.And,
-                                                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.LessThan, txIds[i].ToString() + "|")
-                                                )
-                                          ));
+                    result[i] = await GetTransactionAsync(lazyLoadPreviousOutput, fetchColor, txIds[i]).ConfigureAwait(false);
+                }).ToArray();
 
-                    var entities = table.ExecuteQuery(queries[i])
-                                       .Select(e => new TransactionEntry.Entity(e)).ToArray();
-                    if (entities.Length == 0)
-                        result[i] = null;
-                    else
-                    {
-                        result[i] = new TransactionEntry(entities);
-                        if (result[i].Transaction == null)
-                        {
-                            foreach (var block in result[i].BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
-                            {
-                                result[i].Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txIds[i]);
-                                entities[0].Transaction = result[i].Transaction;
-                                if (entities[0].Transaction != null)
-                                {
-                                    table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
-                                }
-                                break;
-                            }
-                        }
-
-                        if (fetchColor && result[i].ColoredTransaction == null)
-                        {
-                            result[i].ColoredTransaction = ColoredTransaction.FetchColors(txIds[i], result[i].Transaction, new IndexerColoredTransactionRepository(Configuration));
-                            entities[0].ColoredTransaction = result[i].ColoredTransaction;
-                            if (entities[0].ColoredTransaction != null)
-                            {
-                                table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
-                            }
-                        }
-
-                        var needTxOut = result[i].SpentCoins == null && lazyLoadPreviousOutput && result[i].Transaction != null;
-                        if (needTxOut)
-                        {
-                            var tasks =
-                                result[i].Transaction
-                                     .Inputs
-                                     .Select(txin => Task.Run(() =>
-                                     {
-                                         var parentTx = GetTransactions(false, new uint256[] { txin.PrevOut.Hash }).FirstOrDefault();
-                                         if (parentTx == null)
-                                         {
-                                             IndexerTrace.MissingTransactionFromDatabase(txin.PrevOut.Hash);
-                                             return null;
-                                         }
-                                         return parentTx.Transaction.Outputs[(int)txin.PrevOut.N];
-                                     }))
-                                     .ToArray();
-
-                            Task.WaitAll(tasks);
-                            if (tasks.All(t => t.Result != null))
-                            {
-                                var outputs = tasks.Select(t => t.Result).ToArray();
-                                result[i].SpentCoins = outputs.Select((o, n) => new Spendable(result[i].Transaction.Inputs[n].PrevOut, o)).ToList();
-                                entities[0].PreviousTxOuts.Clear();
-                                entities[0].PreviousTxOuts.AddRange(outputs);
-                                if (entities[0].IsLoaded)
-                                {
-                                    table.Execute(TableOperation.Merge(entities[0].CreateTableEntity()));
-                                }
-                            }
-                        }
-
-                        if (result[i].Transaction == null)
-                            result[i] = null;
-                    }
-                });
-            }
-            catch (AggregateException ex)
-            {
-                throw ex.InnerException;
-            }
+            await Task.WhenAll(tasks).ConfigureAwait(false);
             return result;
         }
 
@@ -317,19 +329,46 @@ namespace NBitcoin.Indexer
 
         private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, BalanceQuery query, CancellationToken cancel)
         {
+            TableContinuationToken token = null;
+            do
+            {
+                var list = GetOrderedBalanceCoreAsync(balanceId, query, cancel, token).Result;
+                foreach (var item in list.Item2)
+                {
+                    yield return item;
+                }
+                token = list.Item1;
+            } while (token != null);
+        }
+
+        private async Task<Tuple<TableContinuationToken, List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(string balanceId, BalanceQuery query, CancellationToken cancel, TableContinuationToken continuation)
+        {
             if (query == null)
                 query = new BalanceQuery();
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
             List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
+
+            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
+
             var table = Configuration.GetBalanceTable();
 
             var entityQuery = query.CreateEntityQuery(balanceId);
 
-            foreach (var c in table.ExecuteQuery(entityQuery))
+            var segmentedQuery = (await table.ExecuteQuerySegmentedAsync(entityQuery, continuation).ConfigureAwait(false));
+            continuation = segmentedQuery.ContinuationToken;
+            var loadedChanges =
+                segmentedQuery
+                 .Select(c => new OrderedBalanceChange(c, Configuration.SerializerSettings))
+                 .Select(c => new
+                      {
+                          Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
+                          Change = c
+                      });
+            foreach (var c in loadedChanges)
             {
                 cancel.ThrowIfCancellationRequested();
-
-                var change = new OrderedBalanceChange(c, Configuration.SerializerSettings);
+                await c.Loaded.ConfigureAwait(false);
+                var change = c.Change;
                 if (change.BlockId == null)
                     unconfirmedList.Add(change);
                 else
@@ -343,12 +382,10 @@ namespace NBitcoin.Indexer
                     while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
                     {
                         var unconfirmedChange = unconfirmed.Dequeue();
-                        EnsurePreviousLoaded(unconfirmedChange);
-                        yield return unconfirmedChange;
+                        result.Add(unconfirmedChange);
                     }
 
-                    EnsurePreviousLoaded(change);
-                    yield return change;
+                    result.Add(change);
                 }
             }
             if (unconfirmedList != null)
@@ -359,9 +396,9 @@ namespace NBitcoin.Indexer
             while (unconfirmed.Count != 0)
             {
                 var change = unconfirmed.Dequeue();
-                EnsurePreviousLoaded(change);
-                yield return change;
+                result.Add(change);
             }
+            return Tuple.Create(continuation, result);
         }
 
         public void CleanUnconfirmedChanges(IDestination destination, TimeSpan olderThan)
@@ -391,18 +428,25 @@ namespace NBitcoin.Indexer
             });
         }
 
-        public bool EnsurePreviousLoaded(OrderedBalanceChange change)
+        private bool NeedLoading(OrderedBalanceChange change)
         {
             if (change.SpentCoins != null)
             {
                 if (change.ColoredBalanceChangeEntry != null || !ColoredBalance)
                 {
                     change.AddRedeemInfo();
-                    return true;
+                    return false;
                 }
             }
+            return true;
+        }
+
+        public async Task<bool> EnsurePreviousLoadedAsync(OrderedBalanceChange change)
+        {
+            if (!NeedLoading(change))
+                return true;
             var transactions =
-                GetTransactions(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray());
+                await GetTransactionsAsync(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray()).ConfigureAwait(false);
             CoinCollection result = new CoinCollection();
             for (int i = 0 ; i < transactions.Length ; i++)
             {
@@ -421,7 +465,7 @@ namespace NBitcoin.Indexer
 
             if (ColoredBalance && change.ColoredBalanceChangeEntry == null)
             {
-                var thisTransaction = GetTransactions(false, ColoredBalance, new[] { change.TransactionId })[0];
+                var thisTransaction = await GetTransactionAsync(false, ColoredBalance, change.TransactionId).ConfigureAwait(false);
                 if (thisTransaction.ColoredTransaction == null)
                     return false;
                 change.ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(change, thisTransaction.ColoredTransaction);
