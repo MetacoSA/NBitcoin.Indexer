@@ -115,6 +115,7 @@ namespace NBitcoin.Indexer.Tests
                 if (_Client == null)
                 {
                     _Client = Indexer.Configuration.CreateIndexerClient();
+                    _Client.BalancePartitionSize = 1;
                 }
                 return _Client;
             }

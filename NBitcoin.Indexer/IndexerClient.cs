@@ -35,8 +35,14 @@ namespace NBitcoin.Indexer
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
+            BalancePartitionSize = 50;
         }
 
+        public int BalancePartitionSize
+        {
+            get;
+            set;
+        }
 
         public Block GetBlock(uint256 blockId)
         {
@@ -316,9 +322,19 @@ namespace NBitcoin.Indexer
         {
             return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId), query, cancel);
         }
+        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(string walletId,
+                                                                  BalanceQuery query = null,
+                                                                  CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCoreAsync(OrderedBalanceChange.GetBalanceId(walletId), query, cancel);
+        }
         public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalance(destination.ScriptPubKey, query, cancel);
+        }
+        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceAsync(destination.ScriptPubKey, query, cancel);
         }
 
 
@@ -326,22 +342,23 @@ namespace NBitcoin.Indexer
         {
             return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey), query, cancel);
         }
+        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCoreAsync(OrderedBalanceChange.GetBalanceId(scriptPubKey), query, cancel);
+        }
 
         private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, BalanceQuery query, CancellationToken cancel)
         {
-            TableContinuationToken token = null;
-            do
+            foreach (var partition in GetOrderedBalanceCoreAsync(balanceId, query, cancel))
             {
-                var list = GetOrderedBalanceCoreAsync(balanceId, query, cancel, token).Result;
-                foreach (var item in list.Item2)
+                foreach (var change in partition.Result)
                 {
-                    yield return item;
+                    yield return change;
                 }
-                token = list.Item1;
-            } while (token != null);
+            }
         }
 
-        private async Task<Tuple<TableContinuationToken, List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(string balanceId, BalanceQuery query, CancellationToken cancel, TableContinuationToken continuation)
+        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(string balanceId, BalanceQuery query, CancellationToken cancel)
         {
             if (query == null)
                 query = new BalanceQuery();
@@ -354,39 +371,43 @@ namespace NBitcoin.Indexer
 
             var entityQuery = query.CreateEntityQuery(balanceId);
 
-            var segmentedQuery = (await table.ExecuteQuerySegmentedAsync(entityQuery, continuation).ConfigureAwait(false));
-            continuation = segmentedQuery.ContinuationToken;
-            var loadedChanges =
-                segmentedQuery
+
+            var partitions =
+                table.ExecuteQuery(entityQuery)
                  .Select(c => new OrderedBalanceChange(c, Configuration.SerializerSettings))
                  .Select(c => new
                       {
                           Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
                           Change = c
-                      });
-            foreach (var c in loadedChanges)
+                      })
+                 .Partition(BalancePartitionSize);
+
+            foreach (var partition in partitions)
             {
                 cancel.ThrowIfCancellationRequested();
-                await c.Loaded.ConfigureAwait(false);
-                var change = c.Change;
-                if (change.BlockId == null)
-                    unconfirmedList.Add(change);
-                else
+                var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
+                foreach (var change in partition.Select(p => p.Change))
                 {
-                    if (unconfirmedList != null)
+                    if (change.BlockId == null)
+                        unconfirmedList.Add(change);
+                    else
                     {
-                        unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
-                        unconfirmedList = null;
-                    }
+                        if (unconfirmedList != null)
+                        {
+                            unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
+                            unconfirmedList = null;
+                        }
 
-                    while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
-                    {
-                        var unconfirmedChange = unconfirmed.Dequeue();
-                        result.Add(unconfirmedChange);
+                        while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
+                        {
+                            var unconfirmedChange = unconfirmed.Dequeue();
+                            result.Add(unconfirmedChange);
+                        }
+                        result.Add(change);
                     }
-
-                    result.Add(change);
                 }
+                yield return WaitAndReturn(partitionLoading, result);
+                result = new List<OrderedBalanceChange>();
             }
             if (unconfirmedList != null)
             {
@@ -398,7 +419,15 @@ namespace NBitcoin.Indexer
                 var change = unconfirmed.Dequeue();
                 result.Add(change);
             }
-            return Tuple.Create(continuation, result);
+            if (result.Count > 0)
+                yield return WaitAndReturn(null, result);
+        }
+
+        private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)
+        {
+            if (partitionLoading != null)
+                await Task.WhenAll(partitionLoading);
+            return result;
         }
 
         public void CleanUnconfirmedChanges(IDestination destination, TimeSpan olderThan)
