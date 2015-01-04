@@ -108,7 +108,7 @@ namespace NBitcoin.Indexer
                     Height = header.Height
                 };
 
-                IndexerTrace.Processed(height, _BlockHeaders.Tip.Height, lastLogs, lastHeights);
+                IndexerTrace.Processed(height, Math.Min(ToHeight, _BlockHeaders.Tip.Height), lastLogs, lastHeights);
                 height++;
             }
         }
