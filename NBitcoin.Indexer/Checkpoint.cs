@@ -17,6 +17,7 @@ namespace NBitcoin.Indexer
                 return _FileName;
             }
         }
+
         public Checkpoint(string fileName, Network network)
         {
             _FileName = fileName;
@@ -34,6 +35,14 @@ namespace NBitcoin.Indexer
             }
         }
 
+
+        public uint256 Genesis
+        {
+            get
+            {
+                return BlockLocator.Blocks[BlockLocator.Blocks.Count - 1];
+            }
+        }
 
         BlockLocator _BlockLocator;
         public BlockLocator BlockLocator

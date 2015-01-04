@@ -81,7 +81,10 @@ namespace NBitcoin.Indexer
         {
             Queue<DateTime> lastLogs = new Queue<DateTime>();
             Queue<int> lastHeights = new Queue<int>();
-            var fork = _BlockHeaders.FindFork(_Checkpoint.BlockLocator);
+
+            var locator = DisableSaving ? new BlockLocator(new List<uint256>() { _Checkpoint.Genesis }) : _Checkpoint.BlockLocator;
+
+            var fork = _BlockHeaders.FindFork(locator);
             var headers = _BlockHeaders.EnumerateAfter(fork);
             headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
             var first = headers.FirstOrDefault();

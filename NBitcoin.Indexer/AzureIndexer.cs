@@ -390,14 +390,32 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetBalanceTable();
             var blockId = block.GetHash();
-            foreach (var transaction in block.Transactions)
+            foreach (var group in
+                        block
+                        .Transactions
+                        .SelectMany(t => OrderedBalanceChange.ExtractScriptBalances(t.GetHash(), t, blockId, block.Header, height))
+                        .Select(_ => _.ToEntity(Configuration.SerializerSettings))
+                        .GroupBy(c => c.PartitionKey)
+                        )
             {
-                var txId = transaction.GetHash();
-                var changes = OrderedBalanceChange.ExtractScriptBalances(txId, transaction, blockId, block.Header, height).Select(c => c.ToEntity(Configuration.SerializerSettings));
-                foreach (var group in changes.GroupBy(c => c.PartitionKey))
-                {
-                    Index(group, table);
-                }
+                foreach (var batch in group.Partition(100))
+                    Index(batch, table);
+            }
+        }
+
+        public void IndexTransactions(int height, Block block)
+        {
+            var table = Configuration.GetTransactionTable();
+            var blockId = block.GetHash();
+            foreach (var group in
+                        block
+                        .Transactions
+                        .Select(t => new TransactionEntry.Entity(t.GetHash(), t, blockId))
+                        .Select(c => c.CreateTableEntity())
+                        .GroupBy(c => c.PartitionKey))
+            {
+                foreach (var batch in group.Partition(100))
+                    Index(batch, table);
             }
         }
 
@@ -568,5 +586,7 @@ namespace NBitcoin.Indexer
                 IndexerTrace.Information(file + " Deleted");
             }
         }
+
+
     }
 }
