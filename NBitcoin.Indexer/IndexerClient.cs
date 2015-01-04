@@ -426,7 +426,7 @@ namespace NBitcoin.Indexer
         private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)
         {
             if (partitionLoading != null)
-                await Task.WhenAll(partitionLoading);
+                await Task.WhenAll(partitionLoading).ConfigureAwait(false);
             return result;
         }
 
