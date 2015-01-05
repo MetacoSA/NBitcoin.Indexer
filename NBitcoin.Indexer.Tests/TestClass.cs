@@ -484,9 +484,9 @@ namespace NBitcoin.Indexer.Tests
 
                 var expectedRule = tester.Client.AddWalletRule("Alice", new ScriptRule(alice1)
                 {
-                    CustomData = new JObject(new JProperty("hello"))
+                    CustomData = "hello"
                 });
-
+                Assert.True(expectedRule.Rule.ToString().Contains("hello"));
                 var rules = tester.Client.GetWalletRules("Alice");
                 Assert.Equal(1, rules.Length);
                 Assert.Equal(expectedRule.WalletId, rules[0].WalletId);
@@ -805,6 +805,12 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.All.Count == 3);
                 Assert.True(sheet.All[0].Amount == Money.Parse("10.0"));
                 Assert.True(sheet.All[0].BlockId != null);
+
+                sheet.All[0].CustomData = "test";
+                tester.Indexer.Index(new OrderedBalanceChange[] { sheet.All[0] });
+
+                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.True(sheet.All[0].CustomData == "test");
             }
         }
 

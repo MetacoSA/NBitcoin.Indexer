@@ -3,6 +3,7 @@ using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.DamienG.Security.Cryptography;
 using NBitcoin.OpenAsset;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -366,6 +367,10 @@ namespace NBitcoin.Indexer
             {
                 _Script = new Script(entity.Properties["h"].BinaryValue);
             }
+
+            var data = Helper.GetEntityProperty(entity, "cu");
+            if (data != null)
+                CustomData = Encoding.UTF8.GetString(data);
         }
 
         internal OrderedBalanceChange(uint256 txId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
@@ -450,7 +455,17 @@ namespace NBitcoin.Indexer
             {
                 entity.Properties.Add("h", new EntityProperty(_Script.ToBytes(true)));
             }
+            if (CustomData != null)
+            {
+                Helper.SetEntityProperty(entity, "cu", Encoding.UTF8.GetBytes(CustomData));
+            }
             return entity;
+        }
+
+        public string CustomData
+        {
+            get;
+            set;
         }
 
         public static string GetPartitionKey(string balanceId)

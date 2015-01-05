@@ -14,7 +14,7 @@ namespace NBitcoin.Indexer
         {
         }
         [JsonProperty(DefaultValueHandling=DefaultValueHandling.Ignore)]
-        public JToken CustomData
+        public string CustomData
         {
             get;
             set;
