@@ -51,12 +51,12 @@ namespace NBitcoin.Indexer
         {
             return Parse(str, false);
         }
-        internal static BalanceLocator Parse(string str, bool internalFormat)
+        internal static BalanceLocator Parse(string str, bool queryFormat)
         {
             var splitted = str.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             if (splitted.Length == 0)
                 throw new FormatException("Invalid BalanceLocator string");
-            var height = internalFormat ? Helper.StringToHeight(splitted[0]) : int.Parse(splitted[0]);
+            var height = queryFormat ? Helper.StringToHeight(splitted[0]) : int.Parse(splitted[0]);
 
             uint256 transactionId = null;
             uint256 blockId = null;
