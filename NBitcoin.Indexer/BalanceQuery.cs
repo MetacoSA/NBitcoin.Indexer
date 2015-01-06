@@ -80,9 +80,9 @@ namespace NBitcoin.Indexer
             return ToString(false);
         }
 
-        internal string ToString(bool internalFormat)
+        public string ToString(bool queryFormat)
         {
-            var height = internalFormat ? Helper.HeightToString(Height) : Height.ToString();
+            var height = queryFormat ? Helper.HeightToString(Height) : Height.ToString();
             if (BlockHash != null)
                 return height + "-" + BlockHash + "-" + TransactionId;
             else
