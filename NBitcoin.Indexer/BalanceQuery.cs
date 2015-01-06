@@ -51,7 +51,7 @@ namespace NBitcoin.Indexer
         {
             return Parse(str, false);
         }
-        internal static BalanceLocator Parse(string str, bool queryFormat)
+        public static BalanceLocator Parse(string str, bool queryFormat)
         {
             var splitted = str.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             if (splitted.Length == 0)
