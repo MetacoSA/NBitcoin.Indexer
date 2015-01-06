@@ -109,6 +109,7 @@ namespace NBitcoin.Indexer
             To = new BalanceLocator(0);
             ToIncluded = true;
             FromIncluded = true;
+            Take = int.MaxValue;
         }
         public BalanceLocator To
         {
@@ -128,6 +129,12 @@ namespace NBitcoin.Indexer
         }
 
         public bool FromIncluded
+        {
+            get;
+            set;
+        }
+
+        public int? Take
         {
             get;
             set;
@@ -183,7 +190,8 @@ namespace NBitcoin.Indexer
                                                 TableQuery.GenerateFilterCondition("RowKey",
                                                         ToIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
                                                         balanceId + "-" + to.ToString(true))
-                                            ))
+                                            )),
+                  TakeCount = Take
             };
         }
 
