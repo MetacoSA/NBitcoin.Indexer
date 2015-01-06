@@ -226,10 +226,7 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetChainTable();
             List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
             foreach (var chainPart in
-            table.ExecuteQuery(new TableQuery()
-            {
-                TakeCount = 2   //If almost synchronized, then it won't affect too much table throttling
-            })
+                ExecuteBalanceQuery(table, new TableQuery(), new[] { 1, 2, 10 })
             .Concat(table.ExecuteQuery(new TableQuery()).Skip(2))
             .Select(e => new ChainPartEntry(e)))
             {
@@ -363,11 +360,11 @@ namespace NBitcoin.Indexer
             List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
 
             var table = Configuration.GetBalanceTable();
-
+            var tableQuery = ExecuteBalanceQuery(table, query.CreateEntityQuery(balanceId), query.PageSizes);
 
 
             var partitions =
-                ExecuteQuery(table,query, balanceId)
+                  tableQuery
                  .Select(c => new OrderedBalanceChange(c))
                  .Select(c => new
                       {
@@ -417,16 +414,14 @@ namespace NBitcoin.Indexer
                 yield return WaitAndReturn(null, result);
         }
 
-        private IEnumerable<DynamicTableEntity> ExecuteQuery(CloudTable table, BalanceQuery query, string balanceId)
+        private IEnumerable<DynamicTableEntity> ExecuteBalanceQuery(CloudTable table, TableQuery tableQuery, IEnumerable<int> pages)
         {
-            var tableQuery = query.CreateEntityQuery(balanceId);
-            var pages = query.PageSizes ?? new int[0];
-
+            pages = pages ?? new int[0];
             var pagesEnumerator = pages.GetEnumerator();
             TableContinuationToken continuation = null;
             do
             {
-                tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;                
+                tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
                 var segment = table.ExecuteQuerySegmented(tableQuery, continuation);
                 continuation = segment.ContinuationToken;
                 foreach (var entity in segment)
@@ -434,7 +429,6 @@ namespace NBitcoin.Indexer
                     yield return entity;
                 }
             } while (continuation != null);
-
         }
 
         private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)
