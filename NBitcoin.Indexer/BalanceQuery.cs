@@ -141,9 +141,14 @@ namespace NBitcoin.Indexer
         }
 
 
-        public TableQuery CreateEntityQuery(string balanceId)
+        public TableQuery CreateTableQuery(string balanceId)
         {
+            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
+            return CreateTableQuery(partition, balanceId);
+        }
 
+        public TableQuery CreateTableQuery(string partitionId, string scope)
+        {
             var from = From ?? new BalanceLocator(int.MaxValue);
             var to = To ?? new BalanceLocator(0);
             var toIncluded = ToIncluded;
@@ -175,22 +180,20 @@ namespace NBitcoin.Indexer
                 to = new BalanceLocator(to.Height, to.TransactionId, new uint256(toIncluded ? _MaxUInt256 : _MinUInt256));
             /////
 
-
-            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
             return new TableQuery()
             {
                 FilterString =
                 TableQuery.CombineFilters(
-                                            TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, partition),
+                                            TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, partitionId),
                                             TableOperators.And,
                                             TableQuery.CombineFilters(
                                             TableQuery.GenerateFilterCondition("RowKey",
-                                                    FromIncluded ? QueryComparisons.GreaterThanOrEqual : QueryComparisons.GreaterThan,
-                                                    balanceId + "-" + from.ToString(true)),
+                                                    fromIncluded ? QueryComparisons.GreaterThanOrEqual : QueryComparisons.GreaterThan,
+                                                    scope + "-" + from.ToString(true)),
                                                 TableOperators.And,
                                                 TableQuery.GenerateFilterCondition("RowKey",
-                                                        ToIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
-                                                        balanceId + "-" + to.ToString(true))
+                                                        toIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
+                                                        scope + "-" + to.ToString(true))
                                             ))
             };
         }

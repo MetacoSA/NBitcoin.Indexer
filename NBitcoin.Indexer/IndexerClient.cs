@@ -360,7 +360,7 @@ namespace NBitcoin.Indexer
             List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
 
             var table = Configuration.GetBalanceTable();
-            var tableQuery = ExecuteBalanceQuery(table, query.CreateEntityQuery(balanceId), query.PageSizes);
+            var tableQuery = ExecuteBalanceQuery(table, query.CreateTableQuery(balanceId), query.PageSizes);
 
 
             var partitions =
@@ -447,7 +447,7 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetBalanceTable();
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
-            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateEntityQuery(OrderedBalanceChange.GetBalanceId(scriptPubKey))))
+            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(OrderedBalanceChange.GetBalanceId(scriptPubKey))))
             {
                 var change = new OrderedBalanceChange(c);
                 if (change.BlockId != null)
