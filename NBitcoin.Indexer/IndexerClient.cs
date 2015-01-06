@@ -364,11 +364,10 @@ namespace NBitcoin.Indexer
 
             var table = Configuration.GetBalanceTable();
 
-            var entityQuery = query.CreateEntityQuery(balanceId);
 
 
             var partitions =
-                table.ExecuteQuery(entityQuery)
+                ExecuteQuery(table,query, balanceId)
                  .Select(c => new OrderedBalanceChange(c))
                  .Select(c => new
                       {
@@ -416,6 +415,26 @@ namespace NBitcoin.Indexer
             }
             if (result.Count > 0)
                 yield return WaitAndReturn(null, result);
+        }
+
+        private IEnumerable<DynamicTableEntity> ExecuteQuery(CloudTable table, BalanceQuery query, string balanceId)
+        {
+            var tableQuery = query.CreateEntityQuery(balanceId);
+            var pages = query.PageSizes ?? new int[0];
+
+            var pagesEnumerator = pages.GetEnumerator();
+            TableContinuationToken continuation = null;
+            do
+            {
+                tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;                
+                var segment = table.ExecuteQuerySegmented(tableQuery, continuation);
+                continuation = segment.ContinuationToken;
+                foreach (var entity in segment)
+                {
+                    yield return entity;
+                }
+            } while (continuation != null);
+
         }
 
         private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)

@@ -89,6 +89,7 @@ namespace NBitcoin.Indexer
                 return height + "-" + TransactionId;
         }
     }
+
     public class BalanceQuery
     {
         static uint256 _MinUInt256;
@@ -133,11 +134,12 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public int? Take
+        public IEnumerable<int> PageSizes
         {
             get;
             set;
         }
+
 
         public TableQuery CreateEntityQuery(string balanceId)
         {
@@ -189,8 +191,7 @@ namespace NBitcoin.Indexer
                                                 TableQuery.GenerateFilterCondition("RowKey",
                                                         ToIncluded ? QueryComparisons.LessThanOrEqual : QueryComparisons.LessThan,
                                                         balanceId + "-" + to.ToString(true))
-                                            )),
-                  TakeCount = Take
+                                            ))
             };
         }
 
