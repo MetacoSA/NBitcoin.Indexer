@@ -109,7 +109,6 @@ namespace NBitcoin.Indexer
             To = new BalanceLocator(0);
             ToIncluded = true;
             FromIncluded = true;
-            Take = int.MaxValue;
         }
         public BalanceLocator To
         {
