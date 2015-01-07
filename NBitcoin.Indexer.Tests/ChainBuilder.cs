@@ -40,10 +40,10 @@ namespace NBitcoin.Indexer.Tests
             set;
         }
 
-        public Transaction EmitMoney(IDestination destination, Money amount)
+        public Transaction EmitMoney(IDestination destination, Money amount, bool isCoinbase = true)
         {
             Transaction transaction = new Transaction();
-            if (!NoRandom)
+            if (!NoRandom && isCoinbase)
                 transaction.AddInput(new TxIn()
                 {
                     ScriptSig = new Script(RandomUtils.GetBytes(32)),
@@ -61,7 +61,8 @@ namespace NBitcoin.Indexer.Tests
         {
             var b = GetCurrentBlock();
             b.Transactions.Add(tx);
-            _Tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+            if (!tx.IsCoinBase)
+                _Tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
         }
         uint nonce = 0;
         private Block CreateNewBlock()
@@ -95,6 +96,10 @@ namespace NBitcoin.Indexer.Tests
             {
                 var height = _Chain.GetBlock(b.GetHash()).Height;
                 _Tester.Indexer.IndexOrderedBalance(height, b);
+                foreach (var tx in b.Transactions.Where(t => t.IsCoinBase))
+                {
+                    _Tester.Indexer.Index(new [] { new TransactionEntry.Entity(tx.GetHash(), tx, b.GetHash()) });
+                }
                 if (walletRules.Count() != 0)
                 {
                     _Tester.Indexer.IndexWalletOrderedBalance(height, b, walletRules);

@@ -745,7 +745,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.All.Count == 2);
                 Assert.True(sheet.All[0].Amount == Money.Parse("20.0"));
 
-                var tx = chainBuilder.EmitMoney(bob, "10.0");
+                var tx = chainBuilder.EmitMoney(bob, "10.0", false);
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
                 tester.Indexer.IndexOrderedBalance(tx);
 
