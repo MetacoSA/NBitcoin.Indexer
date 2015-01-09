@@ -288,10 +288,9 @@ namespace NBitcoin.Indexer
         }
 
 
-        public TableQuery CreateTableQuery(string balanceId)
+        public TableQuery CreateTableQuery(BalanceId balanceId)
         {
-            var partition = OrderedBalanceChange.GetPartitionKey(balanceId);
-            return CreateTableQuery(partition, balanceId);
+            return CreateTableQuery(balanceId.PartitionKey, balanceId.ToString());
         }
 
         public TableQuery CreateTableQuery(string partitionId, string scope)

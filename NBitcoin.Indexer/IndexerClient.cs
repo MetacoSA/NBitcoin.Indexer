@@ -312,13 +312,28 @@ namespace NBitcoin.Indexer
                                                                    BalanceQuery query = null,
                                                                    CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(walletId), query, cancel);
+            return GetOrderedBalanceCore(new BalanceId(walletId), query, cancel);
         }
+
+        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(BalanceId balanceId,
+                                                                  BalanceQuery query = null,
+                                                                  CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCore(balanceId, query, cancel);
+        }
+
+        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(BalanceId balanceId,
+                                                                  BalanceQuery query = null,
+                                                                  CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCoreAsync(balanceId, query, cancel);
+        }
+
         public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(string walletId,
                                                                   BalanceQuery query = null,
                                                                   CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCoreAsync(OrderedBalanceChange.GetBalanceId(walletId), query, cancel);
+            return GetOrderedBalanceCoreAsync(new BalanceId(walletId), query, cancel);
         }
         public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
@@ -332,14 +347,14 @@ namespace NBitcoin.Indexer
 
         public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(OrderedBalanceChange.GetBalanceId(scriptPubKey), query, cancel);
+            return GetOrderedBalanceCore(new BalanceId(scriptPubKey), query, cancel);
         }
         public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCoreAsync(OrderedBalanceChange.GetBalanceId(scriptPubKey), query, cancel);
+            return GetOrderedBalanceCoreAsync(new BalanceId(scriptPubKey), query, cancel);
         }
 
-        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(string balanceId, BalanceQuery query, CancellationToken cancel)
+        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
         {
             foreach (var partition in GetOrderedBalanceCoreAsync(balanceId, query, cancel))
             {
@@ -364,7 +379,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(string balanceId, BalanceQuery query, CancellationToken cancel)
+        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
         {
             if (query == null)
                 query = new BalanceQuery();
@@ -487,7 +502,7 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetBalanceTable();
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
-            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(OrderedBalanceChange.GetBalanceId(scriptPubKey))))
+            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))))
             {
                 var change = new OrderedBalanceChange(c);
                 if (change.BlockId != null)
@@ -593,15 +608,15 @@ namespace NBitcoin.Indexer
 
         public void MergeIntoWallet(string walletId, Script scriptPubKey, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(scriptPubKey), cancel);
+            MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), cancel);
         }
 
         public void MergeIntoWallet(string walletId, string walletSource, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, OrderedBalanceChange.GetBalanceId(walletSource), cancel);
+            MergeIntoWalletCore(walletId, new BalanceId(walletSource), cancel);
         }
 
-        private void MergeIntoWalletCore(string walletId, string balanceId, CancellationToken cancel)
+        private void MergeIntoWalletCore(string walletId, BalanceId balanceId, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
 
