@@ -350,14 +350,25 @@ namespace NBitcoin.Indexer
             }
         }
 
+        class LoadingTransactionTask
+        {
+            public Task<bool> Loaded
+            {
+                get;
+                set;
+            }
+            public OrderedBalanceChange Change
+            {
+                get;
+                set;
+            }
+        }
+
         private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(string balanceId, BalanceQuery query, CancellationToken cancel)
         {
             if (query == null)
                 query = new BalanceQuery();
-            Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
-            List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
-
-            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
+           
 
             var table = Configuration.GetBalanceTable();
             var tableQuery = ExecuteBalanceQuery(table, query.CreateTableQuery(balanceId), query.PageSizes);
@@ -366,13 +377,42 @@ namespace NBitcoin.Indexer
             var partitions =
                   tableQuery
                  .Select(c => new OrderedBalanceChange(c))
-                 .Select(c => new
+                 .Select(c => new LoadingTransactionTask
                       {
                           Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
                           Change = c
                       })
                  .Partition(BalancePartitionSize);
 
+            if (!query.RawOrdering)
+            {
+                return GetOrderedBalanceCoreAsyncOrdered(partitions, cancel);
+            }
+            return GetOrderedBalanceCoreAsyncRaw(partitions, cancel);
+        }
+
+        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncRaw(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
+        {
+            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
+            foreach (var partition in partitions)
+            {
+                cancel.ThrowIfCancellationRequested();
+                var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
+                foreach (var change in partition.Select(p => p.Change))
+                {
+                    result.Add(change);
+                }
+                yield return WaitAndReturn(partitionLoading, result);
+                result = new List<OrderedBalanceChange>();
+            }
+        }
+
+        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncOrdered(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
+        {
+            Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
+            List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
+
+            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
             foreach (var partition in partitions)
             {
                 cancel.ThrowIfCancellationRequested();
@@ -564,10 +604,16 @@ namespace NBitcoin.Indexer
         private void MergeIntoWalletCore(string walletId, string balanceId, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
-            var sourcesByKey = GetOrderedBalanceCore(balanceId, null, cancel)
+
+            var query = new BalanceQuery()
+            {
+                From = new UnconfirmedBalanceLocator().Floor(),
+                RawOrdering = true
+            };
+            var sourcesByKey = GetOrderedBalanceCore(balanceId, query, cancel)
                 .ToDictionary(i => GetKey(i));
             var destByKey =
-                GetOrderedBalance(walletId, null, cancel)
+                GetOrderedBalance(walletId, query, cancel)
                 .ToDictionary(i => GetKey(i));
 
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();

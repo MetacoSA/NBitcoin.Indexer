@@ -40,29 +40,33 @@ namespace NBitcoin.Indexer.Tests
             set;
         }
 
-        public Transaction EmitMoney(IDestination destination, Money amount, bool isCoinbase = true)
+        public Transaction EmitMoney(IDestination destination, Money amount, bool isCoinbase = true, bool indexBalance = false)
         {
             Transaction transaction = new Transaction();
-            if (!NoRandom && isCoinbase)
+            if (isCoinbase)
                 transaction.AddInput(new TxIn()
                 {
-                    ScriptSig = new Script(RandomUtils.GetBytes(32)),
+                    ScriptSig = new Script(NoRandom ? new uint256(0).ToBytes() : RandomUtils.GetBytes(32)),
                 });
             transaction.AddOutput(new TxOut()
             {
                 ScriptPubKey = destination.ScriptPubKey,
                 Value = amount
             });
-            Add(transaction);
+            Add(transaction, indexBalance);
             return transaction;
         }
 
-        private void Add(Transaction tx)
+        private void Add(Transaction tx, bool indexBalances)
         {
             var b = GetCurrentBlock();
             b.Transactions.Add(tx);
             if (!tx.IsCoinBase)
+            {
                 _Tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+                if (indexBalances)
+                    _Tester.Indexer.IndexOrderedBalance(tx);
+            }
         }
         uint nonce = 0;
         private Block CreateNewBlock()
@@ -98,7 +102,7 @@ namespace NBitcoin.Indexer.Tests
                 _Tester.Indexer.IndexOrderedBalance(height, b);
                 foreach (var tx in b.Transactions.Where(t => t.IsCoinBase))
                 {
-                    _Tester.Indexer.Index(new [] { new TransactionEntry.Entity(tx.GetHash(), tx, b.GetHash()) });
+                    _Tester.Indexer.Index(new[] { new TransactionEntry.Entity(tx.GetHash(), tx, b.GetHash()) });
                 }
                 if (walletRules.Count() != 0)
                 {
@@ -108,9 +112,9 @@ namespace NBitcoin.Indexer.Tests
             _UnsyncBlocks.Clear();
         }
 
-        public Transaction Emit(Transaction transaction)
+        public Transaction Emit(Transaction transaction, bool indexBalance = false)
         {
-            Add(transaction);
+            Add(transaction, indexBalance);
             _Mempool.Add(transaction.GetHash(), transaction);
             return transaction;
         }

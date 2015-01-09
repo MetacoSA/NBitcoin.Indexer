@@ -16,6 +16,7 @@ using System.Linq;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -96,6 +97,13 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(0, tester.Indexer.IndexTransactions());
             }
         }
+
+
+        //[Fact]
+        //public void CanGetOrderedBalance2()
+        //{
+
+        //}
 
         BitcoinSecret alice = new BitcoinSecret("KyJTjvFpPF6DDX4fnT56d2eATPfxjdUPXFFUb85psnCdh34iyXRQ");
         BitcoinSecret bob = new BitcoinSecret("KysJMPCkFP4SLsEQAED9CzCurJBkeVvAa4jeN1BBtYS7P5LocUBQ");
@@ -471,7 +479,6 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
-
         [Fact]
         public void CanGetWalletOrderedBalances()
         {
@@ -658,38 +665,52 @@ namespace NBitcoin.Indexer.Tests
                 txs.Add("tx22", chainBuilder.EmitMoney(bob, "2.2"));
                 chainBuilder.SubmitBlock();
 
-                txs.Add("tx31", chainBuilder.EmitMoney(bob, "3.3"));
-                txs.Add("tx32", chainBuilder.EmitMoney(bob, "3.1"));
-                txs.Add("tx33", chainBuilder.EmitMoney(bob, "3.2"));
+                txs.Add("tx31", chainBuilder.EmitMoney(bob, "3.1"));
+                txs.Add("tx32", chainBuilder.EmitMoney(bob, "3.2"));
+                txs.Add("tx33", chainBuilder.EmitMoney(bob, "3.3"));
                 chainBuilder.SubmitBlock();
 
-                txs.Add("tx41", chainBuilder.EmitMoney(bob, "4.1"));
-                txs.Add("tx42", chainBuilder.EmitMoney(bob, "4.2"));
-                txs.Add("tx43", chainBuilder.EmitMoney(bob, "4.3"));
+                txs.Add("tx41", chainBuilder.EmitMoney(bob, "4.2"));
+                txs.Add("tx42", chainBuilder.EmitMoney(bob, "4.3"));
+                txs.Add("tx43", chainBuilder.EmitMoney(bob, "4.1"));
                 chainBuilder.SubmitBlock();
+
+                txs.Add("utx51", chainBuilder.EmitMoney(bob, "5.1", isCoinbase: false, indexBalance: true));
+                Thread.Sleep(1000);
+                txs.Add("utx52", chainBuilder.EmitMoney(bob, "5.2", isCoinbase: false, indexBalance: true));
+                Thread.Sleep(1000);
+                txs.Add("utx53", chainBuilder.EmitMoney(bob, "5.3", isCoinbase: false, indexBalance:true));
 
                 chainBuilder.SyncIndexer();
 
+
                 var tests = new String[][]
                 {
-                     new string[]{"2in", "4in", "tx21,tx22,tx31,tx32,tx33,tx41,tx42,tx43"},
-                     new string[]{"4in", "2in", "tx21,tx22,tx31,tx32,tx33,tx41,tx42,tx43"}, //Does not care about order
-                     new string[]{"2ex", "4in", "tx31,tx32,tx33,tx41,tx42,tx43"},
-                     new string[]{"2in", "4ex", "tx21,tx22,tx31,tx32,tx33"},
-                     new string[]{"2ex", "4ex", "tx31,tx32,tx33"}
+                     new string[]{"2in", "4in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"},
+                     new string[]{"4in", "2in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"}, //Does not care about order
+                     new string[]{"2ex", "4in", "tx43,tx42,tx41,tx33,tx32,tx31"},
+                     new string[]{"2in", "4ex", "tx33,tx32,tx31,tx22,tx21"},
+                     new string[]{"2ex", "4ex", "tx33,tx32,tx31"},
+                     new string[]{"{utx51}in", "{utx53}in", "utx53,utx52,utx51"},
+                     new string[]{"{utx51}in", "{utx53}ex", "utx52,utx51"},
+                     new string[]{"{utx51}ex", "{utx53}in", "utx53,utx52"},
+                     new string[]{"{utx52}ex", "3in", "utx51,tx43,tx42,tx41,tx33,tx32,tx31"}
                 };
+
+                var all = tester.Client.GetOrderedBalance(bob).ToArray();
+                Assert.Equal(all.Length, txs.Count);
 
                 foreach (var test in tests)
                 {
                     var data = test;
                     BalanceQuery query = new BalanceQuery();
-                    query.From = Parse(data[0]);
+                    query.From = Parse(data[0], all, txs);
                     query.FromIncluded = ParseIncl(data[0]);
-                    query.To = Parse(data[1]);
+                    query.To = Parse(data[1], all, txs);
                     query.ToIncluded = ParseIncl(data[1]);
 
                     var result = tester.Client.GetOrderedBalance(bob, query).ToArray();
-                    var expected = data[2].Split(',').Reverse().ToArray();
+                    var expected = data[2].Split(',').ToArray();
 
                     var expectedResult = String.Join(",", expected);
                     var actualResult = String.Join(",", result.Select(o => GetName(txs, o)));
@@ -700,7 +721,7 @@ namespace NBitcoin.Indexer.Tests
 
         private string GetName(Dictionary<string, Transaction> txs, OrderedBalanceChange change)
         {
-            var name = txs.FirstOrDefault(t => t.Value.GetHash() == change.TransactionId).Key;
+            var name = txs.Single(t => t.Value.GetHash() == change.TransactionId).Key;
             var unconf1 = name.StartsWith("u");
             var unconf2 = change.BlockId == null;
             if (unconf1 != unconf2)
@@ -713,9 +734,19 @@ namespace NBitcoin.Indexer.Tests
             return included.EndsWith("in");
         }
 
-        private BalanceLocator Parse(string loc)
+        private BalanceLocator Parse(string loc, OrderedBalanceChange[] changes, Dictionary<string, Transaction> txs)
         {
-            return BalanceLocator.Parse(loc.Substring(0, loc.Length - 2));
+            if (loc.Contains("{"))
+            {
+                var res = Regex.Match(loc, "{(.*?)}");
+                var tx = txs[res.Groups[1].Value];
+                var change = changes.Single(c => c.TransactionId == tx.GetHash());
+                return new UnconfirmedBalanceLocator(change.SeenUtc, tx.GetHash());
+            }
+            else
+            {
+                return BalanceLocator.Parse(loc.Substring(0, loc.Length - 2));
+            }
         }
 
 
@@ -929,7 +960,7 @@ namespace NBitcoin.Indexer.Tests
                     .SetChange(alice)
                     .BuildTransaction(true);
                 tx.AddOutput(new TxOut(Money.Zero, TxNullDataTemplate.Instance.GenerateScriptPubKey(RandomUtils.GetBytes(3)))); //Add OP_RETURN
-                chainBuilder.Emit(tx);
+                chainBuilder.Emit(tx, false);
                 var block = chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 

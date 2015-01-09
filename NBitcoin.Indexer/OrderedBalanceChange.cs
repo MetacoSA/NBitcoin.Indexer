@@ -322,9 +322,19 @@ namespace NBitcoin.Indexer
             BalanceId = splitted[0];
 
             var locator = BalanceLocator.Parse(string.Join("-", splitted.Skip(1).ToArray()), true);
-            Height = locator.Height;
-            TransactionId = locator.TransactionId;
-            BlockId = locator.BlockHash;
+            var confLocator = locator as ConfirmedBalanceLocator;
+            if (confLocator != null)
+            {
+                Height = confLocator.Height;
+                TransactionId = confLocator.TransactionId;
+                BlockId = confLocator.BlockHash;
+            }
+
+            var unconfLocator = locator as UnconfirmedBalanceLocator;
+            if (unconfLocator != null)
+            {
+                TransactionId = unconfLocator.TransactionId;
+            }
 
             SeenUtc = entity.Properties["s"].DateTime.Value;
 
@@ -424,7 +434,10 @@ namespace NBitcoin.Indexer
 
         public BalanceLocator CreateBalanceLocator()
         {
-            return new BalanceLocator(this);
+            if (Height == int.MaxValue)
+                return new UnconfirmedBalanceLocator(SeenUtc, TransactionId);
+            else
+                return new ConfirmedBalanceLocator(this);
         }
 
         internal DynamicTableEntity ToEntity()
@@ -474,10 +487,7 @@ namespace NBitcoin.Indexer
         }
 
         const string DateFormat = "yyyyMMddhhmmssff";
-        private string ToString(DateTime date)
-        {
-            return Helper.ToggleChars(date.ToString(DateFormat));
-        }
+       
 
         public static IEnumerable<OrderedBalanceChange> ExtractScriptBalances(Transaction tx)
         {

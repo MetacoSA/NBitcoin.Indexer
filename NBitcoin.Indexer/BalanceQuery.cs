@@ -1,4 +1,5 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.DataEncoders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,34 +8,31 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public class BalanceLocator
+    public class UnconfirmedBalanceLocator : BalanceLocator
     {
-        public BalanceLocator(OrderedBalanceChange change)
-            : this(change.Height, change.BlockId, change.TransactionId)
+        public UnconfirmedBalanceLocator()
         {
-
+            SeenDate = Utils.UnixTimeToDateTime(uint.MaxValue);
         }
-        public BalanceLocator(int height, uint256 blockId = null, uint256 transactionId = null)
+        public UnconfirmedBalanceLocator(DateTimeOffset seenDate, uint256 transactionId = null)
         {
-            Height = height;
-            BlockHash = blockId;
+            SeenDate = seenDate;
             TransactionId = transactionId;
         }
-
-        public BalanceLocator(uint256 unconfTransactionId)
+        public new static UnconfirmedBalanceLocator Parse(string str)
         {
-            TransactionId = unconfTransactionId;
-            Height = int.MaxValue;
+            var result = BalanceLocator.Parse(str);
+            if (!(result is UnconfirmedBalanceLocator))
+                throw InvalidUnconfirmedBalance();
+            return (UnconfirmedBalanceLocator)result;
         }
 
-        public int Height
+        private static FormatException InvalidUnconfirmedBalance()
         {
-            get;
-            set;
+            return new FormatException("Invalid Unconfirmed Balance Locator");
         }
 
-
-        public uint256 BlockHash
+        public DateTimeOffset SeenDate
         {
             get;
             set;
@@ -46,7 +44,149 @@ namespace NBitcoin.Indexer
             set;
         }
 
+        internal static BalanceLocator ParseCore(string[] splitted, bool queryFormat)
+        {
+            if (splitted.Length < 2)
+                throw InvalidUnconfirmedBalance();
 
+            uint date = queryFormat ? ParseUint(Helper.ToggleChars(splitted[1])) : ParseUint(splitted[1]);
+            uint256 transactionId = null;
+            if (splitted.Length >= 3)
+                transactionId = new uint256(Encoders.Hex.DecodeData(splitted[2]), false);
+            return new UnconfirmedBalanceLocator(Utils.UnixTimeToDateTime(date), transactionId);
+        }
+
+        private static uint ParseUint(string str)
+        {
+            uint result;
+            if (!uint.TryParse(str, out result))
+                throw InvalidUnconfirmedBalance();
+            return result;
+        }
+
+        public override string ToString(bool queryFormat)
+        {
+            var height = queryFormat ? Helper.HeightToString(int.MaxValue) : int.MaxValue.ToString();
+            var date = queryFormat ? Helper.ToggleChars(ToString(SeenDate)) : ToString(SeenDate);
+            return height + "-" + date+ "-" + TransactionId;
+        }
+
+        private string ToString(DateTimeOffset SeenDate)
+        {
+            return Utils.DateTimeToUnixTime(SeenDate).ToString(Helper.format);
+        }
+
+        public override BalanceLocator Ceil()
+        {
+            UnconfirmedBalanceLocator result = this;
+            if (TransactionId == null)
+                result = new UnconfirmedBalanceLocator(result.SeenDate, transactionId: _MinUInt256);
+            return result;
+        }
+
+        public override BalanceLocator Floor()
+        {
+            UnconfirmedBalanceLocator result = this;
+            if (TransactionId == null)
+                result = new UnconfirmedBalanceLocator(result.SeenDate, transactionId: _MaxUInt256);
+            return result;
+        }
+    }
+    public class ConfirmedBalanceLocator : BalanceLocator
+    {
+        public new static ConfirmedBalanceLocator Parse(string str)
+        {
+            var result = BalanceLocator.Parse(str);
+            if (!(result is ConfirmedBalanceLocator))
+                throw new FormatException("Invalid Confirmed Balance Locator");
+            return (ConfirmedBalanceLocator)result;
+        }
+        internal static BalanceLocator ParseCore(int height, string[] splitted)
+        {
+            uint256 blockId = null;
+            uint256 transactionId = null;
+
+            if (splitted.Length >= 2)
+                blockId = new uint256(Encoders.Hex.DecodeData(splitted[1]), false);
+            if (splitted.Length >= 3)
+                transactionId = new uint256(Encoders.Hex.DecodeData(splitted[2]), false);
+            return new ConfirmedBalanceLocator(height, blockId, transactionId);
+        }
+        public ConfirmedBalanceLocator()
+        {
+
+        }
+        public ConfirmedBalanceLocator(OrderedBalanceChange change)
+            : this(change.Height, change.BlockId, change.TransactionId)
+        {
+        }
+        public ConfirmedBalanceLocator(int height, uint256 blockId = null, uint256 transactionId = null)
+        {
+            if (height == int.MaxValue)
+                throw new ArgumentOutOfRangeException("height", "A confirmed block can't have such height");
+            Height = height;
+            BlockHash = blockId;
+            TransactionId = transactionId;
+        }
+        public int Height
+        {
+            get;
+            set;
+        }
+        public uint256 BlockHash
+        {
+            get;
+            set;
+        }
+        public uint256 TransactionId
+        {
+            get;
+            set;
+        }
+
+        public override string ToString(bool queryFormat)
+        {
+            var height = queryFormat ? Helper.HeightToString(Height) : Height.ToString();
+            return height + "-" + BlockHash + "-" + TransactionId;
+        }
+
+        public override BalanceLocator Floor()
+        {
+            ConfirmedBalanceLocator result = this;
+            if (TransactionId == null)
+                result = new ConfirmedBalanceLocator(result.Height, transactionId: _MinUInt256);
+
+            if (BlockHash == null)
+                result = new ConfirmedBalanceLocator(result.Height, result.TransactionId, _MinUInt256);
+            return result;
+        }
+
+        public override BalanceLocator Ceil()
+        {
+            ConfirmedBalanceLocator result = this;
+            if (TransactionId == null)
+                result = new ConfirmedBalanceLocator(result.Height, transactionId: _MaxUInt256);
+
+            if (BlockHash == null)
+                result = new ConfirmedBalanceLocator(result.Height, result.TransactionId, _MaxUInt256);
+            return result;
+        }
+    }
+
+    public abstract class BalanceLocator
+    {
+        static BalanceLocator()
+        {
+            _MinUInt256 = new uint256(new byte[32]);
+            var b = new byte[32];
+            for (int i = 0 ; i < b.Length ; i++)
+            {
+                b[i] = 0xFF;
+            }
+            _MaxUInt256 = new uint256(b);
+        }
+        internal static uint256 _MinUInt256;
+        internal static uint256 _MaxUInt256;
         public static BalanceLocator Parse(string str)
         {
             return Parse(str, false);
@@ -58,56 +198,57 @@ namespace NBitcoin.Indexer
                 throw new FormatException("Invalid BalanceLocator string");
             var height = queryFormat ? Helper.StringToHeight(splitted[0]) : int.Parse(splitted[0]);
 
-            uint256 transactionId = null;
-            uint256 blockId = null;
             if (height == int.MaxValue)
             {
-                if (splitted.Length >= 2)
-                    transactionId = new uint256(splitted[1]);
+                return UnconfirmedBalanceLocator.ParseCore(splitted, queryFormat);
             }
             else
             {
-                if (splitted.Length >= 2)
-                    blockId = new uint256(splitted[1]);
-                if (splitted.Length >= 3)
-                    transactionId = new uint256(splitted[2]);
+                return ConfirmedBalanceLocator.ParseCore(height, splitted);
             }
-            return new BalanceLocator(height, blockId, transactionId);
         }
+
 
         public override string ToString()
         {
             return ToString(false);
         }
 
-        public string ToString(bool queryFormat)
+        public abstract string ToString(bool queryFormat);
+
+        public bool YoungerThan(BalanceLocator to)
         {
-            var height = queryFormat ? Helper.HeightToString(Height) : Height.ToString();
-            if (BlockHash != null)
-                return height + "-" + BlockHash + "-" + TransactionId;
-            else
-                return height + "-" + TransactionId;
+            if (this is UnconfirmedBalanceLocator && to is ConfirmedBalanceLocator)
+                return true;
+            if (this is ConfirmedBalanceLocator && to is UnconfirmedBalanceLocator)
+                return false;
+            if (this is ConfirmedBalanceLocator && to is ConfirmedBalanceLocator)
+            {
+                var a = (ConfirmedBalanceLocator)this;
+                var b = (ConfirmedBalanceLocator)to;
+                return a.Height > b.Height;
+            }
+            if (this is UnconfirmedBalanceLocator && to is UnconfirmedBalanceLocator)
+            {
+                var a = (UnconfirmedBalanceLocator)this;
+                var b = (UnconfirmedBalanceLocator)to;
+                return a.SeenDate > b.SeenDate;
+            }
+            throw new NotSupportedException("should never happen");
         }
+
+        public abstract BalanceLocator Floor();
+        public abstract BalanceLocator Ceil();
     }
 
     public class BalanceQuery
     {
         static uint256 _MinUInt256;
         static uint256 _MaxUInt256;
-        static BalanceQuery()
-        {
-            _MinUInt256 = new uint256(new byte[32]);
-            var b = new byte[32];
-            for (int i = 0 ; i < b.Length ; i++)
-            {
-                b[i] = 0xFF;
-            }
-            _MaxUInt256 = new uint256(b);
-        }
         public BalanceQuery()
         {
-            From = new BalanceLocator(int.MaxValue);
-            To = new BalanceLocator(0);
+            From = new UnconfirmedBalanceLocator();
+            To = new ConfirmedBalanceLocator(0);
             ToIncluded = true;
             FromIncluded = true;
         }
@@ -134,6 +275,12 @@ namespace NBitcoin.Indexer
             set;
         }
 
+        public bool RawOrdering
+        {
+            get;
+            set;
+        }
+
         public IEnumerable<int> PageSizes
         {
             get;
@@ -149,13 +296,13 @@ namespace NBitcoin.Indexer
 
         public TableQuery CreateTableQuery(string partitionId, string scope)
         {
-            var from = From ?? new BalanceLocator(int.MaxValue);
-            var to = To ?? new BalanceLocator(0);
+            BalanceLocator from = From ?? new UnconfirmedBalanceLocator();
+            BalanceLocator to = To ?? new ConfirmedBalanceLocator(0);
             var toIncluded = ToIncluded;
             var fromIncluded = FromIncluded;
 
             //Fix automatically if wrong order
-            if (from.Height < to.Height)
+            if (!from.YoungerThan(to))
             {
                 var temp = to;
                 var temp2 = toIncluded;
@@ -166,18 +313,9 @@ namespace NBitcoin.Indexer
             }
             ////
 
-            //Complete the balance locator if partial
-            if (from.TransactionId == null)
-                from = new BalanceLocator(from.Height, transactionId: new uint256(fromIncluded ? _MinUInt256 : _MaxUInt256));
-
-            if (from.BlockHash == null)
-                from = new BalanceLocator(from.Height, from.TransactionId, new uint256(fromIncluded ? _MinUInt256 : _MaxUInt256));
-
-            if (to.TransactionId == null)
-                to = new BalanceLocator(to.Height, transactionId: new uint256(toIncluded ? _MaxUInt256 : _MinUInt256));
-
-            if (to.BlockHash == null)
-                to = new BalanceLocator(to.Height, to.TransactionId, new uint256(toIncluded ? _MaxUInt256 : _MinUInt256));
+            //Complete the balance locator is partial
+            from = fromIncluded ? from.Floor() : from.Ceil();
+            to = toIncluded ? to.Ceil() : to.Floor();
             /////
 
             return new TableQuery()

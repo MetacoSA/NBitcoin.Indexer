@@ -150,7 +150,7 @@ namespace NBitcoin.Indexer
             return JsonConvert.DeserializeObject<T>(str, Settings);
         }
 
-        static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
+        internal static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
         static char[] Digit = Enumerable.Range(0, 10).Select(c => c.ToString()[0]).ToArray();
 
         //Convert '012' to '987'
