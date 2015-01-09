@@ -243,8 +243,6 @@ namespace NBitcoin.Indexer
 
     public class BalanceQuery
     {
-        static uint256 _MinUInt256;
-        static uint256 _MaxUInt256;
         public BalanceQuery()
         {
             From = new UnconfirmedBalanceLocator();
