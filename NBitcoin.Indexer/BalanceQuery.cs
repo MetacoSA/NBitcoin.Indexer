@@ -154,10 +154,10 @@ namespace NBitcoin.Indexer
         {
             ConfirmedBalanceLocator result = this;
             if (TransactionId == null)
-                result = new ConfirmedBalanceLocator(result.Height, transactionId: _MinUInt256);
+                result = new ConfirmedBalanceLocator(result.Height, result.BlockHash, transactionId: _MinUInt256);
 
             if (BlockHash == null)
-                result = new ConfirmedBalanceLocator(result.Height, result.TransactionId, _MinUInt256);
+                result = new ConfirmedBalanceLocator(result.Height, _MinUInt256, result.TransactionId);
             return result;
         }
 
@@ -168,7 +168,7 @@ namespace NBitcoin.Indexer
                 result = new ConfirmedBalanceLocator(result.Height, transactionId: _MaxUInt256);
 
             if (BlockHash == null)
-                result = new ConfirmedBalanceLocator(result.Height, result.TransactionId, _MaxUInt256);
+                result = new ConfirmedBalanceLocator(result.Height, _MaxUInt256, result.TransactionId);
             return result;
         }
     }
