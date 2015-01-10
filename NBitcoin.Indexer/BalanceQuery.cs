@@ -165,7 +165,7 @@ namespace NBitcoin.Indexer
         {
             ConfirmedBalanceLocator result = this;
             if (TransactionId == null)
-                result = new ConfirmedBalanceLocator(result.Height, transactionId: _MaxUInt256);
+                result = new ConfirmedBalanceLocator(result.Height, result.BlockHash, _MaxUInt256);
 
             if (BlockHash == null)
                 result = new ConfirmedBalanceLocator(result.Height, _MaxUInt256, result.TransactionId);
