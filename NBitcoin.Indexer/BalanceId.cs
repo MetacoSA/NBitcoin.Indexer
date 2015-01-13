@@ -53,7 +53,7 @@ namespace NBitcoin.Indexer
             {
                 if (_PartitionKey == null)
                 {
-                    _PartitionKey = Helper.GetPartitionKey(8, Crc32.Compute(_Internal));
+                    _PartitionKey = Helper.GetPartitionKey(10, Crc32.Compute(_Internal));
                 }
                 return _PartitionKey;
             }
