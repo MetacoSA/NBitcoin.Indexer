@@ -235,6 +235,8 @@ namespace NBitcoin.Indexer
                 int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
                 foreach (var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
                 {
+                    if (currentTip == null)
+                        throw new InvalidOperationException("No fork found, the chain stored in azure is probably different from the one of the provided input");
                     if (height > currentTip.Height)
                         yield return CreateChainChange(height, block);
                     else
