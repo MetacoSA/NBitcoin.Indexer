@@ -385,7 +385,7 @@ namespace NBitcoin.Indexer
         {
             if (query == null)
                 query = new BalanceQuery();
-           
+
 
             var table = Configuration.GetBalanceTable();
             var tableQuery = ExecuteBalanceQuery(table, query.CreateTableQuery(balanceId), query.PageSizes);
@@ -603,22 +603,27 @@ namespace NBitcoin.Indexer
                 .UpdateChain(chain);
         }
 
-        public void MergeIntoWallet(string walletId, IDestination destination, CancellationToken cancel = default(CancellationToken))
+        public void MergeIntoWallet(string walletId,
+                                    IDestination destination,
+                                    WalletRule rule = null,
+                                    CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWallet(walletId, destination.ScriptPubKey, cancel);
+            MergeIntoWallet(walletId, destination.ScriptPubKey, rule, cancel);
         }
 
-        public void MergeIntoWallet(string walletId, Script scriptPubKey, CancellationToken cancel = default(CancellationToken))
+        public void MergeIntoWallet(string walletId, Script scriptPubKey, WalletRule rule = null, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), cancel);
+            MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), rule, cancel);
         }
 
-        public void MergeIntoWallet(string walletId, string walletSource, CancellationToken cancel = default(CancellationToken))
+        public void MergeIntoWallet(string walletId, string walletSource,
+            WalletRule rule = null,
+            CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, new BalanceId(walletSource), cancel);
+            MergeIntoWalletCore(walletId, new BalanceId(walletSource), rule, cancel);
         }
 
-        private void MergeIntoWalletCore(string walletId, BalanceId balanceId, CancellationToken cancel)
+        private void MergeIntoWalletCore(string walletId, BalanceId balanceId, WalletRule rule, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
 
@@ -642,7 +647,7 @@ namespace NBitcoin.Indexer
                 {
                     existing = new OrderedBalanceChange(walletId, source);
                 }
-                existing.Merge(kv.Value, null);
+                existing.Merge(kv.Value, rule);
                 entities.Add(existing);
                 if (entities.Count == 100)
                     indexer.Index(entities);

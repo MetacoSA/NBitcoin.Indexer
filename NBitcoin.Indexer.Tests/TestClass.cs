@@ -463,7 +463,11 @@ namespace NBitcoin.Indexer.Tests
                     );
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
-                tester.Client.MergeIntoWallet("Alice", alice2);
+                tester.Client.MergeIntoWallet("Alice", alice2, new ScriptRule()
+                {
+                    ScriptPubKey = alice2.ScriptPubKey,
+                    CustomData = "hello"
+                });
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 4);
                 Assert.True(aliceBalance[0].Amount ==
@@ -475,6 +479,7 @@ namespace NBitcoin.Indexer.Tests
                     + Money.Parse("0.23")
                     );
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
+                Assert.True(aliceBalance[0].MatchedRules.Any(m=>m.Rule.CustomData == "hello"));
                 ////
             }
         }
