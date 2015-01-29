@@ -223,6 +223,7 @@ namespace NBitcoin.Indexer
 
         public IEnumerable<ChainBlockHeader> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
         {
+            var oldTip = currentTip;
             var table = Configuration.GetChainTable();
             List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
             foreach (var chainPart in
@@ -235,9 +236,9 @@ namespace NBitcoin.Indexer
                 int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
                 foreach (var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
                 {
-                    if (currentTip == null)
+                    if (currentTip == null && oldTip != null)
                         throw new InvalidOperationException("No fork found, the chain stored in azure is probably different from the one of the provided input");
-                    if (height > currentTip.Height)
+                    if (oldTip == null || height > currentTip.Height)
                         yield return CreateChainChange(height, block);
                     else
                     {
