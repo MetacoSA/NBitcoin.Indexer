@@ -315,6 +315,8 @@ namespace NBitcoin.Indexer
 
         public void IndexWalletBalances(ChainBase chain)
         {
+            Configuration.GetWalletBalanceTable().CreateIfNotExists();
+            Configuration.GetWalletRulesTable().CreateIfNotExists();
             var walletRules = Configuration.CreateIndexerClient().GetAllWalletRules();
             IndexBalances(chain, "wallets", (txid, tx, blockid, header, height) =>
             {
