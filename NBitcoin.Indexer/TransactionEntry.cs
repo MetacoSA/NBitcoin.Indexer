@@ -197,8 +197,11 @@ namespace NBitcoin.Indexer
             if (loadedEntity != null)
             {
                 Transaction = loadedEntity.Transaction;
-
-                if (loadedEntity.IsLoaded && !loadedEntity.Transaction.IsCoinBase)
+                if (loadedEntity.Transaction.IsCoinBase)
+                {
+                    SpentCoins = new List<Spendable>();
+                }
+                else if(loadedEntity.IsLoaded)
                 {
                     SpentCoins = new List<Spendable>();
                     for (int i = 0 ; i < Transaction.Inputs.Count ; i++)

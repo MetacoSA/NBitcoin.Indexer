@@ -31,7 +31,7 @@ namespace NBitcoin.Indexer
         public ColoredTransaction Get(uint256 txId)
         {
             var client = _Configuration.CreateIndexerClient();
-            var tx = client.GetTransactionAsync(false, txId).Result;
+            var tx = client.GetTransactionAsync(false, false, txId).Result;
             if (tx == null)
                 return null;
             return tx.ColoredTransaction;

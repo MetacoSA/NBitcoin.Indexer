@@ -67,13 +67,13 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public TransactionEntry GetTransaction(bool lazyLoadSpentOutput, uint256 txId)
+        public TransactionEntry GetTransaction(bool loadPreviousOutput, uint256 txId)
         {
-            return GetTransactionAsync(lazyLoadSpentOutput, txId).Result;
+            return GetTransactionAsync(loadPreviousOutput, txId).Result;
         }
-        public Task<TransactionEntry> GetTransactionAsync(bool lazyLoadSpentOutput, uint256 txId)
+        public Task<TransactionEntry> GetTransactionAsync(bool loadPreviousOutput, uint256 txId)
         {
-            return GetTransactionAsync(lazyLoadSpentOutput, false, txId);
+            return GetTransactionAsync(loadPreviousOutput, false, txId);
         }
         public TransactionEntry GetTransaction(uint256 txId)
         {
@@ -84,16 +84,16 @@ namespace NBitcoin.Indexer
             return GetTransactionAsync(true, false, txId);
         }
 
-        public TransactionEntry[] GetTransactions(bool lazyLoadPreviousOutput, uint256[] txIds)
+        public TransactionEntry[] GetTransactions(bool loadPreviousOutput, uint256[] txIds)
         {
-            return GetTransactionsAsync(lazyLoadPreviousOutput, txIds).Result;
+            return GetTransactionsAsync(loadPreviousOutput, txIds).Result;
         }
-        public Task<TransactionEntry[]> GetTransactionsAsync(bool lazyLoadPreviousOutput, uint256[] txIds)
+        public Task<TransactionEntry[]> GetTransactionsAsync(bool loadPreviousOutput, uint256[] txIds)
         {
-            return GetTransactionsAsync(lazyLoadPreviousOutput, false, txIds);
+            return GetTransactionsAsync(loadPreviousOutput, false, txIds);
         }
 
-        public async Task<TransactionEntry> GetTransactionAsync(bool lazyLoadPreviousOutput, bool fetchColor, uint256 txId)
+        public async Task<TransactionEntry> GetTransactionAsync(bool loadPreviousOutput, bool fetchColor, uint256 txId)
         {
             if (txId == null)
                 return null;
@@ -143,44 +143,39 @@ namespace NBitcoin.Indexer
                         await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
                     }
                 }
-
-                var needTxOut = result.SpentCoins == null && lazyLoadPreviousOutput && result.Transaction != null;
+                var needTxOut = result.SpentCoins == null && loadPreviousOutput && result.Transaction != null;
                 if (needTxOut)
                 {
-                    var tasks =
-                        result.Transaction
-                             .Inputs
-                             .Select(async txin =>
-                             {
-                                 var parentTx = await GetTransactionAsync(false, false, txin.PrevOut.Hash).ConfigureAwait(false);
-                                 if (parentTx == null)
-                                 {
-                                     IndexerTrace.MissingTransactionFromDatabase(txin.PrevOut.Hash);
-                                     return null;
-                                 }
-                                 return parentTx.Transaction.Outputs[(int)txin.PrevOut.N];
-                             })
-                             .ToArray();
+                    var inputs = result.Transaction.Inputs.Select(o => o.PrevOut).ToArray();
+                    var parents = await
+                            GetTransactionsAsync(false, false, inputs
+                             .Select(i => i.Hash)
+                             .ToArray()).ConfigureAwait(false);
 
-                    await Task.WhenAll(tasks).ConfigureAwait(false);
-                    if (tasks.All(t => t.Result != null))
+                    for (int i = 0 ; i < parents.Length ; i++)
                     {
-                        var outputs = tasks.Select(t => t.Result).ToArray();
-                        result.SpentCoins = outputs.Select((o, n) => new Spendable(result.Transaction.Inputs[n].PrevOut, o)).ToList();
-                        entities[0].PreviousTxOuts.Clear();
-                        entities[0].PreviousTxOuts.AddRange(outputs);
-                        if (entities[0].IsLoaded)
+                        if (parents[i] == null)
                         {
-                            await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                            IndexerTrace.MissingTransactionFromDatabase(result.Transaction.Inputs[i].PrevOut.Hash);
+                            return null;
                         }
                     }
+
+                    var outputs = parents.Select((p, i) => p.Transaction.Outputs[inputs[i].N]).ToArray();
+
+                    result.SpentCoins = Enumerable
+                                            .Range(0, inputs.Length)
+                                            .Select(i => new Spendable(inputs[i], outputs[i]))
+                                            .ToList();
+                    entities[0].PreviousTxOuts.Clear();
+                    entities[0].PreviousTxOuts.AddRange(outputs);
+                    if (entities[0].IsLoaded)
+                    {
+                        await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                    }
                 }
-
-                if (result.Transaction == null)
-                    result = null;
             }
-
-            return result;
+            return result != null && result.Transaction != null ? result : null;
         }
 
         /// <summary>
