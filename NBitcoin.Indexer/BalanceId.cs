@@ -38,6 +38,12 @@ namespace NBitcoin.Indexer
 
         }
 
+        public string GetWalletId()
+        {
+            if (!_Internal.StartsWith(WalletPrefix))
+                throw new InvalidOperationException("This balance id does not represent a wallet");
+            return Encoding.UTF8.GetString(FastEncoder.Instance.DecodeData(_Internal.Substring(WalletPrefix.Length)));
+        }
 
         public BalanceType Type
         {

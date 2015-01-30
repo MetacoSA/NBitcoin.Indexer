@@ -182,13 +182,13 @@ namespace NBitcoin.Indexer
         }
 
         BalanceId _BalanceId;
-        internal BalanceId BalanceId
+        public BalanceId BalanceId
         {
             get
             {
                 return _BalanceId;
             }
-            set
+            internal set
             {
                 _BalanceId = value;
             }

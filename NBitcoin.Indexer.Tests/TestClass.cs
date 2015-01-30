@@ -518,6 +518,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance.Length == 1);
+                Assert.Equal("Alice", aliceBalance[0].BalanceId.GetWalletId());
                 Assert.True(aliceBalance[0].Amount == Money.Parse("10.0"));
                 Assert.True(aliceBalance[0].IsCoinbase);
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
