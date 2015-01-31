@@ -518,7 +518,7 @@ namespace NBitcoin.Indexer
             });
         }
 
-        private bool NeedLoading(OrderedBalanceChange change)
+        public bool NeedLoading(OrderedBalanceChange change)
         {
             if (change.SpentCoins != null)
             {
@@ -535,41 +535,24 @@ namespace NBitcoin.Indexer
         {
             if (!NeedLoading(change))
                 return true;
-            var transactions =
-                await GetTransactionsAsync(false, ColoredBalance, change.SpentOutpoints.Select(s => s.Hash).ToArray()).ConfigureAwait(false);
-            CoinCollection result = new CoinCollection();
-            for (int i = 0 ; i < transactions.Length ; i++)
+            var parentIds = change.SpentOutpoints.Select(s => s.Hash).ToArray();
+            var parents =
+                await GetTransactionsAsync(false, ColoredBalance, parentIds).ConfigureAwait(false);
+
+            if (change.SpentCoins == null)
             {
-                var outpoint = change.SpentOutpoints[i];
-                if (outpoint.IsNull)
-                    continue;
-                var prev = transactions[i];
-                if (prev == null)
+                var success = await change.EnsureSpentCoinsLoadedAsync(parentIds, parents.Select(t => t == null ? null : t.Transaction).ToArray()).ConfigureAwait(false);
+                if (!success)
                     return false;
-                if (ColoredBalance && prev.ColoredTransaction == null)
-                    return false;
-                result.Add(new Coin(outpoint, prev.Transaction.Outputs[change.SpentOutpoints[i].N]));
             }
-            change.SpentCoins = result;
-
-
             if (ColoredBalance && change.ColoredBalanceChangeEntry == null)
             {
-                var thisTransaction = await GetTransactionAsync(false, ColoredBalance, change.TransactionId).ConfigureAwait(false);
-                if (thisTransaction.ColoredTransaction == null)
+                var success = await change.EnsureColoredTransactionLoadedAsync(new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
+                if (!success)
                     return false;
-                change.ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(change, thisTransaction.ColoredTransaction);
             }
-
             var entity = change.ToEntity();
-            var spentCoins = Helper.GetEntityProperty(entity, "b");
-            var coloredTx = ColoredBalance ? entity.Properties["g"].BinaryValue : null;
-            entity.Properties.Clear();
-            if (coloredTx != null)
-                entity.Properties.Add("g", new EntityProperty(coloredTx));
-            Helper.SetEntityProperty(entity, "b", spentCoins);
-            Configuration.GetBalanceTable().Execute(TableOperation.Merge(entity));
-            change.AddRedeemInfo();
+            await Configuration.GetBalanceTable().ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
             return true;
         }
 

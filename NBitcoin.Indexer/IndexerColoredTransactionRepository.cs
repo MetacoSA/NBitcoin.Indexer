@@ -28,18 +28,19 @@ namespace NBitcoin.Indexer
 
         #region IColoredTransactionRepository Members
 
-        public ColoredTransaction Get(uint256 txId)
+        public async Task<ColoredTransaction> GetAsync(uint256 txId)
         {
             var client = _Configuration.CreateIndexerClient();
-            var tx = client.GetTransactionAsync(false, false, txId).Result;
+            var tx = await client.GetTransactionAsync(false, false, txId).ConfigureAwait(false);
             if (tx == null)
                 return null;
             return tx.ColoredTransaction;
         }
 
-        public void Put(uint256 txId, ColoredTransaction colored)
+        public Task PutAsync(uint256 txId, ColoredTransaction colored)
         {
             _Configuration.CreateIndexer().Index(new TransactionEntry.Entity(txId, colored));
+            return Task.FromResult(false);
         }
 
         ITransactionRepository _Transactions;

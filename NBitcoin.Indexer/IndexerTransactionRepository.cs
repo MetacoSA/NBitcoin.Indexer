@@ -24,17 +24,18 @@ namespace NBitcoin.Indexer
         }
         #region ITransactionRepository Members
 
-        public Transaction Get(uint256 txId)
+        public async Task<Transaction> GetAsync(uint256 txId)
         {
-            var tx = _Configuration.CreateIndexerClient().GetTransactionAsync(false, txId).Result;
+            var tx = await _Configuration.CreateIndexerClient().GetTransactionAsync(false, txId).ConfigureAwait(false);
             if (tx == null)
                 return null;
             return tx.Transaction;
         }
 
-        public void Put(uint256 txId, Transaction tx)
+        public Task PutAsync(uint256 txId, Transaction tx)
         {
             _Configuration.CreateIndexer().Index(new TransactionEntry.Entity(txId, tx, null));
+            return Task.FromResult(false);
         }
 
         #endregion

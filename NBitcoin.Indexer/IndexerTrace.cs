@@ -86,11 +86,6 @@ namespace NBitcoin.Indexer
             _Trace.TraceInformation("Upload thread count : " + count);
         }
 
-        internal static void StartAtPosition(DiskBlockPos startPosition)
-        {
-            _Trace.TraceInformation("Start at position " + startPosition.ToString());
-        }
-
         internal static void ErrorWhileImportingBalancesToAzure(Exception ex, uint256 txid)
         {
             _Trace.TraceEvent(TraceEventType.Error, 0, "Error while importing balances on " + txid + " \r\n" + Utils.ExceptionToString(ex));

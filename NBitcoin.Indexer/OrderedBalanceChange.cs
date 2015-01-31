@@ -2,6 +2,7 @@
 using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.DamienG.Security.Cryptography;
 using NBitcoin.OpenAsset;
+using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -118,6 +119,38 @@ namespace NBitcoin.Indexer
             {
                 return _MatchedRules;
             }
+        }
+
+        internal Task<bool> EnsureSpentCoinsLoadedAsync(uint256[] parentIds, Transaction[] transactions)
+        {
+            var repo = new NoSqlTransactionRepository();
+            for (int i = 0 ; i < parentIds.Length ; i++)
+            {
+                if (transactions[i] == null)
+                    return Task.FromResult(false);
+                repo.Put(parentIds[i], transactions[i]);
+            }
+            return EnsureSpentCoinsLoadedAsync(repo);
+        }
+
+        public async Task<bool> EnsureSpentCoinsLoadedAsync(ITransactionRepository transactions)
+        {
+            if (SpentCoins != null)
+                return true;
+            CoinCollection result = new CoinCollection();
+            for (int i = 0 ; i < SpentOutpoints.Count; i++)
+            {
+                var outpoint = SpentOutpoints[i];
+                if (outpoint.IsNull)
+                    continue;
+                var prev = await transactions.GetAsync(outpoint.Hash).ConfigureAwait(false);
+                if (prev == null)
+                    return false;
+                result.Add(new Coin(outpoint, prev.Outputs[SpentOutpoints[i].N]));
+            }
+            SpentCoins = result;
+            AddRedeemInfo();
+            return true;
         }
 
         internal void Merge(OrderedBalanceChange other, WalletRule walletRule)
@@ -532,6 +565,29 @@ namespace NBitcoin.Indexer
             get
             {
                 return BlockId == null;
+            }
+        }
+
+
+
+        public async Task<bool> EnsureColoredTransactionLoadedAsync(IColoredTransactionRepository repository)
+        {
+            if (ColoredBalanceChangeEntry != null)
+                return true;
+            var tx = await repository.Transactions.GetAsync(TransactionId).ConfigureAwait(false);
+            if (tx == null)
+                return false;
+            try
+            {
+                var color = await tx.GetColoredTransactionAsync(repository).ConfigureAwait(false);
+                if (color == null)
+                    return false;
+                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, color);
+                return true;
+            }
+            catch (TransactionNotFoundException)
+            {
+                return false;
             }
         }
     }

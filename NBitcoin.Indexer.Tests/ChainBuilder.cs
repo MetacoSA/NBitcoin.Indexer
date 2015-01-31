@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NBitcoin.BitcoinCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,9 +10,9 @@ namespace NBitcoin.Indexer.Tests
     public class ChainBuilder
     {
         private IndexerTester _Tester;
-        Chain _Chain = new Chain(Network.TestNet);
+        PersistantChain _Chain = new PersistantChain(Network.TestNet);
 
-        public Chain Chain
+        public PersistantChain Chain
         {
             get
             {

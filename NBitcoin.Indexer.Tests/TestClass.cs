@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using NBitcoin.BitcoinCore;
 using NBitcoin.DataEncoders;
 using NBitcoin.OpenAsset;
 using NBitcoin.Protocol;
@@ -130,8 +131,8 @@ namespace NBitcoin.Indexer.Tests
                     {
                         Outputs =
                         {
-                            new TxOut("1.0", goldGuy.Key.PubKey),
-                            new TxOut("1.0", silverGuy.Key.PubKey),
+                            new TxOut("1.0", goldGuy.PrivateKey.PubKey),
+                            new TxOut("1.0", silverGuy.PrivateKey.PubKey),
                             new TxOut("1.0", nico.GetAddress()),
                             new TxOut("1.0", alice.GetAddress()),
                         }
@@ -162,10 +163,10 @@ namespace NBitcoin.Indexer.Tests
 
                 txBuilder = new TransactionBuilder();
                 var tx = txBuilder
-                    .AddKeys(goldGuy.Key)
+                    .AddKeys(goldGuy)
                     .AddCoins(goldIssuanceCoin)
                     .IssueAsset(nico.GetAddress(), new Asset(goldId, 30))
-                    .SetChange(goldGuy.Key.PubKey)
+                    .SetChange(goldGuy.PrivateKey.PubKey)
                     .BuildTransaction(true);
 
                 chainBuilder.Emit(tx);
@@ -185,19 +186,19 @@ namespace NBitcoin.Indexer.Tests
                 txBuilder = new TransactionBuilder(1);
                 //GoldGuy sends 20 gold to alice against 0.6 BTC. Nico sends 10 gold to alice + 0.02 BTC.
                 tx = txBuilder
-                    .AddKeys(goldGuy.Key)
+                    .AddKeys(goldGuy)
                     .AddCoins(goldIssuanceCoin)
                     .IssueAsset(alice.GetAddress(), new Asset(goldId, 20))
-                    .SetChange(goldGuy.Key.PubKey)
+                    .SetChange(goldGuy.PrivateKey.PubKey)
                     .Then()
-                    .AddKeys(nico.Key)
+                    .AddKeys(nico.PrivateKey)
                     .AddCoins(nicoCoin)
                     .AddCoins(nicoGold)
                     .SendAsset(alice.GetAddress(), new Asset(goldId, 10))
                     .Send(alice.GetAddress(), Money.Parse("0.02"))
                     .SetChange(nico.GetAddress())
                     .Then()
-                    .AddKeys(alice.Key)
+                    .AddKeys(alice)
                     .AddCoins(aliceCoin)
                     .Send(goldGuy.GetAddress(), Money.Parse("0.6"))
                     .SetChange(alice.GetAddress())
@@ -248,7 +249,7 @@ namespace NBitcoin.Indexer.Tests
             using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
-                var chain = new Chain(tester.Client.Configuration.Network);
+                var chain = new ConcurrentChain(tester.Client.Configuration.Network);
 
                 node.ChainBuilder.Generate();
                 var fork = node.ChainBuilder.Generate();
@@ -318,11 +319,6 @@ namespace NBitcoin.Indexer.Tests
         //	watch.Stop();
         //}
 
-        public List<ChainChange> SeeChainChanges(Chain chain)
-        {
-            chain.Changes.Rewind();
-            return chain.Changes.Enumerate().ToList();
-        }
 
         [Fact]
         public void CanGeneratePartitionKey()
@@ -664,7 +660,7 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
-                Key bob = new BitcoinSecret("L4JinGSmHxKJJrjbeFx3zxf9Vr3VD6jmq5wXpDm6ywUewcWoXEAy").Key;
+                Key bob = new BitcoinSecret("L4JinGSmHxKJJrjbeFx3zxf9Vr3VD6jmq5wXpDm6ywUewcWoXEAy").PrivateKey;
                 var chainBuilder = tester.CreateChainBuilder();
                 chainBuilder.NoRandom = true;
 
