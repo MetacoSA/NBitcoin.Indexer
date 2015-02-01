@@ -203,12 +203,17 @@ namespace NBitcoin.Indexer
                 var scriptRule = match.Rule as ScriptRule;
                 if (scriptRule != null && scriptRule.RedeemScript != null)
                 {
-                    CoinCollection collection = match.MatchType == MatchLocation.Input ? SpentCoins : ReceivedCoins;
-                    if (collection != null)
+                    if (match.MatchType == MatchLocation.Output)
                     {
                         var outpoint = new OutPoint(TransactionId, match.Index);
-                        var coin = collection[outpoint];
-                        collection[outpoint] = new ScriptCoin(coin.Outpoint, coin.TxOut, scriptRule.RedeemScript);
+                        ReceivedCoins[outpoint] = ReceivedCoins[outpoint].ToScriptCoin(scriptRule.RedeemScript);
+                    }
+                    else
+                    {
+                        if (SpentCoins == null)
+                            continue;
+                        var n = this.SpentIndices.IndexOf(match.Index);
+                        this.SpentCoins[n] = this.SpentCoins[n].ToScriptCoin(scriptRule.RedeemScript);
                     }
                 }
             }

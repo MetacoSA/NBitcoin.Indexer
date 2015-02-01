@@ -480,7 +480,7 @@ namespace NBitcoin.Indexer.Tests
                     + Money.Parse("0.23")
                     );
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
-                Assert.True(aliceBalance[0].MatchedRules.Any(m=>m.Rule.CustomData == "hello"));
+                Assert.True(aliceBalance[0].MatchedRules.Any(m => m.Rule.CustomData == "hello"));
                 ////
             }
         }
@@ -650,6 +650,19 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(((ScriptCoin)(aliceBalance[0].ReceivedCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 Assert.False(aliceBalance[0].ReceivedCoins[1] is ScriptCoin);
                 Assert.False(aliceBalance[0].ReceivedCoins[2] is ScriptCoin);
+
+                tx = new TransactionBuilder()
+                        .AddKeys(alice1, alice2)
+                        .AddCoins(aliceBalance[0].ReceivedCoins[0])
+                        .Send(satoshi, "0.0001")
+                        .SetChange(alice1)
+                        .BuildTransaction(true);
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                var aliceBalance2 = tester.Client.GetOrderedBalance("Alice").ToArray();
+                Assert.True(((ScriptCoin)(aliceBalance2[0].SpentCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 /////
             }
 
@@ -686,7 +699,7 @@ namespace NBitcoin.Indexer.Tests
                 Thread.Sleep(1000);
                 txs.Add("utx52", chainBuilder.EmitMoney(bob, "5.2", isCoinbase: false, indexBalance: true));
                 Thread.Sleep(1000);
-                txs.Add("utx53", chainBuilder.EmitMoney(bob, "5.3", isCoinbase: false, indexBalance:true));
+                txs.Add("utx53", chainBuilder.EmitMoney(bob, "5.3", isCoinbase: false, indexBalance: true));
 
                 chainBuilder.SyncIndexer();
 
@@ -873,7 +886,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
-            
+
         }
 
         [Fact]
