@@ -669,12 +669,26 @@ namespace NBitcoin.Indexer
             }
         }
 
+        /// <summary>
+        /// Get the quantity of asset in this balance change
+        /// </summary>
+        /// <param name="assetId">The asset id, if null, returns uncolored satoshi</param>
+        /// <returns></returns>
         public long GetAssetAmount(BitcoinAssetId assetId)
         {
+            if (assetId == null)
+                return Amount;
             return GetAssetAmount(assetId.AssetId);
         }
+        /// <summary>
+        /// Get the quantity of asset in this balance change
+        /// </summary>
+        /// <param name="assetId">The asset id, if null, returns uncolored satoshi</param>
+        /// <returns></returns>
         public long GetAssetAmount(AssetId assetId)
         {
+            if (assetId == null)
+                return Amount;
             var amount = _ReceivedCoins.WhereColored(assetId)
                 .Select(c => c.Amount).Sum() - _SpentCoins.WhereColored(assetId).Select(c => c.Amount).Sum();
             return amount.Satoshi;
