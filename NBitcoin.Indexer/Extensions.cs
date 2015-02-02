@@ -27,8 +27,8 @@ namespace NBitcoin.Indexer
         private static CoinCollection SelectSpentCoins(IEnumerable<OrderedBalanceChange> entries, bool spent)
         {
             CoinCollection result = new CoinCollection();
-            Dictionary<OutPoint, Coin> spentCoins = new Dictionary<OutPoint, Coin>();
-            Dictionary<OutPoint, Coin> receivedCoins = new Dictionary<OutPoint, Coin>();
+            Dictionary<OutPoint, ICoin> spentCoins = new Dictionary<OutPoint, ICoin>();
+            Dictionary<OutPoint, ICoin> receivedCoins = new Dictionary<OutPoint, ICoin>();
             foreach (var entry in entries)
             {
                 if (entry.SpentCoins != null)
@@ -89,9 +89,9 @@ namespace NBitcoin.Indexer
                 .Where(e => IsMinConf(e, minConfirmation, chain));
         }
 
-        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain, bool colored = false)
+        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain)
         {
-            return new BalanceSheet(entries, chain, colored);
+            return new BalanceSheet(entries, chain);
         }
 
         private static bool IsMinConf(OrderedBalanceChange e, int minConfirmation, ChainBase chain)

@@ -158,8 +158,8 @@ namespace NBitcoin.Indexer.Tests
 
                 var balance = tester.Client.GetOrderedBalance(nico).ToArray();
                 var entry = balance[0];
-                Assert.NotNull(entry.ColoredBalanceChangeEntry);
-                Assert.Equal(Money.Parse("1.0"), entry.ColoredBalanceChangeEntry.UncoloredBalanceChange);
+                Assert.NotNull(entry.ColoredTransaction);
+                Assert.Equal(Money.Parse("1.0"), entry.Amount);
 
                 txBuilder = new TransactionBuilder();
                 var tx = txBuilder
@@ -176,9 +176,9 @@ namespace NBitcoin.Indexer.Tests
                 var ctx = new IndexerColoredTransactionRepository(tester.Indexer.Configuration);
 
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
-                var coloredEntry = balance[0].ColoredBalanceChangeEntry;
-                Assert.Equal(Money.Parse("0.0"), coloredEntry.UncoloredBalanceChange);
-                Assert.Equal(30, coloredEntry.GetAsset(goldId).BalanceChange);
+                var coloredEntry = balance[0];
+                Assert.Equal(Money.Parse("0.0"), coloredEntry.Amount);
+                Assert.Equal(30, coloredEntry.GetAssetAmount(goldId));
 
                 var coloredCoins = ColoredCoin.Find(tx, ctx).ToArray();
                 var nicoGold = coloredCoins[0];
@@ -212,15 +212,15 @@ namespace NBitcoin.Indexer.Tests
                 //Nico, should have lost 0.02 BTC and 10 gold
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
-                coloredEntry = balance[0].ColoredBalanceChangeEntry;
-                Assert.Equal(Money.Parse("-0.02") - txBuilder.ColoredDust, coloredEntry.UncoloredBalanceChange);
-                Assert.Equal(-10, coloredEntry.GetAsset(goldId).BalanceChange);
+                coloredEntry = balance[0];
+                Assert.Equal(Money.Parse("-0.02") - txBuilder.ColoredDust, coloredEntry.Amount);
+                Assert.Equal(-10, coloredEntry.GetAssetAmount(goldId));
 
                 //Alice, should have lost 0.58 BTC, but win 10 + 20 gold (one is a transfer, the other issuance)
                 balance = tester.Client.GetOrderedBalance(alice.GetAddress()).ToArray();
-                coloredEntry = balance[0].ColoredBalanceChangeEntry;
-                Assert.Equal(Money.Parse("-0.58"), coloredEntry.UncoloredBalanceChange);
-                Assert.Equal(30, coloredEntry.GetAsset(goldId).BalanceChange);
+                coloredEntry = balance[0];
+                Assert.Equal(Money.Parse("-0.58"), coloredEntry.Amount);
+                Assert.Equal(30, coloredEntry.GetAssetAmount(goldId));
             }
         }
 
@@ -646,7 +646,7 @@ namespace NBitcoin.Indexer.Tests
 
                 aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
                 Assert.True(aliceBalance[0].ReceivedCoins[0] is ScriptCoin);
-                Assert.True(aliceBalance[0].ReceivedCoins[0].ScriptPubKey == alice1.PubKey.ScriptPubKey.Hash.ScriptPubKey);
+                Assert.True(aliceBalance[0].ReceivedCoins[0].TxOut.ScriptPubKey == alice1.PubKey.ScriptPubKey.Hash.ScriptPubKey);
                 Assert.True(((ScriptCoin)(aliceBalance[0].ReceivedCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 Assert.False(aliceBalance[0].ReceivedCoins[1] is ScriptCoin);
                 Assert.False(aliceBalance[0].ReceivedCoins[2] is ScriptCoin);

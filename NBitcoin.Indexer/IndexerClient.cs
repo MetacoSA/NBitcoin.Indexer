@@ -420,6 +420,37 @@ namespace NBitcoin.Indexer
             }
         }
 
+        private bool Prepare(OrderedBalanceChange change)
+        {
+            change.UpdateToScriptCoins();
+            if (change.SpentCoins == null && ExcludeIncompleteBalanceChange)
+                return false;
+            if (ColoredBalance)
+            {
+                if (change.ColoredTransaction == null)
+                    return false;
+                change.UpdateToColoredCoins();
+            }
+            return true;
+        }
+
+        bool _ExcludeIncompleteBalanceChange = false;
+
+        /// <summary>
+        /// When the storage returns a balance change, the previous parent transactions may not exist, resulting in OrderedBalanceChange.SpentCoins equals to null. The default behavior is to exclude such balance change from the result.
+        /// </summary>
+        public bool ExcludeIncompleteBalanceChange
+        {
+            get
+            {
+                return _ExcludeIncompleteBalanceChange;
+            }
+            set
+            {
+                _ExcludeIncompleteBalanceChange = value;
+            }
+        }
+
         private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncOrdered(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
         {
             Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
@@ -488,6 +519,17 @@ namespace NBitcoin.Indexer
         {
             if (partitionLoading != null)
                 await Task.WhenAll(partitionLoading).ConfigureAwait(false);
+
+            List<OrderedBalanceChange> toDelete = new List<OrderedBalanceChange>();
+            foreach (var entity in result)
+            {
+                if (!Prepare(entity))
+                    toDelete.Add(entity);
+            }
+            foreach (var deletion in toDelete)
+            {
+                result.Remove(deletion);
+            }
             return result;
         }
 
@@ -522,9 +564,8 @@ namespace NBitcoin.Indexer
         {
             if (change.SpentCoins != null)
             {
-                if (change.ColoredBalanceChangeEntry != null || !ColoredBalance)
+                if (change.ColoredTransaction != null || !ColoredBalance)
                 {
-                    change.AddRedeemInfo();
                     return false;
                 }
             }
@@ -545,7 +586,7 @@ namespace NBitcoin.Indexer
                 if (!success)
                     return false;
             }
-            if (ColoredBalance && change.ColoredBalanceChangeEntry == null)
+            if (ColoredBalance && change.ColoredTransaction == null)
             {
                 var success = await change.EnsureColoredTransactionLoadedAsync(new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
                 if (!success)

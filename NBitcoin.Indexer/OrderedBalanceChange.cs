@@ -107,7 +107,7 @@ namespace NBitcoin.Indexer
                 }
             }
             foreach (var b in entitiesByWallet.Values)
-                b.AddRedeemInfo();
+                b.UpdateToScriptCoins();
             return entitiesByWallet.Values;
         }
 
@@ -138,7 +138,7 @@ namespace NBitcoin.Indexer
             if (SpentCoins != null)
                 return true;
             CoinCollection result = new CoinCollection();
-            for (int i = 0 ; i < SpentOutpoints.Count; i++)
+            for (int i = 0 ; i < SpentOutpoints.Count ; i++)
             {
                 var outpoint = SpentOutpoints[i];
                 if (outpoint.IsNull)
@@ -149,7 +149,7 @@ namespace NBitcoin.Indexer
                 result.Add(new Coin(outpoint, prev.Outputs[SpentOutpoints[i].N]));
             }
             SpentCoins = result;
-            AddRedeemInfo();
+            UpdateToScriptCoins();
             return true;
         }
 
@@ -158,7 +158,7 @@ namespace NBitcoin.Indexer
             if (other.ReceivedCoins.Count != 0)
             {
                 ReceivedCoins.AddRange(other.ReceivedCoins);
-                ReceivedCoins = new CoinCollection(ReceivedCoins.Distinct<Coin, OutPoint>(c => c.Outpoint));
+                ReceivedCoins = new CoinCollection(ReceivedCoins.Distinct<ICoin, OutPoint>(c => c.Outpoint));
                 if (walletRule != null)
                     foreach (var c in other.ReceivedCoins)
                     {
@@ -180,7 +180,7 @@ namespace NBitcoin.Indexer
                 SpentOutpoints = SpentOutpoints.Distinct().ToList();
 
                 //Remove cached value, no longer correct
-                ColoredBalanceChangeEntry = null;
+                UpdateToUncoloredCoins();
                 SpentCoins = null;
 
                 if (walletRule != null)
@@ -196,7 +196,9 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal void AddRedeemInfo()
+
+
+        public void UpdateToScriptCoins()
         {
             foreach (var match in MatchedRules)
             {
@@ -206,14 +208,22 @@ namespace NBitcoin.Indexer
                     if (match.MatchType == MatchLocation.Output)
                     {
                         var outpoint = new OutPoint(TransactionId, match.Index);
-                        ReceivedCoins[outpoint] = ReceivedCoins[outpoint].ToScriptCoin(scriptRule.RedeemScript);
+                        var coin = ReceivedCoins[outpoint] as Coin;
+                        if (coin != null)
+                        {
+                            ReceivedCoins[outpoint] = coin.ToScriptCoin(scriptRule.RedeemScript);
+                        }
                     }
                     else
                     {
                         if (SpentCoins == null)
                             continue;
                         var n = this.SpentIndices.IndexOf(match.Index);
-                        this.SpentCoins[n] = this.SpentCoins[n].ToScriptCoin(scriptRule.RedeemScript);
+                        var coin = SpentCoins[n] as Coin;
+                        if (coin != null)
+                        {
+                            this.SpentCoins[n] = coin.ToScriptCoin(scriptRule.RedeemScript);
+                        }
                     }
                 }
             }
@@ -343,7 +353,7 @@ namespace NBitcoin.Indexer
             {
                 if (_Amount == null && _SpentCoins != null)
                 {
-                    _Amount = _ReceivedCoins.Select(c => c.Amount).Sum() - _SpentCoins.Select(c => c.Amount).Sum();
+                    _Amount = _ReceivedCoins.WhereUncolored().Select(c => c.Amount).Sum() - _SpentCoins.WhereUncolored().Select(c => c.Amount).Sum();
                 }
                 return _Amount;
             }
@@ -404,7 +414,7 @@ namespace NBitcoin.Indexer
             {
                 var ctx = new ColoredTransaction();
                 ctx.FromBytes(entity["g"].BinaryValue);
-                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, ctx);
+                ColoredTransaction = ctx;
             }
 
             if (entity.Properties.ContainsKey("h"))
@@ -415,6 +425,69 @@ namespace NBitcoin.Indexer
             var data = Helper.GetEntityProperty(entity, "cu");
             if (data != null)
                 CustomData = Encoding.UTF8.GetString(data);
+        }
+
+        public ColoredTransaction ColoredTransaction
+        {
+            get;
+            set;
+        }
+        public void UpdateToColoredCoins()
+        {
+            if (ColoredTransaction == null)
+                throw new InvalidOperationException("Impossible to get colored coin if ColoredTransaction is unknown");
+            UpdateToColoredCoins(SpentCoins, true);
+            UpdateToColoredCoins(ReceivedCoins, false);
+        }
+
+        private void UpdateToColoredCoins(CoinCollection collection, bool input)
+        {
+            if (collection == null)
+                return;
+            for (int i = 0 ; i < collection.Count ; i++)
+            {
+                var coin = collection[i] as Coin;
+                if (coin != null)
+                {
+                    if (input)
+                    {
+                        var txinIndex = SpentIndices[i];
+                        var asset = ColoredTransaction
+                                        .Inputs
+                                        .Where(_ => _.Index == (uint)txinIndex)
+                                        .Select(_ => _.Asset)
+                                        .FirstOrDefault();
+                        if (asset != null)
+                            collection[i] = coin.ToColoredCoin(asset);
+                    }
+                    else
+                    {
+                        var asset = ColoredTransaction.GetColoredEntry(coin.Outpoint.N);
+                        if(asset != null)
+                            collection[i] = coin.ToColoredCoin(asset.Asset);
+                    }
+                }
+            }
+        }
+        public void UpdateToUncoloredCoins()
+        {
+            if (SpentCoins != null)
+            {
+                UpdateToUncoloredCoins(SpentCoins);
+                UpdateToUncoloredCoins(ReceivedCoins);
+            }
+        }
+
+        private void UpdateToUncoloredCoins(CoinCollection collection)
+        {
+            if (collection == null)
+                return;
+            for (int i = 0 ; i < collection.Count ; i++)
+            {
+                var coin = collection[i] as ColoredCoin;
+                if (coin != null)
+                    collection[i] = coin.Bearer;
+            }
         }
 
         internal OrderedBalanceChange(uint256 txId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
@@ -495,9 +568,9 @@ namespace NBitcoin.Indexer
             var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
             entity.Properties.AddOrReplace("e", new EntityProperty(flags));
             entity.Properties.AddOrReplace("f", new EntityProperty(Helper.Serialize(MatchedRules)));
-            if (ColoredBalanceChangeEntry != null)
+            if (ColoredTransaction != null)
             {
-                entity.Properties.AddOrReplace("g", new EntityProperty(ColoredBalanceChangeEntry._Colored.ToBytes()));
+                entity.Properties.AddOrReplace("g", new EntityProperty(ColoredTransaction.ToBytes()));
             }
             if (_Script != null)
             {
@@ -517,13 +590,13 @@ namespace NBitcoin.Indexer
         }
 
         const string DateFormat = "yyyyMMddhhmmssff";
-       
+
 
         public static IEnumerable<OrderedBalanceChange> ExtractScriptBalances(Transaction tx)
         {
             return ExtractScriptBalances(null, tx, null, null, 0);
         }
-        
+
         internal Script ScriptPubKey
         {
             get
@@ -533,7 +606,7 @@ namespace NBitcoin.Indexer
                 return _Script;
             }
         }
-       
+
 
         public IEnumerable<WalletRule> GetMatchedRules(int index, MatchLocation matchType)
         {
@@ -541,7 +614,7 @@ namespace NBitcoin.Indexer
         }
 
 
-        public IEnumerable<WalletRule> GetMatchedRules(Coin coin)
+        public IEnumerable<WalletRule> GetMatchedRules(ICoin coin)
         {
             return GetMatchedRules(coin.Outpoint);
         }
@@ -559,11 +632,6 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public ColoredBalanceChangeEntry ColoredBalanceChangeEntry
-        {
-            get;
-            set;
-        }
 
         public bool MempoolEntry
         {
@@ -577,8 +645,12 @@ namespace NBitcoin.Indexer
 
         public async Task<bool> EnsureColoredTransactionLoadedAsync(IColoredTransactionRepository repository)
         {
-            if (ColoredBalanceChangeEntry != null)
+            if (ColoredTransaction != null)
+            {
+                this.UpdateToColoredCoins();
                 return true;
+            }
+
             var tx = await repository.Transactions.GetAsync(TransactionId).ConfigureAwait(false);
             if (tx == null)
                 return false;
@@ -587,13 +659,25 @@ namespace NBitcoin.Indexer
                 var color = await tx.GetColoredTransactionAsync(repository).ConfigureAwait(false);
                 if (color == null)
                     return false;
-                ColoredBalanceChangeEntry = new ColoredBalanceChangeEntry(this, color);
+                ColoredTransaction = color;
+                this.UpdateToColoredCoins();
                 return true;
             }
             catch (TransactionNotFoundException)
             {
                 return false;
             }
+        }
+
+        public long GetAssetAmount(BitcoinAssetId assetId)
+        {
+            return GetAssetAmount(assetId.AssetId);
+        }
+        public long GetAssetAmount(AssetId assetId)
+        {
+            var amount = _ReceivedCoins.WhereColored(assetId)
+                .Select(c => c.Amount).Sum() - _SpentCoins.WhereColored(assetId).Select(c => c.Amount).Sum();
+            return amount.Satoshi;
         }
     }
 }

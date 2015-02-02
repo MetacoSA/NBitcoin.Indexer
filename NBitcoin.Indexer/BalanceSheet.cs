@@ -16,15 +16,14 @@ namespace NBitcoin.Indexer
                 return _Chain;
             }
         }
-        public BalanceSheet(IEnumerable<OrderedBalanceChange> changes, ChainBase chain, bool colored)
+        public BalanceSheet(IEnumerable<OrderedBalanceChange> changes, ChainBase chain)
         {
             if (chain == null)
                 throw new ArgumentNullException("chain");
             _Chain = chain;
 
             var all = changes
-                        .Where(c => c.SpentCoins != null) //Remove line whose previous coins have not been loaded
-                        .Where(c => !colored || c.ColoredBalanceChangeEntry != null) //Remove live whose color could not be deduced
+                        .Where(c => c.SpentCoins != null) //Remove line whose previous coins have not been loadedcould not be deduced
                         .Where(c => c.MempoolEntry || chain.GetBlock(c.BlockId) != null) //Take only mempool entry, or confirmed one
                         .Where(c => !(c.IsCoinbase && c.MempoolEntry)) //There is no such thing as a Coinbase unconfirmed, by definition a coinbase appear in a block
                         .ToList(); 
