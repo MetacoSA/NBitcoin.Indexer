@@ -53,7 +53,7 @@ namespace NBitcoin.Indexer
         }
         public IEnumerable<ColoredCoin> WhereColored(AssetId assetId)
         {
-            return this.OfType<ColoredCoin>();
+            return this.OfType<ColoredCoin>().Where(c => c.AssetId == assetId);
         }
     }
 }
