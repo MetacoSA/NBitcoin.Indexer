@@ -660,7 +660,6 @@ namespace NBitcoin.Indexer
                 GetOrderedBalance(walletId, query, cancel)
                 .ToDictionary(i => GetKey(i));
 
-            bool mergeHappened = false;
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
             foreach (var kv in sourcesByKey)
             {
@@ -670,8 +669,6 @@ namespace NBitcoin.Indexer
                 {
                     existing = new OrderedBalanceChange(walletId, source);
                 }
-                else
-                    mergeHappened = true;
                 existing.Merge(kv.Value, rule);
                 entities.Add(existing);
                 if (entities.Count == 100)
@@ -679,7 +676,7 @@ namespace NBitcoin.Indexer
             }
             if (entities.Count != 0)
                 indexer.Index(entities);
-            return mergeHappened;
+            return true;
         }
 
         private string GetKey(OrderedBalanceChange change)
