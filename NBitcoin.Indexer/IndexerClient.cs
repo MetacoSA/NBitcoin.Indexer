@@ -623,27 +623,27 @@ namespace NBitcoin.Indexer
                 .UpdateChain(chain);
         }
 
-        public void MergeIntoWallet(string walletId,
+        public bool MergeIntoWallet(string walletId,
                                     IDestination destination,
                                     WalletRule rule = null,
                                     CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWallet(walletId, destination.ScriptPubKey, rule, cancel);
+            return MergeIntoWallet(walletId, destination.ScriptPubKey, rule, cancel);
         }
 
-        public void MergeIntoWallet(string walletId, Script scriptPubKey, WalletRule rule = null, CancellationToken cancel = default(CancellationToken))
+        public bool MergeIntoWallet(string walletId, Script scriptPubKey, WalletRule rule = null, CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), rule, cancel);
+            return MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), rule, cancel);
         }
 
-        public void MergeIntoWallet(string walletId, string walletSource,
+        public bool MergeIntoWallet(string walletId, string walletSource,
             WalletRule rule = null,
             CancellationToken cancel = default(CancellationToken))
         {
-            MergeIntoWalletCore(walletId, new BalanceId(walletSource), rule, cancel);
+            return MergeIntoWalletCore(walletId, new BalanceId(walletSource), rule, cancel);
         }
 
-        private void MergeIntoWalletCore(string walletId, BalanceId balanceId, WalletRule rule, CancellationToken cancel)
+        private bool MergeIntoWalletCore(string walletId, BalanceId balanceId, WalletRule rule, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
 
@@ -654,10 +654,13 @@ namespace NBitcoin.Indexer
             };
             var sourcesByKey = GetOrderedBalanceCore(balanceId, query, cancel)
                 .ToDictionary(i => GetKey(i));
+            if (sourcesByKey.Count == 0)
+                return false;
             var destByKey =
                 GetOrderedBalance(walletId, query, cancel)
                 .ToDictionary(i => GetKey(i));
 
+            bool mergeHappened = false;
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
             foreach (var kv in sourcesByKey)
             {
@@ -667,6 +670,8 @@ namespace NBitcoin.Indexer
                 {
                     existing = new OrderedBalanceChange(walletId, source);
                 }
+                else
+                    mergeHappened = true;
                 existing.Merge(kv.Value, rule);
                 entities.Add(existing);
                 if (entities.Count == 100)
@@ -674,6 +679,7 @@ namespace NBitcoin.Indexer
             }
             if (entities.Count != 0)
                 indexer.Index(entities);
+            return mergeHappened;
         }
 
         private string GetKey(OrderedBalanceChange change)
