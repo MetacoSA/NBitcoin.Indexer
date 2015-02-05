@@ -681,7 +681,7 @@ namespace NBitcoin.Indexer
 
         private string GetKey(OrderedBalanceChange change)
         {
-            return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId;
+            return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId + "-" + change.SeenUtc.Ticks;
         }
     }
 }
