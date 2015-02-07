@@ -421,6 +421,10 @@ namespace NBitcoin.Indexer
             {
                 _Script = new Script(entity.Properties["h"].BinaryValue);
             }
+            else
+            {
+                _Script = new Script(Helper.GetEntityProperty(entity, "hs"));
+            }
 
             var data = Helper.GetEntityProperty(entity, "cu");
             if (data != null)
@@ -573,8 +577,17 @@ namespace NBitcoin.Indexer
                 entity.Properties.AddOrReplace("g", new EntityProperty(ColoredTransaction.ToBytes()));
             }
             if (_Script != null)
-            {
-                entity.Properties.Add("h", new EntityProperty(_Script.ToBytes(true)));
+            {      
+                var bytes = _Script.ToBytes(true);
+                if (bytes.Length < 10 * 1024)
+                {
+                    entity.Properties.Add("h", new EntityProperty(bytes));
+                }
+                else
+                {
+                    //Big script of 25K : 22e08a53aff6cb0680758036e09f792dac56e4813de81c9be1b4b1ae3cda0ab0
+                    Helper.SetEntityProperty(entity, "hs", bytes);
+                }
             }
             if (CustomData != null)
             {

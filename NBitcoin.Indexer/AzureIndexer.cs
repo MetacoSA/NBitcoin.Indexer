@@ -152,25 +152,27 @@ namespace NBitcoin.Indexer
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
             int exceptionCount = 0;
-            while (true)
+            var options = new TableRequestOptions()
             {
+                PayloadFormat = TablePayloadFormat.Json,
+                MaximumExecutionTime = _Timeout,
+                ServerTimeout = _Timeout,
+            };
+
+            var batch = new TableBatchOperation();
+            int count = 0;
+            foreach (var entity in entities)
+            {
+                batch.Add(TableOperation.InsertOrReplace(entity));
+                count++;
+            }
+            Queue<TableBatchOperation> batches = new Queue<TableBatchOperation>();
+            batches.Enqueue(batch);
+            while (batches.Count > 0)
+            {
+                batch = batches.Dequeue();
                 try
                 {
-                    var options = new TableRequestOptions()
-                        {
-                            PayloadFormat = TablePayloadFormat.Json,
-                            MaximumExecutionTime = _Timeout,
-                            ServerTimeout = _Timeout,
-                        };
-
-                    var batch = new TableBatchOperation();
-                    int count = 0;
-                    foreach (var entity in entities)
-                    {
-                        batch.Add(TableOperation.InsertOrReplace(entity));
-                        count++;
-                    }
-
                     if (count > 1)
                         table.ExecuteBatch(batch, options);
                     else
@@ -180,18 +182,79 @@ namespace NBitcoin.Indexer
                     }
 
                     if (exceptionCount != 0)
+                    {
+                        exceptionCount = 0;
                         IndexerTrace.RetryWorked();
-                    break;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities.ToArray(), ex);
-                    exceptionCount++;
-                    if (exceptionCount > 5)
-                        throw;
-                    Thread.Sleep(exceptionCount * 1000);
+                    if (IsError413(ex))
+                    {
+                        var split = batch.Count / 2;
+                        var batch1 = batch.Take(split).ToList();
+                        var batch2 = batch.Skip(split).Take(batch.Count - split).ToList();
+                        batches.Enqueue(ToBatch(batch1));
+                        batches.Enqueue(ToBatch(batch2));
+                    }
+                    else if (IsError(ex, "EntityTooLarge"))
+                    {
+                        var op = GetFaultyOperation(ex, batch);
+                        batch.Remove(op);
+                        batches.Enqueue(batch);
+                    }
+                    else
+                    {
+                        IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities.ToArray(), ex);
+                        exceptionCount++;
+                        batches.Enqueue(batch);
+                        if (exceptionCount > 5)
+                            throw;
+                        Thread.Sleep(exceptionCount * 1000);
+                    }
                 }
             }
+        }
+
+        private TableOperation GetFaultyOperation(Exception ex, TableBatchOperation batch)
+        {
+            var storage = ex as StorageException;
+            if (storage == null)
+                return null;
+            if (storage.RequestInformation != null
+               && storage.RequestInformation.ExtendedErrorInformation != null)
+            {
+                var match = Regex.Match(storage.RequestInformation.ExtendedErrorInformation.ErrorMessage, "[0-9]*");
+                if (match.Success)
+                    return batch[int.Parse(match.Value)];
+            }
+            return null;
+        }
+
+        private bool IsError(Exception ex, string code)
+        {
+            var storage = ex as StorageException;
+            if (storage == null)
+                return false;
+            return storage.RequestInformation != null
+                && storage.RequestInformation.ExtendedErrorInformation != null
+                && storage.RequestInformation.ExtendedErrorInformation.ErrorCode == code;
+        }
+
+        private TableBatchOperation ToBatch(List<TableOperation> ops)
+        {
+            var op = new TableBatchOperation();
+            foreach (var operation in ops)
+                op.Add(operation);
+            return op;
+        }
+
+        private bool IsError413(Exception ex)
+        {
+            var storage = ex as StorageException;
+            if (storage == null)
+                return false;
+            return storage.RequestInformation != null && storage.RequestInformation.HttpStatusCode == 413;
         }
         public void Index(Block block)
         {
