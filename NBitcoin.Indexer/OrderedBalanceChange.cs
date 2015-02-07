@@ -419,11 +419,7 @@ namespace NBitcoin.Indexer
 
             if (entity.Properties.ContainsKey("h"))
             {
-                _Script = new Script(entity.Properties["h"].BinaryValue);
-            }
-            else
-            {
-                _Script = new Script(Helper.GetEntityProperty(entity, "hs"));
+                _ScriptPubKey = new Script(entity.Properties["h"].BinaryValue);
             }
 
             var data = Helper.GetEntityProperty(entity, "cu");
@@ -467,7 +463,7 @@ namespace NBitcoin.Indexer
                     else
                     {
                         var asset = ColoredTransaction.GetColoredEntry(coin.Outpoint.N);
-                        if(asset != null)
+                        if (asset != null)
                             collection[i] = coin.ToColoredCoin(asset.Asset);
                     }
                 }
@@ -499,10 +495,9 @@ namespace NBitcoin.Indexer
         {
             var balanceId = new BalanceId(scriptPubKey);
             Init(txId, balanceId, blockId, blockHeader, height);
-            var scriptBytes = scriptPubKey.ToBytes(true);
-            if (scriptPubKey.Length > BalanceId.MaxScriptSize)
+            if (!balanceId.ContainsScript)
             {
-                _Script = scriptPubKey;
+                _ScriptPubKey = scriptPubKey;
             }
         }
 
@@ -515,13 +510,11 @@ namespace NBitcoin.Indexer
             BalanceId = balanceId;
         }
 
-        Script _Script;
-
         internal OrderedBalanceChange(uint256 txId, string walletId, Script scriptPubKey, uint256 blockId, BlockHeader blockHeader, int height)
             : this()
         {
             Init(txId, new BalanceId(walletId), blockId, blockHeader, height);
-            _Script = scriptPubKey;
+            _ScriptPubKey = scriptPubKey;
         }
 
         internal OrderedBalanceChange(string walletId, OrderedBalanceChange source)
@@ -576,18 +569,11 @@ namespace NBitcoin.Indexer
             {
                 entity.Properties.AddOrReplace("g", new EntityProperty(ColoredTransaction.ToBytes()));
             }
-            if (_Script != null)
-            {      
-                var bytes = _Script.ToBytes(true);
-                if (bytes.Length < 10 * 1024)
-                {
+            if (ScriptPubKey != null && !BalanceId.ContainsScript)
+            {
+                var bytes = ScriptPubKey.ToBytes(true);
+                if (bytes.Length < 63000)
                     entity.Properties.Add("h", new EntityProperty(bytes));
-                }
-                else
-                {
-                    //Big script of 25K : 22e08a53aff6cb0680758036e09f792dac56e4813de81c9be1b4b1ae3cda0ab0
-                    Helper.SetEntityProperty(entity, "hs", bytes);
-                }
             }
             if (CustomData != null)
             {
@@ -610,13 +596,14 @@ namespace NBitcoin.Indexer
             return ExtractScriptBalances(null, tx, null, null, 0);
         }
 
+        Script _ScriptPubKey;
         internal Script ScriptPubKey
         {
             get
             {
-                if (_Script == null)
-                    _Script = BalanceId.ExtractScript();
-                return _Script;
+                if (_ScriptPubKey == null)
+                    _ScriptPubKey = BalanceId.ExtractScript();
+                return _ScriptPubKey;
             }
         }
 

@@ -15,6 +15,8 @@ namespace NBitcoin.Indexer
     public class BalanceId
     {
         const string WalletPrefix = "w$";
+        const string HashPrefix = "h$";
+
         internal const int MaxScriptSize = 512;
         public BalanceId(string walletId)
         {
@@ -24,7 +26,7 @@ namespace NBitcoin.Indexer
         {
             var pubKey = scriptPubKey.ToBytes(true);
             if (pubKey.Length > MaxScriptSize)
-                _Internal = FastEncoder.Instance.EncodeData(scriptPubKey.Hash.ToBytes(true));
+                _Internal = HashPrefix + FastEncoder.Instance.EncodeData(scriptPubKey.Hash.ToBytes(true));
             else
                 _Internal = FastEncoder.Instance.EncodeData(scriptPubKey.ToBytes(true));
         }
@@ -67,9 +69,21 @@ namespace NBitcoin.Indexer
 
         public Script ExtractScript()
         {
-            if (_Internal.StartsWith(WalletPrefix))
+            if (!ContainsScript)
                 return null;
             return Script.FromBytesUnsafe(FastEncoder.Instance.DecodeData(_Internal));
+        }
+
+        public bool ContainsScript
+        {
+            get
+            {
+                if (_Internal.StartsWith(WalletPrefix))
+                    return false;
+                if (_Internal.StartsWith(HashPrefix))
+                    return false;
+                return true;
+            }
         }
 
 
@@ -87,5 +101,7 @@ namespace NBitcoin.Indexer
                 _Internal = balanceId
             };
         }
+
+        
     }
 }
