@@ -27,6 +27,32 @@ namespace NBitcoin.Indexer.Tests
     public class TestClass
     {
         [Fact]
+        public void CanSerializeOrderedBalanceToEntity()
+        {
+            uint256 txId = new uint256(RandomUtils.GetBytes(32));
+            Script script = CreateScript(512);
+            OrderedBalanceChange balance = new OrderedBalanceChange(txId, script, null, null, 0);
+            Assert.Equal(script, balance.ScriptPubKey);
+            var entity = balance.ToEntity();
+            Assert.False(entity.Properties.ContainsKey("h"));
+            balance = new OrderedBalanceChange(entity);
+            Assert.Equal(script, balance.ScriptPubKey);
+
+            script = CreateScript(513);
+            balance = new OrderedBalanceChange(txId, script, null, null, 0);
+            Assert.Equal(script, balance.ScriptPubKey);
+            entity = balance.ToEntity();
+            Assert.True(entity.Properties.ContainsKey("h"));
+            balance = new OrderedBalanceChange(entity);
+            Assert.Equal(script, balance.ScriptPubKey);
+        }
+
+        private Script CreateScript(int size)
+        {
+            return new Script(Op.GetPushOp(new byte[size - 3]));
+        }
+
+        [Fact]
         public void CanSpreadBytes()
         {
             var bytes =
