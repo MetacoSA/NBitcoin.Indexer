@@ -78,11 +78,7 @@ namespace NBitcoin.Indexer
         {
             get
             {
-                if (_Internal.StartsWith(WalletPrefix))
-                    return false;
-                if (_Internal.StartsWith(HashPrefix))
-                    return false;
-                return true;
+                return _Internal.Length >= 2 && _Internal[1] != '$';
             }
         }
 
