@@ -149,7 +149,7 @@ namespace NBitcoin.Indexer
 
             if (NeedSave)
             {
-                _LastSaved = DateTime.Now;
+                _LastSaved = DateTime.UtcNow;
             }
         }
 
