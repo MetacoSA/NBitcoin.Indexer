@@ -13,6 +13,13 @@ namespace NBitcoin.Indexer
         public WalletRule()
         {
         }
+
+        [JsonIgnore]
+        public abstract string Id
+        {
+            get;
+        }
+
         [JsonProperty(DefaultValueHandling=DefaultValueHandling.Ignore)]
         public string CustomData
         {

@@ -41,5 +41,13 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+
+        public override string Id
+        {
+            get
+            {
+                return ScriptPubKey.Hash.ToString();
+            }
+        }
     }
 }

@@ -19,7 +19,15 @@ namespace NBitcoin.Indexer
         public WalletRuleEntry(DynamicTableEntity entity, IndexerClient client)
         {
             WalletId = Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.PartitionKey));
-            Rule = Helper.DeserializeObject<WalletRule>(Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.RowKey)));
+
+            if (!entity.Properties.ContainsKey("a0")) //Legacy
+            {
+                Rule = Helper.DeserializeObject<WalletRule>(Encoding.UTF8.GetString(Encoders.Hex.DecodeData(entity.RowKey)));
+            }
+            else
+            {
+                Rule = Helper.DeserializeObject<WalletRule>(Encoding.UTF8.GetString(Helper.GetEntityProperty(entity, "a")));
+            }
         }
         public WalletRuleEntry(string walletId, WalletRule rule)
         {
@@ -45,7 +53,8 @@ namespace NBitcoin.Indexer
 
             if (Rule != null)
             {
-                entity.RowKey = Encoders.Hex.EncodeData(Encoding.UTF8.GetBytes(Helper.Serialize(Rule)));
+                entity.RowKey = Rule.Id;
+                Helper.SetEntityProperty(entity, "a", Encoding.UTF8.GetBytes(Helper.Serialize(Rule)));
             }
             return entity;
         }
