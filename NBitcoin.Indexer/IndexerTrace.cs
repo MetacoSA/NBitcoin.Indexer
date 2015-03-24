@@ -32,7 +32,9 @@ namespace NBitcoin.Indexer
 
         internal static TraceCorrelation NewCorrelation(string activityName)
         {
-            return new TraceCorrelation(_Trace, activityName);
+            var correlation = new TraceCorrelation(_Trace, activityName);
+            _Trace.TraceInformation(activityName);
+            return correlation;
         }
 
         internal static void CheckpointLoaded(ChainedBlock block, string file)
@@ -75,7 +77,7 @@ namespace NBitcoin.Indexer
                 sb.AppendFormat("{0}h ", span.Hours);
             if (span.Minutes > 0)
                 sb.AppendFormat("{0}m", span.Minutes);
-            var result =  sb.ToString();
+            var result = sb.ToString();
             if (result == string.Empty)
                 return "< 1min";
             return result;
@@ -97,29 +99,29 @@ namespace NBitcoin.Indexer
         }
 
 
-        internal static void LocalMainChainTip(ChainedBlock block)
+        internal static void InputChainTip(ChainedBlock block)
         {
-            _Trace.TraceInformation("Local main tip " + ToString(block));
+            _Trace.TraceInformation("The input chain tip is at height " + ToString(block));
         }
 
         private static string ToString(uint256 blockId, int height)
         {
-            return "Height : " + height + ", BlockId : " + blockId;
+            return height.ToString();
         }
 
-        internal static void StoredMainChainTip(uint256 blockId, int height)
+        internal static void IndexedChainTip(uint256 blockId, int height)
         {
-            _Trace.TraceInformation("Stored main tip " + ToString(blockId, height));
+            _Trace.TraceInformation("Indexed chain is at height " + ToString(blockId, height));
         }
 
-        internal static void LocalMainChainIsLate()
+        internal static void InputChainIsLate()
         {
-            _Trace.TraceInformation("Local main chain is late");
+            _Trace.TraceInformation("The input chain is late compared to the indexed one");
         }
 
-        public static void ImportingChain(ChainedBlock from, ChainedBlock to)
+        public static void IndexingChain(ChainedBlock from, ChainedBlock to)
         {
-            _Trace.TraceInformation("Importing blocks from " + ToString(from) + " to " + ToString(to) + " (both included)");
+            _Trace.TraceInformation("Indexing blocks from " + ToString(from) + " to " + ToString(to) + " (both included)");
         }
 
         private static string ToString(ChainedBlock chainedBlock)
@@ -138,9 +140,9 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal static void StoredMainChainIsUpToDate(ChainedBlock block)
+        internal static void IndexedChainIsUpToDate(ChainedBlock block)
         {
-            _Trace.TraceInformation("Stored main chain is up to date " + ToString(block));
+            _Trace.TraceInformation("Indexed chain is up to date at height " + ToString(block));
         }
 
         public static void Information(string message)

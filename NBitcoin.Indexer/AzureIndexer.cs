@@ -259,61 +259,60 @@ namespace NBitcoin.Indexer
         public void Index(Block block)
         {
             var hash = block.GetHash().ToString();
-            using (IndexerTrace.NewCorrelation("Upload of " + hash).Open())
+
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+            bool failedBefore = false;
+            while (true)
             {
-                Stopwatch watch = new Stopwatch();
-                watch.Start();
-                bool failedBefore = false;
-                while (true)
+                try
                 {
+                    var container = Configuration.GetBlocksContainer();
+                    var client = container.ServiceClient;
+                    client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
+                    var blob = container.GetPageBlobReference(hash);
+                    MemoryStream ms = new MemoryStream();
+                    block.ReadWrite(ms, true);
+                    var blockBytes = ms.GetBuffer();
+
+                    long length = 512 - (ms.Length % 512);
+                    if (length == 512)
+                        length = 0;
+                    Array.Resize(ref blockBytes, (int)(ms.Length + length));
+
                     try
                     {
-                        var container = Configuration.GetBlocksContainer();
-                        var client = container.ServiceClient;
-                        client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-                        var blob = container.GetPageBlobReference(hash);
-                        MemoryStream ms = new MemoryStream();
-                        block.ReadWrite(ms, true);
-                        var blockBytes = ms.GetBuffer();
-
-                        long length = 512 - (ms.Length % 512);
-                        if (length == 512)
-                            length = 0;
-                        Array.Resize(ref blockBytes, (int)(ms.Length + length));
-
-                        try
+                        blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
                         {
-                            blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
-                            {
-                                //Will throw if already exist, save 1 call
-                                IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
-                            }, new BlobRequestOptions()
-                            {
-                                MaximumExecutionTime = _Timeout,
-                                ServerTimeout = _Timeout
-                            });
-                            watch.Stop();
-                            IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
-                            break;
-                        }
-                        catch (StorageException ex)
+                            //Will throw if already exist, save 1 call
+                            IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
+                        }, new BlobRequestOptions()
                         {
-                            var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
-                            if (!alreadyExist)
-                                throw;
-                            watch.Stop();
-                            IndexerTrace.BlockAlreadyUploaded();
-                            break;
-                        }
+                            MaximumExecutionTime = _Timeout,
+                            ServerTimeout = _Timeout
+                        });
+                        watch.Stop();
+                        IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
+                        break;
                     }
-                    catch (Exception ex)
+                    catch (StorageException ex)
                     {
-                        IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
-                        failedBefore = true;
-                        Thread.Sleep(5000);
+                        var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
+                        if (!alreadyExist)
+                            throw;
+                        watch.Stop();
+                        IndexerTrace.BlockAlreadyUploaded();
+                        break;
                     }
                 }
+                catch (Exception ex)
+                {
+                    IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+                    failedBefore = true;
+                    Thread.Sleep(5000);
+                }
             }
+
         }
 
         public long IndexBlocks(ChainBase chain = null)
@@ -393,7 +392,7 @@ namespace NBitcoin.Indexer
             BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
 
             var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.ToEntity()), this.Configuration.GetBalanceTable()), 30);
-            using (IndexerTrace.NewCorrelation("Import balances " + checkpointName + " to azure started").Open())
+            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
             {
                 this.Configuration.GetBalanceTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
@@ -602,26 +601,26 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("chain");
             SetThrottling();
 
-            using (IndexerTrace.NewCorrelation("Index Main chain").Open())
+            using (IndexerTrace.NewCorrelation("Index main chain to azure started").Open())
             {
                 Configuration.GetChainTable().CreateIfNotExists();
-                IndexerTrace.LocalMainChainTip(chain.Tip);
+                IndexerTrace.InputChainTip(chain.Tip);
                 var client = Configuration.CreateIndexerClient();
                 var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
 
                 var height = 0;
                 if (changes.Count != 0)
                 {
-                    IndexerTrace.StoredMainChainTip(changes[0].BlockId, changes[0].Height);
+                    IndexerTrace.IndexedChainTip(changes[0].BlockId, changes[0].Height);
                     if (changes[0].Height > chain.Tip.Height)
                     {
-                        IndexerTrace.LocalMainChainIsLate();
+                        IndexerTrace.InputChainIsLate();
                         return;
                     }
                     height = changes[changes.Count - 1].Height + 1;
                     if (height > chain.Height)
                     {
-                        IndexerTrace.StoredMainChainIsUpToDate(chain.Tip);
+                        IndexerTrace.IndexedChainIsUpToDate(chain.Tip);
                         return;
                     }
                 }
@@ -630,7 +629,7 @@ namespace NBitcoin.Indexer
                     IndexerTrace.NoForkFoundWithStored();
                 }
 
-                IndexerTrace.ImportingChain(chain.GetBlock(height), chain.Tip);
+                IndexerTrace.IndexingChain(chain.GetBlock(height), chain.Tip);
                 Index(chain, height);
 
             }

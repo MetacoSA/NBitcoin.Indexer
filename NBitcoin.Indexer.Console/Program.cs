@@ -15,7 +15,6 @@ namespace NBitcoin.Indexer.Console
         {
             try
             {
-
                 var options = new IndexerOptions();
                 if (args.Length == 0)
                     System.Console.WriteLine(options.GetUsage());
