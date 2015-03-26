@@ -83,7 +83,7 @@ namespace NBitcoin.Indexer.Tests
         public Block SubmitBlock()
         {
             var b = GetCurrentBlock();
-            b.Header.HashMerkleRoot = b.ComputeMerkleRoot();
+            b.UpdateMerkleRoot();
             _Chain.SetTip(b.Header);
             _Current = null;
             _UnsyncBlocks.Add(b);
