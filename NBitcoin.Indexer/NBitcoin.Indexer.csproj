@@ -89,6 +89,7 @@
     <Compile Include="BalanceSheet.cs" />
     <Compile Include="BlockFetcher.cs" />
     <Compile Include="Checkpoint.cs" />
+    <Compile Include="CheckpointRepository.cs" />
     <Compile Include="CoinCollection.cs" />
     <Compile Include="Converters\WalletRuleConverter.cs" />
     <Compile Include="Crc32.cs" />

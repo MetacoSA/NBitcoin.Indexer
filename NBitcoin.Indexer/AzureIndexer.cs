@@ -38,61 +38,6 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public Task<Checkpoint> GetCheckpointAsync(string checkpointName)
-        {
-            var container = Configuration.GetBlocksContainer();
-            var blob = container.GetBlockBlobReference("Checkpoints/" + checkpointName);
-            return Checkpoint.LoadBlobAsync(blob, Configuration.Network);
-        }
-
-        public Task<Checkpoint[]> GetCheckpointsAsync()
-        {
-            var container = Configuration.GetBlocksContainer();
-            List<Task<Checkpoint>> checkpoints = new List<Task<Checkpoint>>();
-            foreach (var blob in container.ListBlobs("Checkpoints/", true, BlobListingDetails.None).OfType<CloudBlockBlob>())
-            {
-                checkpoints.Add(Checkpoint.LoadBlobAsync(blob, Configuration.Network));
-            }
-            return Task.WhenAll(checkpoints.ToArray());
-        }
-
-        public async Task DeleteCheckpointsAsync()
-        {
-            List<Task> deletions = new List<Task>();
-            var checkpoints = await GetCheckpointsAsync().ConfigureAwait(false);
-            foreach (var checkpoint in checkpoints)
-            {
-                deletions.Add(checkpoint.DeleteAsync());
-            }
-            await Task.WhenAll(deletions.ToArray()).ConfigureAwait(false);
-        }
-
-        public void DeleteCheckpoints()
-        {
-            try
-            {
-                DeleteCheckpointsAsync().Wait();
-            }
-            catch (AggregateException aex)
-            {
-                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
-            }
-        }
-
-        public Checkpoint GetCheckpoint(string checkpointName)
-        {
-            try
-            {
-
-                return GetCheckpointAsync(checkpointName).Result;
-            }
-            catch (AggregateException aex)
-            {
-                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
-                return null;
-            }
-        }
-
 
         private readonly IndexerConfiguration _Configuration;
         public IndexerConfiguration Configuration
@@ -403,6 +348,11 @@ namespace NBitcoin.Indexer
             return blkCount;
         }
 
+        public CheckpointRepository GetCheckpointRepository()
+        {
+            return new CheckpointRepository(_Configuration.GetBlocksContainer(), _Configuration.Network, string.IsNullOrWhiteSpace(_Configuration.CheckpointSetName) ? "default" : _Configuration.CheckpointSetName);
+        }
+
         private BlockFetcher Enumerate(string checkpointName, ChainBase blockHeaders)
         {
             blockHeaders = blockHeaders ?? GetNodeChain();
@@ -410,7 +360,7 @@ namespace NBitcoin.Indexer
             var node = Configuration.ConnectToNode(false);
             node.VersionHandshake();
 
-            var checkpoint = GetCheckpoint(checkpointName);
+            var checkpoint = GetCheckpointRepository().GetCheckpoint(checkpointName);
             return new BlockFetcher(checkpoint, node, blockHeaders)
             {
                 CheckpointInterval = CheckpointInterval,
@@ -420,7 +370,6 @@ namespace NBitcoin.Indexer
             };
 
         }
-
        
         public void IndexOrderedBalances(ChainBase chain)
         {

@@ -91,7 +91,7 @@ namespace NBitcoin.Indexer.Tests
 
                 Assert.Equal(2, tester.Indexer.IndexBlocks());
 
-                tester.Indexer.DeleteCheckpoints();
+                tester.Indexer.GetCheckpointRepository().DeleteCheckpoints();
 
                 tester.Indexer.FromHeight = 10;
                 tester.Indexer.ToHeight = 12;
@@ -130,7 +130,8 @@ namespace NBitcoin.Indexer.Tests
         {
             using (var tester = CreateTester())
             {
-                var checkpoint = tester.Indexer.GetCheckpoint("toto");
+                var repo = tester.Indexer.GetCheckpointRepository();
+                var checkpoint = repo.GetCheckpoint("toto");
                 var builder =  tester.CreateChainBuilder();
                 builder.SubmitBlock();
                 builder.SubmitBlock();
@@ -139,17 +140,39 @@ namespace NBitcoin.Indexer.Tests
                 builder.SubmitBlock();
 
                 //optimist locking
-                checkpoint = tester.Indexer.GetCheckpoint("toto");
-                var checkpoint2 = tester.Indexer.GetCheckpoint("toto");
+                checkpoint = repo.GetCheckpoint("toto");
+                var checkpoint2 = repo.GetCheckpoint("toto");
                 Assert.True(checkpoint.BlockLocator.Blocks[0] == lastTip.HashBlock);
                 Assert.True(checkpoint.SaveProgress(builder.Chain.Tip));
                 Assert.False(checkpoint2.SaveProgress(builder.Chain.Tip));
+                lastTip = builder.Chain.Tip;
                 //
 
+                //Assert can get with complete name or local name
+                checkpoint = repo.GetCheckpoint("toto");
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == lastTip.HashBlock);
+                checkpoint = repo.GetCheckpoint("default/toto");
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == lastTip.HashBlock);
+                var repo2 = tester.Indexer.GetCheckpointRepository();
+                repo2.CheckpointSet = null;
+                checkpoint = repo2.GetCheckpoint("toto");
+                Assert.False(checkpoint.BlockLocator.Blocks[0] == lastTip.HashBlock);
+                //
+
+                //Can query all checkpointset
+                repo2.CheckpointSet = "default2";
+                checkpoint = repo2.GetCheckpoint("toto");
+                Assert.True(checkpoint.SaveProgress(builder.Chain.Tip));
+                repo2.CheckpointSet = null;
+                var checkpoints = repo2.GetCheckpointsAsync().Result;
+                Assert.True(checkpoints.Length == 2);
+                //
+
+                checkpoint = repo.GetCheckpoint("toto");
                 checkpoint.DeleteAsync().Wait();
                 checkpoint.DeleteAsync().Wait(); //don't care about double delete
-                checkpoint = tester.Indexer.GetCheckpoint("toto");
-                Assert.True(checkpoint.BlockLocator.Blocks[0] == Network.TestNet.GetGenesis().GetHash());
+                checkpoint = repo.GetCheckpoint("toto");
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == Network.TestNet.GetGenesis().GetHash());                
             }
         }
 

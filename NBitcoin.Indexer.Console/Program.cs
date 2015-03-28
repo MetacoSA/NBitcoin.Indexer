@@ -29,10 +29,11 @@ namespace NBitcoin.Indexer.Console
                     indexer.TaskCount = options.ThreadCount;
 
                     ChainBase chain = null;
-
+                    var checkpointRepository = indexer.GetCheckpointRepository();
+                    checkpointRepository.CheckpointSet = null;
                     if (options.ListCheckpoints)
                     {
-                        foreach (var checkpoint in indexer.GetCheckpointsAsync().Result)
+                        foreach (var checkpoint in checkpointRepository.GetCheckpointsAsync().Result)
                         {
                             chain = chain ?? indexer.GetNodeChain();
                             var fork = chain.FindFork(checkpoint.BlockLocator);
@@ -48,7 +49,7 @@ namespace NBitcoin.Indexer.Console
                     }
                     if (options.DeleteCheckpoint != null)
                     {
-                        indexer.GetCheckpoint(options.DeleteCheckpoint).DeleteAsync().Wait();
+                        checkpointRepository.GetCheckpoint(options.DeleteCheckpoint).DeleteAsync().Wait();
                         System.Console.WriteLine("Checkpoint " + options.DeleteCheckpoint + " deleted");
                     }
                     if (options.AddCheckpoint != null)
@@ -59,7 +60,7 @@ namespace NBitcoin.Indexer.Console
                         var height = int.Parse(split[1]);
                         var b = chain.GetBlock(height);
 
-                        var checkpoint = indexer.GetCheckpoint(name);
+                        var checkpoint = checkpointRepository.GetCheckpoint(name);
                         checkpoint.SaveProgress(b.GetLocator());
                         System.Console.WriteLine("Checkpoint " + options.AddCheckpoint + " saved to height " + b.Height);
                     }
@@ -72,10 +73,10 @@ namespace NBitcoin.Indexer.Console
                             var path = GetFilePath(indexer.Configuration, chk);
                             if (File.Exists(path))
                             {
-                                var onlineCheckpoint = indexer.GetCheckpointsAsync().Result.FirstOrDefault(r => r.CheckpointName.ToLowerInvariant() == chk);
+                                var onlineCheckpoint = checkpointRepository.GetCheckpointsAsync().Result.FirstOrDefault(r => r.CheckpointName.ToLowerInvariant() == chk);
                                 if (onlineCheckpoint == null)
                                 {
-                                    onlineCheckpoint = indexer.GetCheckpoint(path);
+                                    onlineCheckpoint = checkpointRepository.GetCheckpoint(chk);
                                     BlockLocator offlineLocator = new BlockLocator();
                                     offlineLocator.FromBytes(File.ReadAllBytes(path));
                                     onlineCheckpoint.SaveProgress(offlineLocator);

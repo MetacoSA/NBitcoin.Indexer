@@ -116,7 +116,7 @@ namespace NBitcoin.Indexer
 
         public static async Task<Checkpoint> LoadBlobAsync(CloudBlockBlob blob, Network network)
         {
-            var checkpointName = blob.Name.Split('/').Last();
+            var checkpointName = string.Join("/", blob.Name.Split('/').Skip(1).ToArray());
             MemoryStream ms = new MemoryStream();
             try
             {
@@ -130,6 +130,11 @@ namespace NBitcoin.Indexer
             }
             var checkpoint = new Checkpoint(checkpointName, network, ms, blob);
             return checkpoint;
+        }
+
+        public override string ToString()
+        {
+            return CheckpointName;
         }
     }
 
