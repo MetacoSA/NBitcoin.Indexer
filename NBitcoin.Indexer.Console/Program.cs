@@ -29,6 +29,65 @@ namespace NBitcoin.Indexer.Console
                     indexer.TaskCount = options.ThreadCount;
 
                     ChainBase chain = null;
+
+                    if (options.ListCheckpoints)
+                    {
+                        foreach (var checkpoint in indexer.GetCheckpointsAsync().Result)
+                        {
+                            chain = chain ?? indexer.GetNodeChain();
+                            var fork = chain.FindFork(checkpoint.BlockLocator);
+                            System.Console.WriteLine("Name : " + checkpoint.CheckpointName);
+                            if (fork != null)
+                            {
+                                System.Console.WriteLine("Height : " + fork.Height);
+                                System.Console.WriteLine("Hash : " + fork.HashBlock);
+                            }
+                            System.Console.WriteLine();
+
+                        }
+                    }
+                    if (options.DeleteCheckpoint != null)
+                    {
+                        indexer.GetCheckpoint(options.DeleteCheckpoint).DeleteAsync().Wait();
+                        System.Console.WriteLine("Checkpoint " + options.DeleteCheckpoint + " deleted");
+                    }
+                    if (options.AddCheckpoint != null)
+                    {
+                        chain = chain ?? indexer.GetNodeChain();
+                        var split = options.AddCheckpoint.Split(':');
+                        var name = split[0];
+                        var height = int.Parse(split[1]);
+                        var b = chain.GetBlock(height);
+
+                        var checkpoint = indexer.GetCheckpoint(name);
+                        checkpoint.SaveProgress(b.GetLocator());
+                        System.Console.WriteLine("Checkpoint " + options.AddCheckpoint + " saved to height " + b.Height);
+                    }
+                    if (ConfigurationManager.AppSettings["MainDirectory"] != null)
+                    {
+                        System.Console.WriteLine("Warning : obsolete appsetting detected, MainDirectory");
+                        string[] oldCheckpoints = new string[] { "transactions", "blocks", "wallets", "balances" };
+                        foreach (var chk in oldCheckpoints)
+                        {
+                            var path = GetFilePath(indexer.Configuration, chk);
+                            if (File.Exists(path))
+                            {
+                                var onlineCheckpoint = indexer.GetCheckpointsAsync().Result.FirstOrDefault(r => r.CheckpointName.ToLowerInvariant() == chk);
+                                if (onlineCheckpoint == null)
+                                {
+                                    onlineCheckpoint = indexer.GetCheckpoint(path);
+                                    BlockLocator offlineLocator = new BlockLocator();
+                                    offlineLocator.FromBytes(File.ReadAllBytes(path));
+                                    onlineCheckpoint.SaveProgress(offlineLocator);
+                                    System.Console.WriteLine("Local checkpoint " + chk + " saved in azure");
+                                }
+                                File.Delete(path);
+                                System.Console.WriteLine("Checkpoint File deleted " + path);
+                            }
+                        }
+                    }
+
+
                     if (options.IndexBlocks)
                     {
                         chain = chain ?? indexer.GetNodeChain();
@@ -54,12 +113,23 @@ namespace NBitcoin.Indexer.Console
                         chain = chain ?? indexer.GetNodeChain();
                         indexer.IndexWalletBalances(chain);
                     }
+
                 }
             }
             catch (ConfigurationErrorsException ex)
             {
                 System.Console.WriteLine("LocalSettings.config missing settings : " + ex.Message);
             }
+        }
+
+
+        static string GetFilePath(IndexerConfiguration conf, string name)
+        {
+            var mainDirectory = ConfigurationManager.AppSettings["MainDirectory"];
+            var fileName = conf.StorageNamespace + "-" + name;
+            if (!String.IsNullOrEmpty(mainDirectory))
+                return Path.Combine(mainDirectory, fileName);
+            return fileName;
         }
     }
 }

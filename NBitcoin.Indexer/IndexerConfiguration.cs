@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -25,9 +26,17 @@ namespace NBitcoin.Indexer
 
         public void EnsureSetup()
         {
-            foreach (var table in EnumerateTables())
+            var tasks = EnumerateTables()
+                .Select(t => t.CreateIfNotExistsAsync())
+                .ToArray();
+            try
             {
-                table.CreateIfNotExists();
+                Task.WaitAll(tasks);
+            }
+            catch (AggregateException aex)
+            {
+                ExceptionDispatchInfo.Capture(aex).Throw();
+                throw;
             }
             GetBlocksContainer().CreateIfNotExists();
         }
@@ -45,8 +54,6 @@ namespace NBitcoin.Indexer
                              Network.TestNet : null;
             if (config.Network == null)
                 throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
-
-            config.MainDirectory = GetValue("MainDirectory", false);
             config.Node = GetValue("Node", false);
         }
 
@@ -80,26 +87,10 @@ namespace NBitcoin.Indexer
             return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
         }
 
-
-        public string MainDirectory
-        {
-            get;
-            set;
-        }
-
         public string Node
         {
             get;
             set;
-        }
-
-
-        internal string GetFilePath(string name)
-        {
-            var fileName = StorageNamespace + "-" + name;
-            if (!String.IsNullOrEmpty(MainDirectory))
-                return Path.Combine(MainDirectory, fileName);
-            return fileName;
         }
 
         string _Container = "indexer";

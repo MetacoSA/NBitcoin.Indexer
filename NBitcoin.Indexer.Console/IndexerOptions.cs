@@ -23,6 +23,26 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
+        [Option("ListCheckpoints", HelpText = "list checkpoints", Required = false, DefaultValue = false)]
+        public bool ListCheckpoints
+        {
+            get;
+            set;
+        }
+        [Option("AddCheckpoint", HelpText = "add/set checkpoint (format : \"CheckpointName:Height\")", Required = false, DefaultValue = null)]
+        public string AddCheckpoint
+        {
+            get;
+            set;
+        }
+
+        [Option("DeleteCheckpoint", HelpText = "delete checkpoint (format : checkpoint name)", Required = false, DefaultValue = null)]
+        public string DeleteCheckpoint
+        {
+            get;
+            set;
+        }
+
         string _Usage;
         [HelpOption('?', "help", HelpText = "Display this help screen.")]
         public string GetUsage()
@@ -62,7 +82,7 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
-      
+
         [Option('t', "IndexTransactions", DefaultValue = false, Required = false, HelpText = "Index transactions into azure table")]
         public bool IndexTransactions
         {
