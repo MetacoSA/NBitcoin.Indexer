@@ -93,6 +93,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
+
         internal string GetFilePath(string name)
         {
             var fileName = StorageNamespace + "-" + name;

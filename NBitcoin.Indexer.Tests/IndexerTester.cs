@@ -59,11 +59,14 @@ namespace NBitcoin.Indexer.Tests
                     });
                 }
                 var container = _Importer.Configuration.GetBlocksContainer();
-                var blobs = container.ListBlobs().ToList();
+                var blobs = container.ListBlobs(useFlatBlobListing: true).ToList();
 
                 Parallel.ForEach(blobs, b =>
                 {
-                    ((CloudPageBlob)b).Delete();
+                    if (b is CloudPageBlob)
+                        ((CloudPageBlob)b).Delete();
+                    else
+                        ((CloudBlockBlob)b).Delete();
                 });
             }
         }

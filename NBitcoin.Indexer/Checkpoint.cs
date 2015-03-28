@@ -1,7 +1,10 @@
-﻿using System;
+﻿using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -9,32 +12,38 @@ namespace NBitcoin.Indexer
 {
     public class Checkpoint
     {
-        string _FileName;
-        public string FileName
+        private readonly string _CheckpointName;
+        public string CheckpointName
         {
             get
             {
-                return _FileName;
+                return _CheckpointName;
             }
         }
 
-        public Checkpoint(string fileName, Network network)
+        CloudBlockBlob _Blob;
+        public Checkpoint(string checkpointName, Network network, Stream data, CloudBlockBlob blob)
         {
-            _FileName = fileName;
-            try
+            if (checkpointName == null)
+                throw new ArgumentNullException("checkpointName");
+            _Blob = blob;
+            _CheckpointName = checkpointName;
+            _BlockLocator = new BlockLocator();
+            if (data != null)
             {
-
-                _BlockLocator = new NBitcoin.BlockLocator();
-                _BlockLocator.FromBytes(File.ReadAllBytes(fileName));
+                try
+                {
+                    _BlockLocator.ReadWrite(data, false);
+                    return;
+                }
+                catch
+                {
+                }
             }
-            catch
-            {
-                var list = new List<uint256>();
-                list.Add(network.GetGenesis().Header.GetHash());
-                _BlockLocator = new BlockLocator(list);
-            }
+            var list = new List<uint256>();
+            list.Add(network.GetGenesis().Header.GetHash());
+            _BlockLocator = new BlockLocator(list);
         }
-
 
         public uint256 Genesis
         {
@@ -53,14 +62,74 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public void SaveProgress(ChainedBlock tip)
+        public bool SaveProgress(ChainedBlock tip)
         {
-            SaveProgress(tip.GetLocator());
+            return SaveProgress(tip.GetLocator());
         }
-        public void SaveProgress(BlockLocator locator)
+        public bool SaveProgress(BlockLocator locator)
         {
             _BlockLocator = locator;
-            File.WriteAllBytes(_FileName, _BlockLocator.ToBytes());
+            try
+            {
+                return SaveProgressAsync().Result;
+            }
+            catch (AggregateException aex)
+            {
+                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
+                return false;
+            }
+        }
+
+        public async Task DeleteAsync()
+        {
+            try
+            {
+                await _Blob.DeleteAsync().ConfigureAwait(false);
+            }
+            catch (StorageException ex)
+            {
+                if (ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 404)
+                    return;
+                throw;
+            }
+        }
+
+        private async Task<bool> SaveProgressAsync()
+        {
+            var bytes = BlockLocator.ToBytes();
+            try
+            {
+
+                await _Blob.UploadFromByteArrayAsync(bytes, 0, bytes.Length, new AccessCondition()
+                {
+                    IfMatchETag = _Blob.Properties.ETag
+                }, null, null).ConfigureAwait(false);
+            }
+            catch (StorageException ex)
+            {
+                if (ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412)
+                    return false;
+                throw;
+            }
+            return true;
+        }
+
+        public static async Task<Checkpoint> LoadBlobAsync(CloudBlockBlob blob, Network network)
+        {
+            var checkpointName = blob.Name.Split('/').Last();
+            MemoryStream ms = new MemoryStream();
+            try
+            {
+                await blob.DownloadToStreamAsync(ms).ConfigureAwait(false);
+                ms.Position = 0;
+            }
+            catch (StorageException ex)
+            {
+                if (ex.RequestInformation == null || ex.RequestInformation.HttpStatusCode != 404)
+                    throw;
+            }
+            var checkpoint = new Checkpoint(checkpointName, network, ms, blob);
+            return checkpoint;
         }
     }
 

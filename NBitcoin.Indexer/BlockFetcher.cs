@@ -145,7 +145,7 @@ namespace NBitcoin.Indexer
                 return;
 
             _Checkpoint.SaveProgress(_LastProcessed);
-            IndexerTrace.CheckpointSaved(_LastProcessed, _Checkpoint.FileName);
+            IndexerTrace.CheckpointSaved(_LastProcessed, _Checkpoint.CheckpointName);
 
             if (NeedSave)
             {

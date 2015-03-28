@@ -16,6 +16,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -36,6 +37,62 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+
+        public Task<Checkpoint> GetCheckpointAsync(string checkpointName)
+        {
+            var container = Configuration.GetBlocksContainer();
+            var blob = container.GetBlockBlobReference("Checkpoints/" + checkpointName);
+            return Checkpoint.LoadBlobAsync(blob, Configuration.Network);
+        }
+
+        public Task<Checkpoint[]> GetCheckpointsAsync()
+        {
+            var container = Configuration.GetBlocksContainer();
+            List<Task<Checkpoint>> checkpoints = new List<Task<Checkpoint>>();
+            foreach (var blob in container.ListBlobs("Checkpoints/", true, BlobListingDetails.None).OfType<CloudBlockBlob>())
+            {
+                checkpoints.Add(Checkpoint.LoadBlobAsync(blob, Configuration.Network));
+            }
+            return Task.WhenAll(checkpoints.ToArray());
+        }
+
+        public async Task DeleteCheckpointsAsync()
+        {
+            List<Task> deletions = new List<Task>();
+            var checkpoints = await GetCheckpointsAsync().ConfigureAwait(false);
+            foreach (var checkpoint in checkpoints)
+            {
+                deletions.Add(checkpoint.DeleteAsync());
+            }
+            await Task.WhenAll(deletions.ToArray()).ConfigureAwait(false);
+        }
+
+        public void DeleteCheckpoints()
+        {
+            try
+            {
+                DeleteCheckpointsAsync().Wait();
+            }
+            catch (AggregateException aex)
+            {
+                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
+            }
+        }
+
+        public Checkpoint GetCheckpoint(string checkpointName)
+        {
+            try
+            {
+
+                return GetCheckpointAsync(checkpointName).Result;
+            }
+            catch (AggregateException aex)
+            {
+                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
+                return null;
+            }
+        }
+
 
         private readonly IndexerConfiguration _Configuration;
         public IndexerConfiguration Configuration
@@ -346,13 +403,15 @@ namespace NBitcoin.Indexer
             return blkCount;
         }
 
-        private BlockFetcher Enumerate(string checkpoint, ChainBase blockHeaders)
+        private BlockFetcher Enumerate(string checkpointName, ChainBase blockHeaders)
         {
             blockHeaders = blockHeaders ?? GetNodeChain();
 
             var node = Configuration.ConnectToNode(false);
             node.VersionHandshake();
-            return new BlockFetcher(new Checkpoint(Configuration.GetFilePath(checkpoint), Configuration.Network), node, blockHeaders)
+
+            var checkpoint = GetCheckpoint(checkpointName);
+            return new BlockFetcher(checkpoint, node, blockHeaders)
             {
                 CheckpointInterval = CheckpointInterval,
                 DisableSaving = NoSave,
@@ -362,6 +421,7 @@ namespace NBitcoin.Indexer
 
         }
 
+       
         public void IndexOrderedBalances(ChainBase chain)
         {
             IndexBalances(chain, "balances", (txid, tx, blockid, header, height) =>
@@ -640,17 +700,5 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-
-        public void DeleteCheckpoints()
-        {
-            foreach (var checkpoint in _Checkpoints)
-            {
-                var file = Configuration.GetFilePath(checkpoint);
-                File.Delete(file);
-                IndexerTrace.Information(file + " Deleted");
-            }
-        }
-
-
     }
 }

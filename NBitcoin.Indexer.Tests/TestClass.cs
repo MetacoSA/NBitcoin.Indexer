@@ -125,6 +125,34 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+        [Fact]
+        public void CanManageCheckpoints()
+        {
+            using (var tester = CreateTester())
+            {
+                var checkpoint = tester.Indexer.GetCheckpoint("toto");
+                var builder =  tester.CreateChainBuilder();
+                builder.SubmitBlock();
+                builder.SubmitBlock();
+                var lastTip = builder.Chain.Tip;
+                Assert.True(checkpoint.SaveProgress(builder.Chain.Tip));
+                builder.SubmitBlock();
+
+                //optimist locking
+                checkpoint = tester.Indexer.GetCheckpoint("toto");
+                var checkpoint2 = tester.Indexer.GetCheckpoint("toto");
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == lastTip.HashBlock);
+                Assert.True(checkpoint.SaveProgress(builder.Chain.Tip));
+                Assert.False(checkpoint2.SaveProgress(builder.Chain.Tip));
+                //
+
+                checkpoint.DeleteAsync().Wait();
+                checkpoint.DeleteAsync().Wait(); //don't care about double delete
+                checkpoint = tester.Indexer.GetCheckpoint("toto");
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == Network.TestNet.GetGenesis().GetHash());
+            }
+        }
+
 
         //[Fact]
         //public void CanGetOrderedBalance2()
