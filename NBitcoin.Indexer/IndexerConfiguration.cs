@@ -55,7 +55,7 @@ namespace NBitcoin.Indexer
             if (config.Network == null)
                 throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
             config.Node = GetValue("Node", false);
-            config.CheckpointSetName = GetValue("CheckpointSetName", false);
+            config.CheckpointSetName = GetValue("CheckpointSetName", false) ?? "default";
         }
 
         protected static string GetValue(string config, bool required)
