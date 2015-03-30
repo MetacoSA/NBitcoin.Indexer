@@ -94,11 +94,6 @@ namespace NBitcoin.Indexer.Console
                         chain = chain ?? indexer.GetNodeChain();
                         indexer.IndexBlocks(chain);
                     }
-                    if (options.IndexChain)
-                    {
-                        chain = chain ?? indexer.GetNodeChain();
-                        indexer.IndexChain(chain);
-                    }
                     if (options.IndexTransactions)
                     {
                         chain = chain ?? indexer.GetNodeChain();
@@ -114,7 +109,11 @@ namespace NBitcoin.Indexer.Console
                         chain = chain ?? indexer.GetNodeChain();
                         indexer.IndexWalletBalances(chain);
                     }
-
+                    if (options.IndexChain)
+                    {
+                        chain = chain ?? indexer.GetNodeChain();
+                        indexer.IndexChain(chain);
+                    }
                 }
             }
             catch (ConfigurationErrorsException ex)
