@@ -39,7 +39,7 @@ namespace NBitcoin.Indexer
 
         internal static void CheckpointLoaded(ChainedBlock block, string file)
         {
-            _Trace.TraceInformation("Checkpoint loaded at " + ToString(block) + " (" + file + ")");
+            _Trace.TraceInformation("Checkpoint " + file + " loaded at " + ToString(block));
         }
 
         internal static void CheckpointSaved(ChainedBlock block, string checkpointName)

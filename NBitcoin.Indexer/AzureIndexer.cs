@@ -361,6 +361,7 @@ namespace NBitcoin.Indexer
             node.VersionHandshake();
 
             var checkpoint = GetCheckpointRepository().GetCheckpoint(checkpointName);
+            IndexerTrace.CheckpointLoaded(blockHeaders.FindFork(checkpoint.BlockLocator), checkpoint.CheckpointName);
             return new BlockFetcher(checkpoint, node, blockHeaders)
             {
                 CheckpointInterval = CheckpointInterval,
@@ -370,7 +371,7 @@ namespace NBitcoin.Indexer
             };
 
         }
-       
+
         public void IndexOrderedBalances(ChainBase chain)
         {
             IndexBalances(chain, "balances", (txid, tx, blockid, header, height) =>
