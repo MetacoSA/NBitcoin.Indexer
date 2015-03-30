@@ -24,6 +24,13 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
+    public enum IndexerCheckpoints
+    {
+        Wallets,
+        Transactions,
+        Blocks,
+        Balances
+    }
     public class AzureIndexer
     {
         public static AzureIndexer CreateIndexer()
@@ -69,8 +76,6 @@ namespace NBitcoin.Indexer
             return pool;
         }
 
-        string[] _Checkpoints = new[] { "transactions", "blocks", "wallets", "balances" };
-
         public long IndexTransactions(ChainBase chain = null)
         {
             long txCount = 0;
@@ -84,7 +89,7 @@ namespace NBitcoin.Indexer
             {
                 Configuration.GetTransactionTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, TransactionEntry.Entity>();
-                using (var storedBlocks = Enumerate("transactions", chain))
+                using (var storedBlocks = GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain))
                 {
 
                     foreach (var block in storedBlocks)
@@ -99,7 +104,7 @@ namespace NBitcoin.Indexer
                             {
                                 PushTransactions(buckets, collection, transactions);
                             }
-                            if (storedBlocks.NeedSave)
+                            if (!IgnoreCheckpoints && storedBlocks.NeedSave)
                             {
                                 foreach (var kv in buckets.AsLookup().ToArray())
                                 {
@@ -117,10 +122,19 @@ namespace NBitcoin.Indexer
                         PushTransactions(buckets, kv, transactions);
                     }
                     tasks.Stop();
-                    storedBlocks.SaveCheckpoint();
+                    if (!IgnoreCheckpoints)
+                        storedBlocks.SaveCheckpoint();
                 }
             }
             return txCount;
+        }
+
+        private Checkpoint GetCheckpointInternal(IndexerCheckpoints checkpoint)
+        {
+            var chk = GetCheckpoint(checkpoint);
+            if (IgnoreCheckpoints)
+                chk = new Checkpoint(chk.CheckpointName, Configuration.Network, null, null);
+            return chk;
         }
 
         private void SetThrottling()
@@ -327,14 +341,14 @@ namespace NBitcoin.Indexer
             using (IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
             {
                 Configuration.GetBlocksContainer().CreateIfNotExists();
-                using (var storedBlocks = Enumerate("blocks", chain))
+                using (var storedBlocks = GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), chain))
                 {
 
                     foreach (var block in storedBlocks)
                     {
                         blkCount++;
                         blocks.Add(block.Block);
-                        if (storedBlocks.NeedSave)
+                        if (!IgnoreCheckpoints && storedBlocks.NeedSave)
                         {
                             tasks.Stop();
                             storedBlocks.SaveCheckpoint();
@@ -342,10 +356,20 @@ namespace NBitcoin.Indexer
                         }
                     }
                     tasks.Stop();
-                    storedBlocks.SaveCheckpoint();
+                    if (!IgnoreCheckpoints)
+                        storedBlocks.SaveCheckpoint();
                 }
             }
             return blkCount;
+        }
+
+        public Checkpoint GetCheckpoint(IndexerCheckpoints checkpoint)
+        {
+            return GetCheckpointRepository().GetCheckpoint(checkpoint.ToString().ToLowerInvariant());
+        }
+        public Task<Checkpoint> GetCheckpointAsync(IndexerCheckpoints checkpoint)
+        {
+            return GetCheckpointRepository().GetCheckpointAsync(checkpoint.ToString().ToLowerInvariant());
         }
 
         public CheckpointRepository GetCheckpointRepository()
@@ -353,28 +377,47 @@ namespace NBitcoin.Indexer
             return new CheckpointRepository(_Configuration.GetBlocksContainer(), _Configuration.Network, string.IsNullOrWhiteSpace(_Configuration.CheckpointSetName) ? "default" : _Configuration.CheckpointSetName);
         }
 
-        private BlockFetcher Enumerate(string checkpointName, ChainBase blockHeaders)
+
+        /// <summary>
+        /// Get a block fetcher of the specified chain from the specified checkpoint
+        /// </summary>
+        /// <param name="checkpoint">The checkpoint to load from</param>
+        /// <param name="chain">The chain to fetcher (default: the Node's main chain)</param>
+        /// <returns>A BlockFetcher for enumerating blocks and saving progression</returns>
+        public BlockFetcher GetBlockFetcher(Checkpoint checkpoint, ChainBase chain = null)
         {
-            blockHeaders = blockHeaders ?? GetNodeChain();
+            if (checkpoint == null)
+                throw new ArgumentNullException("checkpoint");
+            chain = chain ?? GetNodeChain();
 
             var node = Configuration.ConnectToNode(false);
             node.VersionHandshake();
 
-            var checkpoint = GetCheckpointRepository().GetCheckpoint(checkpointName);
-            IndexerTrace.CheckpointLoaded(blockHeaders.FindFork(checkpoint.BlockLocator), checkpoint.CheckpointName);
-            return new BlockFetcher(checkpoint, node, blockHeaders)
+            IndexerTrace.CheckpointLoaded(chain.FindFork(checkpoint.BlockLocator), checkpoint.CheckpointName);
+            return new BlockFetcher(checkpoint, node, chain)
             {
-                CheckpointInterval = CheckpointInterval,
-                DisableSaving = NoSave,
+                NeedSaveInterval = CheckpointInterval,
                 FromHeight = FromHeight,
                 ToHeight = ToHeight
             };
+        }
 
+        /// <summary>
+        /// Get a block fetcher of the specified chain from the specified checkpoint
+        /// </summary>
+        /// <param name="checkpoint">The checkpoint name to load from</param>
+        /// <param name="chain">The chain to fetcher (default: the Node's main chain)</param>
+        /// <returns>A BlockFetcher for enumerating blocks and saving progression</returns>
+        public BlockFetcher GetBlockFetcher(string checkpointName, ChainBase chain = null)
+        {
+            if (checkpointName == null)
+                throw new ArgumentNullException("checkpointName");
+            return GetBlockFetcher(GetCheckpointRepository().GetCheckpoint(checkpointName), chain);
         }
 
         public void IndexOrderedBalances(ChainBase chain)
         {
-            IndexBalances(chain, "balances", (txid, tx, blockid, header, height) =>
+            IndexBalances(chain, GetCheckpointInternal(IndexerCheckpoints.Balances), (txid, tx, blockid, header, height) =>
             {
                 return OrderedBalanceChange.ExtractScriptBalances(txid, tx, blockid, header, height);
             });
@@ -390,13 +433,13 @@ namespace NBitcoin.Indexer
             Configuration.GetWalletBalanceTable().CreateIfNotExists();
             Configuration.GetWalletRulesTable().CreateIfNotExists();
             var walletRules = Configuration.CreateIndexerClient().GetAllWalletRules();
-            IndexBalances(chain, "wallets", (txid, tx, blockid, header, height) =>
+            IndexBalances(chain, GetCheckpointInternal(IndexerCheckpoints.Wallets), (txid, tx, blockid, header, height) =>
             {
                 return OrderedBalanceChange.ExtractWalletBalances(txid, tx, blockid, header, height, walletRules);
             });
         }
 
-        private void IndexBalances(ChainBase chain, string checkpointName, Func<uint256, Transaction, uint256, BlockHeader, int, IEnumerable<OrderedBalanceChange>> extract)
+        private void IndexBalances(ChainBase chain, Checkpoint checkpoint, Func<uint256, Transaction, uint256, BlockHeader, int, IEnumerable<OrderedBalanceChange>> extract)
         {
             SetThrottling();
             BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
@@ -407,7 +450,7 @@ namespace NBitcoin.Indexer
                 this.Configuration.GetBalanceTable().CreateIfNotExists();
                 var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
 
-                using (var storedBlocks = Enumerate(checkpointName, chain))
+                using (var storedBlocks = GetBlockFetcher(checkpoint, chain))
                 {
 
                     foreach (var block in storedBlocks)
@@ -430,7 +473,7 @@ namespace NBitcoin.Indexer
                                     }
                                 }
 
-                                if (storedBlocks.NeedSave)
+                                if (!IgnoreCheckpoints && storedBlocks.NeedSave)
                                 {
                                     foreach (var kv in buckets.AsLookup().ToArray())
                                     {
@@ -455,7 +498,8 @@ namespace NBitcoin.Indexer
                         indexedEntries.Add(kv.ToArray());
                     }
                     tasks.Stop();
-                    storedBlocks.SaveCheckpoint();
+                    if (!IgnoreCheckpoints)
+                        storedBlocks.SaveCheckpoint();
                 }
             }
         }
@@ -599,7 +643,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public bool NoSave
+        public bool IgnoreCheckpoints
         {
             get;
             set;

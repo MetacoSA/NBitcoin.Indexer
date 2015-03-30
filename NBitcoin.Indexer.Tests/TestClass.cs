@@ -109,7 +109,7 @@ namespace NBitcoin.Indexer.Tests
 
                 Assert.Equal(0, tester.Indexer.IndexBlocks()); //23,24,25
 
-                tester.Indexer.NoSave = true;
+                tester.Indexer.IgnoreCheckpoints = true;
                 Assert.Equal(3, tester.Indexer.IndexBlocks()); //23,24,25
             }
         }

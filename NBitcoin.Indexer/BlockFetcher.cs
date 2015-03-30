@@ -62,17 +62,18 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("blockHeaders");
             if (checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
-            CheckpointInterval = TimeSpan.FromMinutes(15);
+            NeedSaveInterval = TimeSpan.FromMinutes(15);
             _BlockHeaders = blockHeaders;
             _Node = node;
             _Checkpoint = checkpoint;
         }
 
-        public bool DisableSaving
+        public TimeSpan NeedSaveInterval
         {
             get;
             set;
         }
+
 
         #region IEnumerable<BlockInfo> Members
 
@@ -82,9 +83,7 @@ namespace NBitcoin.Indexer
             Queue<DateTime> lastLogs = new Queue<DateTime>();
             Queue<int> lastHeights = new Queue<int>();
 
-            var locator = DisableSaving ? new BlockLocator(new List<uint256>() { _Checkpoint.Genesis }) : _Checkpoint.BlockLocator;
-
-            var fork = _BlockHeaders.FindFork(locator);
+            var fork = _BlockHeaders.FindFork(_Checkpoint.BlockLocator);
             var headers = _BlockHeaders.EnumerateAfter(fork);
             headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
             var first = headers.FirstOrDefault();
@@ -124,33 +123,25 @@ namespace NBitcoin.Indexer
 
         #endregion
 
-        public TimeSpan CheckpointInterval
-        {
-            get;
-            set;
-        }
+
 
         private DateTime _LastSaved = DateTime.UtcNow;
         public bool NeedSave
         {
             get
             {
-                return (DateTime.UtcNow - _LastSaved) > CheckpointInterval && !DisableSaving;
+                return (DateTime.UtcNow - _LastSaved) > NeedSaveInterval;
             }
         }
 
         public void SaveCheckpoint()
         {
-            if (DisableSaving || _LastProcessed == null)
-                return;
-
-            _Checkpoint.SaveProgress(_LastProcessed);
-            IndexerTrace.CheckpointSaved(_LastProcessed, _Checkpoint.CheckpointName);
-
-            if (NeedSave)
+            if (_LastProcessed != null)
             {
-                _LastSaved = DateTime.UtcNow;
+                _Checkpoint.SaveProgress(_LastProcessed);
+                IndexerTrace.CheckpointSaved(_LastProcessed, _Checkpoint.CheckpointName);
             }
+            _LastSaved = DateTime.UtcNow;
         }
 
         public int FromHeight

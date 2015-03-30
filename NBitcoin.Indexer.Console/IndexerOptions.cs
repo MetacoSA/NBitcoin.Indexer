@@ -16,8 +16,8 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
-        [Option("NoSave", HelpText = "Do not save progress in a checkpoint file", Required = false, DefaultValue = false)]
-        public bool NoSave
+        [Option("IgnoreCheckpoints", HelpText = "Ignore checkpoints (Do not save them, nor load them)", Required = false, DefaultValue = false)]
+        public bool IgnoreCheckpoints
         {
             get;
             set;

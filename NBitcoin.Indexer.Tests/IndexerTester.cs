@@ -88,7 +88,7 @@ namespace NBitcoin.Indexer.Tests
             CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
             if (Client.GetBlock(KnownBlockId) == null)
             {
-                Indexer.NoSave = true;
+                Indexer.IgnoreCheckpoints = true;
                 Indexer.TaskCount = 15;
                 Indexer.FromHeight = 0;
                 Indexer.IndexBlocks();
@@ -100,7 +100,7 @@ namespace NBitcoin.Indexer.Tests
             CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
             if (Client.GetTransaction(KnownTransactionId) == null)
             {
-                Indexer.NoSave = true;
+                Indexer.IgnoreCheckpoints = true;
                 Indexer.TaskCount = 15;
                 Indexer.FromHeight = 0;
                 Indexer.IndexTransactions();
