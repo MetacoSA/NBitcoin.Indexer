@@ -76,7 +76,7 @@ namespace NBitcoin.Indexer.Console
                                 var onlineCheckpoint = checkpointRepository.GetCheckpointsAsync().Result.FirstOrDefault(r => r.CheckpointName.ToLowerInvariant() == chk);
                                 if (onlineCheckpoint == null)
                                 {
-                                    onlineCheckpoint = checkpointRepository.GetCheckpoint(chk);
+                                    onlineCheckpoint = checkpointRepository.GetCheckpoint(indexer.Configuration.CheckpointSetName + "/" + chk);
                                     BlockLocator offlineLocator = new BlockLocator();
                                     offlineLocator.FromBytes(File.ReadAllBytes(path));
                                     onlineCheckpoint.SaveProgress(offlineLocator);
