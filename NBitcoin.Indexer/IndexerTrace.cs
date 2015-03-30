@@ -37,14 +37,14 @@ namespace NBitcoin.Indexer
             return correlation;
         }
 
-        internal static void CheckpointLoaded(ChainedBlock block, string file)
+        internal static void CheckpointLoaded(ChainedBlock block, string checkpointName)
         {
-            _Trace.TraceInformation("Checkpoint " + file + " loaded at " + ToString(block));
+            _Trace.TraceInformation("Checkpoint " + checkpointName + " loaded at " + ToString(block));
         }
 
         internal static void CheckpointSaved(ChainedBlock block, string checkpointName)
         {
-            _Trace.TraceInformation("New checkpoint : " + ToString(block) + " (" + checkpointName + ")");
+            _Trace.TraceInformation("Checkpoint " + checkpointName + " saved at " + ToString(block));
         }
 
 
