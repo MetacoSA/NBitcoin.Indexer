@@ -10,9 +10,10 @@ namespace NBitcoin.Indexer
 {
     public class UnconfirmedBalanceLocator : BalanceLocator
     {
+        internal const int UnconfHeight = (int.MaxValue - 1);
         public UnconfirmedBalanceLocator()
         {
-            SeenDate = Utils.UnixTimeToDateTime(uint.MaxValue);
+            SeenDate = Utils.UnixTimeToDateTime(0);
         }
         public UnconfirmedBalanceLocator(DateTimeOffset seenDate, uint256 transactionId = null)
         {
@@ -49,7 +50,7 @@ namespace NBitcoin.Indexer
             if (splitted.Length < 2)
                 throw InvalidUnconfirmedBalance();
 
-            uint date = queryFormat ? ParseUint(Helper.ToggleChars(splitted[1])) : ParseUint(splitted[1]);
+            uint date = ParseUint(splitted[1]);
             uint256 transactionId = null;
             if (splitted.Length >= 3)
                 transactionId = new uint256(Encoders.Hex.DecodeData(splitted[2]), false);
@@ -66,8 +67,8 @@ namespace NBitcoin.Indexer
 
         public override string ToString(bool queryFormat)
         {
-            var height = queryFormat ? Helper.HeightToString(int.MaxValue) : int.MaxValue.ToString();
-            var date = queryFormat ? Helper.ToggleChars(ToString(SeenDate)) : ToString(SeenDate);
+            var height = queryFormat ? Helper.HeightToString(UnconfHeight) : (UnconfHeight).ToString();
+            var date = ToString(SeenDate);
             return height + "-" + date+ "-" + TransactionId;
         }
 
@@ -122,7 +123,7 @@ namespace NBitcoin.Indexer
         }
         public ConfirmedBalanceLocator(int height, uint256 blockId = null, uint256 transactionId = null)
         {
-            if (height == int.MaxValue)
+            if (height >= UnconfirmedBalanceLocator.UnconfHeight)
                 throw new ArgumentOutOfRangeException("height", "A confirmed block can't have such height");
             Height = height;
             BlockHash = blockId;
@@ -198,7 +199,7 @@ namespace NBitcoin.Indexer
                 throw new FormatException("Invalid BalanceLocator string");
             var height = queryFormat ? Helper.StringToHeight(splitted[0]) : int.Parse(splitted[0]);
 
-            if (height == int.MaxValue)
+            if (height == UnconfirmedBalanceLocator.UnconfHeight)
             {
                 return UnconfirmedBalanceLocator.ParseCore(splitted, queryFormat);
             }
@@ -216,25 +217,10 @@ namespace NBitcoin.Indexer
 
         public abstract string ToString(bool queryFormat);
 
-        public bool YoungerThan(BalanceLocator to)
+        public bool IsGreaterThan(BalanceLocator to)
         {
-            if (this is UnconfirmedBalanceLocator && to is ConfirmedBalanceLocator)
-                return true;
-            if (this is ConfirmedBalanceLocator && to is UnconfirmedBalanceLocator)
-                return false;
-            if (this is ConfirmedBalanceLocator && to is ConfirmedBalanceLocator)
-            {
-                var a = (ConfirmedBalanceLocator)this;
-                var b = (ConfirmedBalanceLocator)to;
-                return a.Height > b.Height;
-            }
-            if (this is UnconfirmedBalanceLocator && to is UnconfirmedBalanceLocator)
-            {
-                var a = (UnconfirmedBalanceLocator)this;
-                var b = (UnconfirmedBalanceLocator)to;
-                return a.SeenDate > b.SeenDate;
-            }
-            throw new NotSupportedException("should never happen");
+            var result = string.Compare(ToString(true), to.ToString(true));
+            return result < 1;
         }
 
         public abstract BalanceLocator Floor();
@@ -299,7 +285,7 @@ namespace NBitcoin.Indexer
             var fromIncluded = FromIncluded;
 
             //Fix automatically if wrong order
-            if (!from.YoungerThan(to))
+            if (!from.IsGreaterThan(to))
             {
                 var temp = to;
                 var temp2 = toIncluded;

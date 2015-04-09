@@ -14,7 +14,11 @@ namespace NBitcoin.Indexer.Tests
     {
         public static void Main(string[] args)
         {
-            //var client = IndexerConfiguration.FromConfiguration().CreateIndexerClient();
+            var client = IndexerConfiguration.FromConfiguration().CreateIndexerClient();
+            var changes = client.GetOrderedBalance(BitcoinAddress.Create("1LuckyR1fFHEsXYyx5QK4UFzv3PEAepPMK"));
+            foreach (var change in changes)
+            {
+            }
             //var result = client.GetAddressBalance(new BitcoinAddress("1dice8EMZmqKvrGE4Qc9bUFf9PX3xaYDp"));
             
             //Azure();

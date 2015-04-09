@@ -788,10 +788,10 @@ namespace NBitcoin.Indexer.Tests
                      new string[]{"2ex", "4in", "tx43,tx42,tx41,tx33,tx32,tx31"},
                      new string[]{"2in", "4ex", "tx33,tx32,tx31,tx22,tx21"},
                      new string[]{"2ex", "4ex", "tx33,tx32,tx31"},
-                     new string[]{"{utx51}in", "{utx53}in", "utx53,utx52,utx51"},
+                     new string[]{"{utx51}in", "{utx52}in", "utx52,utx51"},
                      new string[]{"{utx51}in", "{utx53}ex", "utx52,utx51"},
                      new string[]{"{utx51}ex", "{utx53}in", "utx53,utx52"},
-                     new string[]{"{utx52}ex", "3in", "utx51,tx43,tx42,tx41,tx33,tx32,tx31"}
+                     new string[]{"{utx52}ex", "3in", "utx53,tx43,tx42,tx41,tx33,tx32,tx31"}
                 };
 
                 var all = tester.Client.GetOrderedBalance(bob).ToArray();
