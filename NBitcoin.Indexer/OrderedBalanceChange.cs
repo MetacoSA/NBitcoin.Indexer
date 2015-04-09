@@ -505,7 +505,7 @@ namespace NBitcoin.Indexer
         {
             BlockId = blockId;
             SeenUtc = blockHeader == null ? DateTime.UtcNow : blockHeader.BlockTime.UtcDateTime;
-            Height = blockId == null ? int.MaxValue : height;
+            Height = blockId == null ? UnconfirmedBalanceLocator.UnconfHeight : height;
             TransactionId = txId;
             BalanceId = balanceId;
         }
@@ -539,7 +539,7 @@ namespace NBitcoin.Indexer
 
         public BalanceLocator CreateBalanceLocator()
         {
-            if (Height == int.MaxValue)
+            if (Height == UnconfirmedBalanceLocator.UnconfHeight)
                 return new UnconfirmedBalanceLocator(SeenUtc, TransactionId);
             else
                 return new ConfirmedBalanceLocator(this);
