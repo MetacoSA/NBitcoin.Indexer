@@ -154,7 +154,7 @@ namespace NBitcoin.Indexer
                     return false;
 
                 var coin = new Coin(outpoint, prev.Outputs[SpentOutpoints[i].N]);
-                if (coin.ScriptPubKey != ScriptPubKey)
+                if (coin.ScriptPubKey != GetScriptPubkey(i))
                 {
                     cleanSpent = true;
                     SpentOutpoints[i] = null;
@@ -186,6 +186,13 @@ namespace NBitcoin.Indexer
             SpentCoins = result;
             UpdateToScriptCoins();
             return true;
+        }
+
+        private Script GetScriptPubkey(int i)
+        {
+            if (this.MatchedRules.Count == 0)
+                return ScriptPubKey;
+            return ((ScriptRule)(this.MatchedRules.First(r=>r.MatchType == MatchLocation.Input && r.Index == SpentIndices[i]).Rule)).ScriptPubKey;
         }
 
         internal void Merge(OrderedBalanceChange other, WalletRule walletRule)
