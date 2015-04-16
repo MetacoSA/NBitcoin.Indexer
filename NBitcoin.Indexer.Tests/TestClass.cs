@@ -132,7 +132,7 @@ namespace NBitcoin.Indexer.Tests
             {
                 var repo = tester.Indexer.GetCheckpointRepository();
                 var checkpoint = repo.GetCheckpoint("toto");
-                var builder =  tester.CreateChainBuilder();
+                var builder = tester.CreateChainBuilder();
                 builder.SubmitBlock();
                 builder.SubmitBlock();
                 var lastTip = builder.Chain.Tip;
@@ -172,7 +172,7 @@ namespace NBitcoin.Indexer.Tests
                 checkpoint.DeleteAsync().Wait();
                 checkpoint.DeleteAsync().Wait(); //don't care about double delete
                 checkpoint = repo.GetCheckpoint("toto");
-                Assert.True(checkpoint.BlockLocator.Blocks[0] == Network.TestNet.GetGenesis().GetHash());                
+                Assert.True(checkpoint.BlockLocator.Blocks[0] == Network.TestNet.GetGenesis().GetHash());
             }
         }
 
@@ -975,6 +975,143 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.IndexOrderedBalance(tx);
                 var result = tester.Client.GetOrderedBalance(tx.Outputs[1].ScriptPubKey).ToArray()[0];
                 Assert.Equal(result.ScriptPubKey, tx.Outputs[1].ScriptPubKey);
+            }
+        }
+
+
+        [Fact]
+        public void NonStandardScriptPubKeyDoesNotReturnsWrongBalance()
+        {
+            using (var tester = CreateTester())
+            {
+                var bob = new Key();
+                var alice = new Key();
+                BalanceId bobId = new BalanceId(bob);
+                NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
+
+                bob = new Key();
+                alice = new Key();
+                bobId = new BalanceId("bob");
+                tester.Client.AddWalletRule("bob", new ScriptRule()
+                {
+                    ScriptPubKey = bob.ScriptPubKey
+                });
+                NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
+
+
+                bob = new Key();
+                alice = new Key();
+                bobId = new BalanceId("bob2");
+                tester.Client.AddWalletRule("bob2", new ScriptRule()
+                {
+                    ScriptPubKey = bob.ScriptPubKey
+                });
+                var chainBuilder = tester.CreateChainBuilder();
+
+                List<Coin> bobCoins = new List<Coin>();
+
+                bobCoins.AddRange(chainBuilder.EmitMoney(bob, "50.0").Outputs.AsCoins());
+                bobCoins.AddRange(chainBuilder.EmitMoney(bob, "5.0").Outputs.AsCoins());
+                bobCoins.AddRange(chainBuilder.EmitMoney(bob, "15.0").Outputs.AsCoins());
+
+
+                var prev = chainBuilder.Emit(new Transaction()
+                {
+                    Outputs =
+                    {
+                        new TxOut(Money.Coins(1.0m), bob.ScriptPubKey + OpcodeType.OP_NOP),
+                        new TxOut(Money.Coins(1.5m), bob.ScriptPubKey + OpcodeType.OP_NOP),
+                        new TxOut(Money.Coins(2.0m), bob.ScriptPubKey + OpcodeType.OP_NOP),
+                    }
+                });
+
+                bobCoins.AddRange(prev.Outputs.AsCoins());
+                Shuffle(bobCoins);
+
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+
+                var bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                Assert.True(bobBalance.Length == 3);
+
+                var tx = new Transaction();
+                foreach (var coin in bobCoins)
+                {
+                    tx.Inputs.Add(new TxIn()
+                    {
+                        PrevOut = coin.Outpoint,
+                        ScriptSig = bob.ScriptPubKey
+                    });
+                }
+                tx.Outputs.Add(new TxOut(Money.Coins(0.1m), alice));
+                tx.Sign(bob, false);
+                chainBuilder.Emit(tx);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+                for (int i = 0 ; i < 2 ; i++)
+                {
+                    bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                    Assert.True(bobBalance.Length == 4); //OP_NOP spending should not appear
+                    Assert.True(bobBalance[0].SpentCoins.Count == 3);
+                    foreach (var coin in bobBalance[0].SpentCoins)
+                    {
+                        Assert.Equal(bob.ScriptPubKey, coin.TxOut.ScriptPubKey);
+                    }
+                }
+            }
+        }
+
+        private void Shuffle(List<Coin> bobCoins)
+        {
+            var rand = new Random();
+            var result = bobCoins
+                .Select(c => new
+                {
+                    i = rand.Next(),
+                    c
+                }).OrderBy(i => i.i)
+                .Select(i => i.c)
+                .ToList();
+            bobCoins.Clear();
+            bobCoins.AddRange(result);
+        }
+
+        private static void NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(IndexerTester tester, Key bob, Key alice, BalanceId bobId)
+        {
+            var chainBuilder = tester.CreateChainBuilder();
+            chainBuilder.EmitMoney(bob, "50.0");
+
+
+            var prev = chainBuilder.Emit(new Transaction()
+            {
+                Outputs =
+                    {
+                        new TxOut(Money.Coins(1.0m), bob.ScriptPubKey + OpcodeType.OP_NOP)
+                    }
+            });
+            chainBuilder.SubmitBlock();
+            chainBuilder.SyncIndexer();
+
+            var bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+            Assert.True(bobBalance.Length == 1);
+
+            var tx = new Transaction();
+            tx.Inputs.Add(new TxIn()
+            {
+                PrevOut = prev.Outputs.AsCoins().First().Outpoint,
+                ScriptSig = bob.ScriptPubKey
+            });
+            tx.Outputs.Add(new TxOut(Money.Coins(0.1m), alice));
+            tx.Sign(bob, false);
+            chainBuilder.Emit(tx);
+            chainBuilder.SubmitBlock();
+            chainBuilder.SyncIndexer();
+
+            for (int i = 0 ; i < 2 ; i++)
+            {
+                bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                Assert.True(bobBalance.Length < 2); //OP_NOP spending should not appear
             }
         }
 

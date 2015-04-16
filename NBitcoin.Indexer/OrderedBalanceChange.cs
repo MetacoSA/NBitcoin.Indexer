@@ -112,12 +112,16 @@ namespace NBitcoin.Indexer
         }
 
 
-        private readonly List<MatchedRule> _MatchedRules = new List<MatchedRule>();
+        private List<MatchedRule> _MatchedRules = new List<MatchedRule>();
         public List<MatchedRule> MatchedRules
         {
             get
             {
                 return _MatchedRules;
+            }
+            internal set
+            {
+                _MatchedRules = value;
             }
         }
 
@@ -137,6 +141,8 @@ namespace NBitcoin.Indexer
         {
             if (SpentCoins != null)
                 return true;
+
+            bool cleanSpent = false;
             CoinCollection result = new CoinCollection();
             for (int i = 0 ; i < SpentOutpoints.Count ; i++)
             {
@@ -146,8 +152,37 @@ namespace NBitcoin.Indexer
                 var prev = await transactions.GetAsync(outpoint.Hash).ConfigureAwait(false);
                 if (prev == null)
                     return false;
-                result.Add(new Coin(outpoint, prev.Outputs[SpentOutpoints[i].N]));
+
+                var coin = new Coin(outpoint, prev.Outputs[SpentOutpoints[i].N]);
+                if (coin.ScriptPubKey != ScriptPubKey)
+                {
+                    cleanSpent = true;
+                    SpentOutpoints[i] = null;
+                }
+                else
+                    result.Add(coin);
             }
+
+            if (cleanSpent)
+            {
+                List<uint> spentIndices = new List<uint>();
+                List<OutPoint> spentOutpoints = new List<OutPoint>();
+                List<MatchedRule> matchedRules = new List<MatchedRule>();
+                for (int i = 0 ; i < SpentOutpoints.Count ; i++)
+                {
+                    if (SpentOutpoints[i] != null)
+                    {
+                        spentIndices.Add(SpentIndices[i]);
+                        spentOutpoints.Add(SpentOutpoints[i]);
+                        if (MatchedRules != null && MatchedRules.Count != 0)
+                            matchedRules.Add(MatchedRules[i]);
+                    }
+                }
+                SpentIndices = spentIndices;
+                SpentOutpoints = spentOutpoints;
+                MatchedRules = matchedRules;
+            }
+
             SpentCoins = result;
             UpdateToScriptCoins();
             return true;
@@ -692,6 +727,14 @@ namespace NBitcoin.Indexer
             var amount = _ReceivedCoins.WhereColored(assetId)
                 .Select(c => c.Amount).Sum() - _SpentCoins.WhereColored(assetId).Select(c => c.Amount).Sum();
             return amount.Satoshi;
+        }
+
+        internal bool IsEmpty
+        {
+            get
+            {
+                return SpentCoins.Count == 0 && ReceivedCoins.Count == 0;
+            }
         }
     }
 }

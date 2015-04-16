@@ -425,6 +425,8 @@ namespace NBitcoin.Indexer
             change.UpdateToScriptCoins();
             if (change.SpentCoins == null && ExcludeIncompleteBalanceChange)
                 return false;
+            if (change.IsEmpty)
+                return false;
             if (ColoredBalance)
             {
                 if (change.ColoredTransaction == null)
@@ -593,7 +595,22 @@ namespace NBitcoin.Indexer
                     return false;
             }
             var entity = change.ToEntity();
-            await Configuration.GetBalanceTable().ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
+            if (!change.IsEmpty)
+            {
+                await Configuration.GetBalanceTable().ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
+            }
+            else
+            {
+                try
+                {
+                    await Configuration.GetTransactionTable().ExecuteAsync(TableOperation.Delete(entity)).ConfigureAwait(false);
+                }
+                catch (StorageException ex)
+                {
+                    if (ex.RequestInformation == null || ex.RequestInformation.HttpStatusCode != 404)
+                        throw;
+                }
+            }
             return true;
         }
 
