@@ -26,7 +26,6 @@ namespace NBitcoin.Indexer.Console
                     indexer.IgnoreCheckpoints = options.IgnoreCheckpoints;
                     indexer.FromHeight = options.From;
                     indexer.ToHeight = options.To;
-                    indexer.TaskCount = options.ThreadCount;
 
                     ChainBase chain = null;
                     var checkpointRepository = indexer.GetCheckpointRepository();

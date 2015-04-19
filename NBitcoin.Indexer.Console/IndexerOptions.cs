@@ -112,13 +112,6 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
-        [Option('u', "UploadThreadCount", DefaultValue = -1, Required = false, HelpText = "Number of simultaneous uploads (default value is 15 for blocks upload, 30 for transactions upload)")]
-        public int ThreadCount
-        {
-            get;
-            set;
-        }
-
         [Option("CheckpointInterval", DefaultValue = "00:15:00", Required = false, HelpText = "Interval after which the indexer flush its progress to azure tables and save a checkpoint")]
         public string CheckpointInterval
         {

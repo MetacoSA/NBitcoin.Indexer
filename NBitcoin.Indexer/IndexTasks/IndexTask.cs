@@ -72,7 +72,9 @@ namespace NBitcoin.Indexer.IndexTasks
 
             while (bulk._ReadyPartitions.Count != 0)
             {
-                WaitRunningTaskIsBelow(100).Wait();
+                int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
+                if (runningTask > 100)
+                    WaitRunningTaskIsBelow(70).Wait();
                 var item = bulk._ReadyPartitions.Dequeue();
                 var task = retry.Do(() => IndexCore(item.Item1, item.Item2));
                 Interlocked.Increment(ref _RunningTask);

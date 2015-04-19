@@ -118,7 +118,6 @@
     <Compile Include="IndexerColoredTransactionRepository.cs" />
     <Compile Include="IndexerTransactionRepository.cs" />
     <Compile Include="MultiValueDictionary.cs" />
-    <Compile Include="TaskPool.cs" />
     <Compile Include="TransactionEntry.cs" />
     <Compile Include="IndexerClient.cs" />
     <Compile Include="IndexerConfiguration.cs" />

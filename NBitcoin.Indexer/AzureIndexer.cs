@@ -40,12 +40,6 @@ namespace NBitcoin.Indexer
             return config.CreateIndexer();
         }
 
-        public int TaskCount
-        {
-            get;
-            set;
-        }
-
 
         private readonly IndexerConfiguration _Configuration;
         public IndexerConfiguration Configuration
@@ -61,21 +55,9 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("configuration");
             CheckpointInterval = TimeSpan.FromMinutes(15.0);
             _Configuration = configuration;
-            TaskCount = -1;
             FromHeight = 0;
             ToHeight = 99999999;
-        }
-
-        public TaskPool<TItem> CreateTaskPool<TItem>(BlockingCollection<TItem> collection, Action<TItem> action, int defaultTaskCount)
-        {
-            var pool = new TaskPool<TItem>(collection, action, defaultTaskCount)
-            {
-                TaskCount = TaskCount
-            };
-            pool.Start();
-            IndexerTrace.TaskCount(pool.Tasks.Length);
-            return pool;
-        }
+        }      
 
         public long IndexTransactions(ChainBase chain = null)
         {
