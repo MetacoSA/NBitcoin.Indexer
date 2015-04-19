@@ -99,14 +99,13 @@ namespace NBitcoin.Indexer.IndexTasks
         protected override async Task IndexCore(string partitionName, IEnumerable<TIndexed> items)
         {
             var batch = new TableBatchOperation();
-            foreach(var item in items)
+            foreach (var item in items)
             {
                 batch.Add(TableOperation.InsertOrReplace(ToTableEntity(item)));
             }
 
             var table = GetCloudTable();
 
-            int exceptionCount = 0;
             var options = new TableRequestOptions()
             {
                 PayloadFormat = TablePayloadFormat.Json,
@@ -114,22 +113,11 @@ namespace NBitcoin.Indexer.IndexTasks
                 ServerTimeout = _Timeout,
             };
 
-
-
-
-
             Queue<TableBatchOperation> batches = new Queue<TableBatchOperation>();
             batches.Enqueue(batch);
-            bool needWait = false;
-
 
             while (batches.Count > 0)
             {
-                if (needWait)
-                {
-                    needWait = false;
-                    await Task.Delay(exceptionCount * 1000).ConfigureAwait(false);
-                }
                 batch = batches.Dequeue();
                 try
                 {
@@ -142,11 +130,6 @@ namespace NBitcoin.Indexer.IndexTasks
                     }
 
                     Interlocked.Add(ref _IndexedEntities, batch.Count);
-                    if (exceptionCount != 0)
-                    {
-                        exceptionCount = 0;
-                        IndexerTrace.RetryWorked();
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -167,11 +150,8 @@ namespace NBitcoin.Indexer.IndexTasks
                     else
                     {
                         IndexerTrace.ErrorWhileImportingEntitiesToAzure(batch.Select(b => GetEntity(b)).ToArray(), ex);
-                        exceptionCount++;
                         batches.Enqueue(batch);
-                        if (exceptionCount > 5)
-                            throw;
-                        needWait = true;
+                        throw;
                     }
                 }
             }

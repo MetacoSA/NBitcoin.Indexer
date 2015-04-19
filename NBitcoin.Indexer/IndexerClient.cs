@@ -423,7 +423,7 @@ namespace NBitcoin.Indexer
         private bool Prepare(OrderedBalanceChange change)
         {
             change.UpdateToScriptCoins();
-            if (change.SpentCoins == null && ExcludeIncompleteBalanceChange)
+            if (change.SpentCoins == null || change.ReceivedCoins == null)
                 return false;
             if (change.IsEmpty)
                 return false;
@@ -434,23 +434,6 @@ namespace NBitcoin.Indexer
                 change.UpdateToColoredCoins();
             }
             return true;
-        }
-
-        bool _ExcludeIncompleteBalanceChange = false;
-
-        /// <summary>
-        /// When the storage returns a balance change, the previous parent transactions may not exist, resulting in OrderedBalanceChange.SpentCoins equals to null. The default behavior is to exclude such balance change from the result.
-        /// </summary>
-        public bool ExcludeIncompleteBalanceChange
-        {
-            get
-            {
-                return _ExcludeIncompleteBalanceChange;
-            }
-            set
-            {
-                _ExcludeIncompleteBalanceChange = value;
-            }
         }
 
         private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncOrdered(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)

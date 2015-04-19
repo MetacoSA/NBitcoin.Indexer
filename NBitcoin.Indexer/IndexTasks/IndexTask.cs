@@ -60,7 +60,9 @@ namespace NBitcoin.Indexer.IndexTasks
             ServicePoint tableServicePoint = ServicePointManager.FindServicePoint(Configuration.CreateTableClient().BaseUri);
             tableServicePoint.ConnectionLimit = 1000;
         }
-
+        ExponentialBackoff retry = new ExponentialBackoff(15, TimeSpan.FromMilliseconds(100),
+                                                              TimeSpan.FromSeconds(10),
+                                                              TimeSpan.FromMilliseconds(200));
         private void EnqueueTasks(BulkImport<TIndexed> bulk, bool uncompletePartitions)
         {
             if (!uncompletePartitions && !bulk.HasFullPartition)
@@ -72,7 +74,7 @@ namespace NBitcoin.Indexer.IndexTasks
             {
                 WaitRunningTaskIsBelow(100).Wait();
                 var item = bulk._ReadyPartitions.Dequeue();
-                var task = IndexCore(item.Item1, item.Item2);
+                var task = retry.Do(() => IndexCore(item.Item1, item.Item2));
                 Interlocked.Increment(ref _RunningTask);
                 task.ContinueWith(t =>
                 {

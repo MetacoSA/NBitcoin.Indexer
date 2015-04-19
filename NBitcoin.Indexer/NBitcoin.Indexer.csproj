@@ -98,6 +98,7 @@
     <Compile Include="CoinCollection.cs" />
     <Compile Include="Converters\WalletRuleConverter.cs" />
     <Compile Include="Crc32.cs" />
+    <Compile Include="ExponentialBackoff.cs" />
     <Compile Include="FastEncoder.cs" />
     <Compile Include="IndexTasks\BulkImport.cs" />
     <Compile Include="IndexTasks\IndexTableEntitiesTask.cs" />
