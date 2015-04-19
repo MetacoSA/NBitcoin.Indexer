@@ -107,7 +107,6 @@ namespace NBitcoin.Indexer
         string _BalanceTable = "balances";
         string _ChainTable = "chain";
         string _WalletTable = "wallets";
-        string _WalletBalanceTable = "walletbalances";
 
         public StorageCredentials StorageCredentials
         {
@@ -129,10 +128,6 @@ namespace NBitcoin.Indexer
         public CloudTable GetWalletRulesTable()
         {
             return CreateTableClient().GetTableReference(GetFullName(_WalletTable));
-        }
-        public CloudTable GetWalletBalanceTable()
-        {
-            return CreateTableClient().GetTableReference(GetFullName(_WalletBalanceTable));
         }
 
         public CloudTable GetTable(string tableName)
@@ -181,7 +176,6 @@ namespace NBitcoin.Indexer
             yield return GetBalanceTable();
             yield return GetChainTable();
             yield return GetWalletRulesTable();
-            yield return GetWalletBalanceTable();
         }
     }
 }

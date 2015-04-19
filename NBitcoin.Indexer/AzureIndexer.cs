@@ -5,6 +5,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.Converters;
+using NBitcoin.Indexer.IndexTasks;
 using NBitcoin.Indexer.Internal;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
@@ -78,55 +79,14 @@ namespace NBitcoin.Indexer
 
         public long IndexTransactions(ChainBase chain = null)
         {
-            long txCount = 0;
-            SetThrottling();
-
-            BlockingCollection<TransactionEntry.Entity[]> transactions = new BlockingCollection<TransactionEntry.Entity[]>(20);
-
-            var tasks = CreateTaskPool(transactions, (txs) => Index(txs), 30);
-
             using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
             {
-                Configuration.GetTransactionTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<string, TransactionEntry.Entity>();
-                using (var storedBlocks = GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain))
-                {
 
-                    foreach (var block in storedBlocks)
-                    {
-                        foreach (var transaction in block.Block.Transactions)
-                        {
-                            txCount++;
-                            var indexed = new TransactionEntry.Entity(null, transaction, block.BlockId);
-                            buckets.Add(indexed.PartitionKey, indexed);
-                            var collection = buckets[indexed.PartitionKey];
-                            if (collection.Count == 100)
-                            {
-                                PushTransactions(buckets, collection, transactions);
-                            }
-                            if (!IgnoreCheckpoints && storedBlocks.NeedSave)
-                            {
-                                foreach (var kv in buckets.AsLookup().ToArray())
-                                {
-                                    PushTransactions(buckets, kv, transactions);
-                                }
-                                tasks.Stop();
-                                storedBlocks.SaveCheckpoint();
-                                tasks.Start();
-                            }
-                        }
-                    }
-
-                    foreach (var kv in buckets.AsLookup().ToArray())
-                    {
-                        PushTransactions(buckets, kv, transactions);
-                    }
-                    tasks.Stop();
-                    if (!IgnoreCheckpoints)
-                        storedBlocks.SaveCheckpoint();
-                }
+                var task = new IndexTransactionsTask(Configuration);
+                task.IgnoreCheckpoints = IgnoreCheckpoints;
+                task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain));
+                return task.IndexedEntities;
             }
-            return txCount;
         }
 
         private Checkpoint GetCheckpointInternal(IndexerCheckpoints checkpoint)
@@ -167,200 +127,20 @@ namespace NBitcoin.Indexer
         }
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
-            int exceptionCount = 0;
-            var options = new TableRequestOptions()
-            {
-                PayloadFormat = TablePayloadFormat.Json,
-                MaximumExecutionTime = _Timeout,
-                ServerTimeout = _Timeout,
-            };
-
-            var batch = new TableBatchOperation();
-            int count = 0;
-            foreach (var entity in entities)
-            {
-                batch.Add(TableOperation.InsertOrReplace(entity));
-                count++;
-            }
-            Queue<TableBatchOperation> batches = new Queue<TableBatchOperation>();
-            batches.Enqueue(batch);
-            while (batches.Count > 0)
-            {
-                batch = batches.Dequeue();
-                try
-                {
-                    if (count > 1)
-                        table.ExecuteBatch(batch, options);
-                    else
-                    {
-                        if (count == 1)
-                            table.Execute(batch[0], options);
-                    }
-
-                    if (exceptionCount != 0)
-                    {
-                        exceptionCount = 0;
-                        IndexerTrace.RetryWorked();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (IsError413(ex))
-                    {
-                        var split = batch.Count / 2;
-                        var batch1 = batch.Take(split).ToList();
-                        var batch2 = batch.Skip(split).Take(batch.Count - split).ToList();
-                        batches.Enqueue(ToBatch(batch1));
-                        batches.Enqueue(ToBatch(batch2));
-                    }
-                    else if (IsError(ex, "EntityTooLarge"))
-                    {
-                        var op = GetFaultyOperation(ex, batch);
-                        batch.Remove(op);
-                        batches.Enqueue(batch);
-                    }
-                    else
-                    {
-                        IndexerTrace.ErrorWhileImportingEntitiesToAzure(entities.ToArray(), ex);
-                        exceptionCount++;
-                        batches.Enqueue(batch);
-                        if (exceptionCount > 5)
-                            throw;
-                        Thread.Sleep(exceptionCount * 1000);
-                    }
-                }
-            }
+            var task = new IndexTableEntitiesTask(Configuration, table);
+            task.Index(entities);
         }
 
-        private TableOperation GetFaultyOperation(Exception ex, TableBatchOperation batch)
-        {
-            var storage = ex as StorageException;
-            if (storage == null)
-                return null;
-            if (storage.RequestInformation != null
-               && storage.RequestInformation.ExtendedErrorInformation != null)
-            {
-                var match = Regex.Match(storage.RequestInformation.ExtendedErrorInformation.ErrorMessage, "[0-9]*");
-                if (match.Success)
-                    return batch[int.Parse(match.Value)];
-            }
-            return null;
-        }
-
-        private bool IsError(Exception ex, string code)
-        {
-            var storage = ex as StorageException;
-            if (storage == null)
-                return false;
-            return storage.RequestInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation.ErrorCode == code;
-        }
-
-        private TableBatchOperation ToBatch(List<TableOperation> ops)
-        {
-            var op = new TableBatchOperation();
-            foreach (var operation in ops)
-                op.Add(operation);
-            return op;
-        }
-
-        private bool IsError413(Exception ex)
-        {
-            var storage = ex as StorageException;
-            if (storage == null)
-                return false;
-            return storage.RequestInformation != null && storage.RequestInformation.HttpStatusCode == 413;
-        }
-        public void Index(Block block)
-        {
-            var hash = block.GetHash().ToString();
-
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
-            bool failedBefore = false;
-            while (true)
-            {
-                try
-                {
-                    var container = Configuration.GetBlocksContainer();
-                    var client = container.ServiceClient;
-                    client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
-                    var blob = container.GetPageBlobReference(hash);
-                    MemoryStream ms = new MemoryStream();
-                    block.ReadWrite(ms, true);
-                    var blockBytes = ms.GetBuffer();
-
-                    long length = 512 - (ms.Length % 512);
-                    if (length == 512)
-                        length = 0;
-                    Array.Resize(ref blockBytes, (int)(ms.Length + length));
-
-                    try
-                    {
-                        blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
-                        {
-                            //Will throw if already exist, save 1 call
-                            IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
-                        }, new BlobRequestOptions()
-                        {
-                            MaximumExecutionTime = _Timeout,
-                            ServerTimeout = _Timeout
-                        });
-                        watch.Stop();
-                        IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
-                        break;
-                    }
-                    catch (StorageException ex)
-                    {
-                        var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
-                        if (!alreadyExist)
-                            throw;
-                        watch.Stop();
-                        IndexerTrace.BlockAlreadyUploaded();
-                        break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
-                    failedBefore = true;
-                    Thread.Sleep(5000);
-                }
-            }
-
-        }
 
         public long IndexBlocks(ChainBase chain = null)
         {
-            long blkCount = 0;
-            SetThrottling();
-            BlockingCollection<Block> blocks = new BlockingCollection<Block>(20);
-            var tasks = CreateTaskPool(blocks, Index, 15);
-
             using (IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
             {
-                Configuration.GetBlocksContainer().CreateIfNotExists();
-                using (var storedBlocks = GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), chain))
-                {
-
-                    foreach (var block in storedBlocks)
-                    {
-                        blkCount++;
-                        blocks.Add(block.Block);
-                        if (!IgnoreCheckpoints && storedBlocks.NeedSave)
-                        {
-                            tasks.Stop();
-                            storedBlocks.SaveCheckpoint();
-                            tasks.Start();
-                        }
-                    }
-                    tasks.Stop();
-                    if (!IgnoreCheckpoints)
-                        storedBlocks.SaveCheckpoint();
-                }
+                var task = new IndexBlocksTask(Configuration);
+                task.IgnoreCheckpoints = IgnoreCheckpoints;
+                task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), chain));
+                return task.IndexedBlocks;
             }
-            return blkCount;
         }
 
         public Checkpoint GetCheckpoint(IndexerCheckpoints checkpoint)
@@ -415,12 +195,15 @@ namespace NBitcoin.Indexer
             return GetBlockFetcher(GetCheckpointRepository().GetCheckpoint(checkpointName), chain);
         }
 
-        public void IndexOrderedBalances(ChainBase chain)
+        public int IndexOrderedBalances(ChainBase chain)
         {
-            IndexBalances(chain, GetCheckpointInternal(IndexerCheckpoints.Balances), (txid, tx, blockid, header, height) =>
+            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
             {
-                return OrderedBalanceChange.ExtractScriptBalances(txid, tx, blockid, header, height);
-            });
+                var task = new IndexBalanceTask(Configuration, null);
+                task.IgnoreCheckpoints = IgnoreCheckpoints;
+                task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain));
+                return task.IndexedEntities;
+            }
         }
 
         internal ChainBase GetMainChain()
@@ -428,137 +211,66 @@ namespace NBitcoin.Indexer
             return Configuration.CreateIndexerClient().GetMainChain();
         }
 
-        public void IndexWalletBalances(ChainBase chain)
+        public int IndexWalletBalances(ChainBase chain)
         {
-            Configuration.GetWalletBalanceTable().CreateIfNotExists();
-            Configuration.GetWalletRulesTable().CreateIfNotExists();
-            var walletRules = Configuration.CreateIndexerClient().GetAllWalletRules();
-            IndexBalances(chain, GetCheckpointInternal(IndexerCheckpoints.Wallets), (txid, tx, blockid, header, height) =>
+            using (IndexerTrace.NewCorrelation("Import wallet balances to azure started").Open())
             {
-                return OrderedBalanceChange.ExtractWalletBalances(txid, tx, blockid, header, height, walletRules);
-            });
-        }
-
-        private void IndexBalances(ChainBase chain, Checkpoint checkpoint, Func<uint256, Transaction, uint256, BlockHeader, int, IEnumerable<OrderedBalanceChange>> extract)
-        {
-            SetThrottling();
-            BlockingCollection<OrderedBalanceChange[]> indexedEntries = new BlockingCollection<OrderedBalanceChange[]>(100);
-
-            var tasks = CreateTaskPool(indexedEntries, (entries) => Index(entries.Select(e => e.ToEntity()), this.Configuration.GetBalanceTable()), 30);
-            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
-            {
-                this.Configuration.GetBalanceTable().CreateIfNotExists();
-                var buckets = new MultiValueDictionary<string, OrderedBalanceChange>();
-
-                using (var storedBlocks = GetBlockFetcher(checkpoint, chain))
-                {
-
-                    foreach (var block in storedBlocks)
-                    {
-                        foreach (var tx in block.Block.Transactions)
-                        {
-                            var txId = tx.GetHash();
-                            try
-                            {
-                                var entries = extract(txId, tx, block.BlockId, block.Block.Header, block.Height);
-
-                                foreach (var entry in entries)
-                                {
-                                    buckets.Add(entry.PartitionKey, entry);
-                                    var bucket = buckets[entry.PartitionKey];
-                                    if (bucket.Count == 100)
-                                    {
-                                        indexedEntries.Add(bucket.ToArray());
-                                        buckets.Remove(entry.PartitionKey);
-                                    }
-                                }
-
-                                if (!IgnoreCheckpoints && storedBlocks.NeedSave)
-                                {
-                                    foreach (var kv in buckets.AsLookup().ToArray())
-                                    {
-                                        indexedEntries.Add(kv.ToArray());
-                                    }
-                                    buckets.Clear();
-                                    tasks.Stop();
-                                    storedBlocks.SaveCheckpoint();
-                                    tasks.Start();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                IndexerTrace.ErrorWhileImportingBalancesToAzure(ex, txId);
-                                throw;
-                            }
-                        }
-                    }
-
-                    foreach (var kv in buckets.AsLookup().ToArray())
-                    {
-                        indexedEntries.Add(kv.ToArray());
-                    }
-                    tasks.Stop();
-                    if (!IgnoreCheckpoints)
-                        storedBlocks.SaveCheckpoint();
-                }
+                var task = new IndexBalanceTask(Configuration, Configuration.CreateIndexerClient().GetAllWalletRules());
+                task.IgnoreCheckpoints = IgnoreCheckpoints;
+                task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain));
+                return task.IndexedEntities;
             }
         }
 
         public void IndexOrderedBalance(int height, Block block)
         {
             var table = Configuration.GetBalanceTable();
-            var blockId = block.GetHash();
-            foreach (var group in
-                        block
+            var blockId = block == null ? null : block.GetHash();
+            var header = block == null ? null : block.Header;
+
+            var entities =
+                    block
                         .Transactions
-                        .SelectMany(t => OrderedBalanceChange.ExtractScriptBalances(t.GetHash(), t, blockId, block.Header, height))
+                        .SelectMany(t => OrderedBalanceChange.ExtractScriptBalances(t.GetHash(), t, blockId, header, height))
                         .Select(_ => _.ToEntity())
-                        .GroupBy(c => c.PartitionKey)
-                        )
-            {
-                foreach (var batch in group.Partition(100))
-                    Index(batch, table);
-            }
+                        .AsEnumerable();
+
+            Index(entities, table);
         }
 
         public void IndexTransactions(int height, Block block)
         {
             var table = Configuration.GetTransactionTable();
-            var blockId = block.GetHash();
-            foreach (var group in
+            var blockId = block == null ? null : block.GetHash();
+            var entities =
                         block
                         .Transactions
                         .Select(t => new TransactionEntry.Entity(t.GetHash(), t, blockId))
                         .Select(c => c.CreateTableEntity())
-                        .GroupBy(c => c.PartitionKey))
-            {
-                foreach (var batch in group.Partition(100))
-                    Index(batch, table);
-            }
+                        .AsEnumerable();
+            Index(entities, table);
         }
 
         public void IndexWalletOrderedBalance(int height, Block block, WalletRuleEntryCollection walletRules)
         {
             var table = Configuration.GetBalanceTable();
-            var blockId = block.GetHash();
-            foreach (var transaction in block.Transactions)
-            {
-                var txId = transaction.GetHash();
-                var changes = OrderedBalanceChange.ExtractWalletBalances(txId, transaction, blockId, block.Header, height, walletRules).Select(c => c.ToEntity());
-                foreach (var group in changes.GroupBy(c => c.PartitionKey))
-                {
-                    Index(group, table);
-                }
-            }
+            var blockId = block == null ? null : block.GetHash();
+
+            var entities =
+                    block
+                    .Transactions
+                    .SelectMany(t => OrderedBalanceChange.ExtractWalletBalances(null, t, blockId, block.Header, height, walletRules))
+                    .Select(t => t.ToEntity())
+                    .AsEnumerable();
+
+            Index(entities, table);
         }
 
         public void IndexOrderedBalance(Transaction tx)
         {
             var table = Configuration.GetBalanceTable();
-            foreach (var group in OrderedBalanceChange.ExtractScriptBalances(tx).GroupBy(c => c.BalanceId, c => c.ToEntity()))
-            {
-                Index(group, table);
-            }
+            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity()).AsEnumerable();
+            Index(entities, table);
         }
 
         public ChainBase GetNodeChain()

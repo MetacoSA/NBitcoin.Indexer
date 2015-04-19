@@ -99,6 +99,12 @@
     <Compile Include="Converters\WalletRuleConverter.cs" />
     <Compile Include="Crc32.cs" />
     <Compile Include="FastEncoder.cs" />
+    <Compile Include="IndexTasks\BulkImport.cs" />
+    <Compile Include="IndexTasks\IndexTableEntitiesTask.cs" />
+    <Compile Include="IndexTasks\IndexTask.cs" />
+    <Compile Include="IndexTasks\IndexBlocksTask.cs" />
+    <Compile Include="IndexTasks\IndexTransactionsTask.cs" />
+    <Compile Include="IndexTasks\IndexBalanceTask.cs" />
     <Compile Include="MatchedRule.cs" />
     <Compile Include="OrderedBalanceChange.cs" />
     <Compile Include="Converters\ScriptJsonConverter.cs" />
