@@ -36,9 +36,6 @@ namespace NBitcoin.Indexer.IndexTasks
 
             await EnsureSetup().ConfigureAwait(false);
             BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
-
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
             foreach (var block in blockFetcher)
             {
                 ThrowIfException();
@@ -48,22 +45,6 @@ namespace NBitcoin.Indexer.IndexTasks
                         await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
                 }
                 ProcessBlock(block, bulk);
-                if (watch.Elapsed > TimeSpan.FromSeconds(60.0))
-                {
-                    IndexerTrace.Information("Indexing : " + _RunningTask);
-                    int worker, completion;
-                    ThreadPool.GetAvailableThreads(out worker, out completion);
-                    IndexerTrace.Information("Worker & Completion available : " + worker + "," + completion);
-
-                    ThreadPool.GetMinThreads(out worker, out completion);
-                    IndexerTrace.Information("Min Worker & Completion : " + worker + "," + completion);
-
-                    ThreadPool.GetMaxThreads(out worker, out completion);
-                    IndexerTrace.Information("Max Worker & Completion : " + worker + "," + completion);
-
-
-                    watch.Restart();
-                }
                 if (bulk.HasFullPartition)
                 {
                     EnqueueTasks(bulk, false);
@@ -90,11 +71,12 @@ namespace NBitcoin.Indexer.IndexTasks
             if (uncompletePartitions)
                 bulk.FlushUncompletePartitions();
 
+            int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
+            if (runningTask > 500)
+                WaitRunningTaskIsBelow(70).Wait();
+
             while (bulk._ReadyPartitions.Count != 0)
             {
-                int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
-                if (runningTask > 100)
-                    WaitRunningTaskIsBelow(70).Wait();
                 var item = bulk._ReadyPartitions.Dequeue();
                 var task = retry.Do(() => IndexCore(item.Item1, item.Item2));
                 Interlocked.Increment(ref _RunningTask);
