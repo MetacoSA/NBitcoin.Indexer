@@ -22,6 +22,16 @@ namespace NBitcoin.Indexer.Console
                 if (Parser.Default.ParseArguments(args, options))
                 {
                     System.Console.WriteLine("NBitcoin.Indexer " + typeof(AzureIndexer).Assembly.GetName().Version);
+
+                    if (options.All)
+                    {
+                        options.IndexAddresses = true;
+                        options.IndexBlocks = true;
+                        options.IndexWallets = true;
+                        options.IndexChain = true;
+                        options.IndexTransactions = true;
+                    }
+
                     var indexer = AzureIndexer.CreateIndexer();
                     indexer.CheckpointInterval = TimeSpan.Parse(options.CheckpointInterval);
                     indexer.IgnoreCheckpoints = options.IgnoreCheckpoints;

@@ -112,6 +112,13 @@ namespace NBitcoin.Indexer.Console
             set;
         }
 
+        [Option("All", DefaultValue = false, Required = false, HelpText = "Index all objects, equivalent to -m -a -b -t -w")]
+        public bool All
+        {
+            get;
+            set;
+        }
+
         [Option("CheckpointInterval", DefaultValue = "00:15:00", Required = false, HelpText = "Interval after which the indexer flush its progress to azure tables and save a checkpoint")]
         public string CheckpointInterval
         {
