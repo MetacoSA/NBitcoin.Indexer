@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -31,6 +32,32 @@ namespace NBitcoin.Indexer.IndexTasks
             {
                 return _IndexedBlocks;
             }
+        }
+
+
+        public void Index(params Block[] blocks)
+        {
+            try
+            {
+                IndexAsync(blocks).Wait();
+            }
+            catch (AggregateException aex)
+            {
+                ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
+                throw;
+            }
+        }
+
+        public Task IndexAsync(params Block[] blocks)
+        {
+            var tasks = blocks
+                .Select(b => IndexCore("o", new[]{new BlockInfo()
+                {
+                    Block = b,
+                    BlockId = b.GetHash()
+                }}))
+                .ToArray();
+            return Task.WhenAll(tasks);
         }
 
         protected async override Task EnsureSetup()
@@ -105,7 +132,5 @@ namespace NBitcoin.Indexer.IndexTasks
                 }
             }
         }
-
-
     }
 }

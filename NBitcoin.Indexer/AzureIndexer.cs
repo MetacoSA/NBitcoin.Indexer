@@ -63,7 +63,6 @@ namespace NBitcoin.Indexer
         {
             using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
             {
-
                 var task = new IndexTransactionsTask(Configuration);
                 task.IgnoreCheckpoints = IgnoreCheckpoints;
                 task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), chain));
@@ -97,7 +96,11 @@ namespace NBitcoin.Indexer
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
-
+        public void Index(params Block[] blocks)
+        {
+            var task = new IndexBlocksTask(Configuration);
+            task.Index(blocks);
+        }
         public void Index(params TransactionEntry.Entity[] entities)
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());

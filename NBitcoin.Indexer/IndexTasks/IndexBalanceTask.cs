@@ -8,7 +8,6 @@ namespace NBitcoin.Indexer.IndexTasks
 {
     public class IndexBalanceTask : IndexTableEntitiesTaskBase<OrderedBalanceChange>
     {
-        bool _Wallet;
         WalletRuleEntryCollection _WalletRules;
         public IndexBalanceTask(IndexerConfiguration conf, WalletRuleEntryCollection walletRules)
             : base(conf)
