@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Runtime.ExceptionServices;
@@ -35,6 +36,9 @@ namespace NBitcoin.Indexer.IndexTasks
 
             await EnsureSetup().ConfigureAwait(false);
             BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
+
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
             foreach (var block in blockFetcher)
             {
                 ThrowIfException();
@@ -44,6 +48,22 @@ namespace NBitcoin.Indexer.IndexTasks
                         await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
                 }
                 ProcessBlock(block, bulk);
+                if (watch.Elapsed > TimeSpan.FromSeconds(60.0))
+                {
+                    IndexerTrace.Information("Indexing : " + _RunningTask);
+                    int worker, completion;
+                    ThreadPool.GetAvailableThreads(out worker, out completion);
+                    IndexerTrace.Information("Worker & Completion available : " + worker + "," + completion);
+
+                    ThreadPool.GetMinThreads(out worker, out completion);
+                    IndexerTrace.Information("Min Worker & Completion : " + worker + "," + completion);
+
+                    ThreadPool.GetMaxThreads(out worker, out completion);
+                    IndexerTrace.Information("Max Worker & Completion : " + worker + "," + completion);
+
+
+                    watch.Restart();
+                }
                 if (bulk.HasFullPartition)
                 {
                     EnqueueTasks(bulk, false);

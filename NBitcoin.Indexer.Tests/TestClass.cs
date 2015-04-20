@@ -82,7 +82,6 @@ namespace NBitcoin.Indexer.Tests
                 var node = tester.CreateLocalNode();
                 node.ChainBuilder.Load("../../Data/blocks");
 
-                tester.Indexer.TaskCount = 15;
                 Assert.Equal(138, tester.Indexer.IndexBlocks());
                 Assert.Equal(0, tester.Indexer.IndexBlocks());
 
@@ -119,7 +118,6 @@ namespace NBitcoin.Indexer.Tests
             using (var tester = CreateTester())
             {
                 tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
-                tester.Indexer.TaskCount = 15;
                 Assert.Equal(138, tester.Indexer.IndexTransactions());
                 Assert.Equal(0, tester.Indexer.IndexTransactions());
             }

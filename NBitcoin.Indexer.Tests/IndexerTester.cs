@@ -89,7 +89,6 @@ namespace NBitcoin.Indexer.Tests
             if (Client.GetBlock(KnownBlockId) == null)
             {
                 Indexer.IgnoreCheckpoints = true;
-                Indexer.TaskCount = 15;
                 Indexer.FromHeight = 0;
                 Indexer.IndexBlocks();
             }
@@ -101,7 +100,6 @@ namespace NBitcoin.Indexer.Tests
             if (Client.GetTransaction(KnownTransactionId) == null)
             {
                 Indexer.IgnoreCheckpoints = true;
-                Indexer.TaskCount = 15;
                 Indexer.FromHeight = 0;
                 Indexer.IndexTransactions();
             }
