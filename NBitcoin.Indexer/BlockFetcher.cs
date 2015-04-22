@@ -62,10 +62,17 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("checkpoint");
             if (node == null)
                 throw new ArgumentNullException("node");
-            NeedSaveInterval = TimeSpan.FromMinutes(15);
             _BlockHeaders = chain ?? node.GetChain();
             _BlocksRepository = new NodeBlocksRepository(node);
             _Checkpoint = checkpoint;
+
+            InitDefault();
+        }
+
+        private void InitDefault()
+        {
+            NeedSaveInterval = TimeSpan.FromMinutes(15);
+            ToHeight = int.MaxValue;
         }
         public BlockFetcher(Checkpoint checkpoint, IBlocksRepository blocksRepository, ChainBase chain)
         {
@@ -75,10 +82,10 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("blockHeaders");
             if (checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
-            NeedSaveInterval = TimeSpan.FromMinutes(15);
             _BlockHeaders = chain;
             _BlocksRepository = blocksRepository;
             _Checkpoint = checkpoint;
+            InitDefault();
         }
 
         public TimeSpan NeedSaveInterval
