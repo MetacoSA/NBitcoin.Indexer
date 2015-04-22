@@ -116,7 +116,7 @@ namespace NBitcoin.Indexer
                 height = 0;
             }
 
-            foreach (var block in _BlocksRepository.GetBlocks(headers.Select(b => b.HashBlock)))
+            foreach (var block in _BlocksRepository.GetBlocks(headers.Select(b => b.HashBlock)).TakeWhile(b => b != null))
             {
                 var header = _BlockHeaders.GetBlock(height);
                 _LastProcessed = header;

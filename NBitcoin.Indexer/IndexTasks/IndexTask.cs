@@ -17,6 +17,8 @@ namespace NBitcoin.Indexer.IndexTasks
 
         volatile Exception _IndexingException;
 
+        
+
         public void Index(BlockFetcher blockFetcher)
         {
             try
@@ -30,11 +32,24 @@ namespace NBitcoin.Indexer.IndexTasks
             }
         }
 
+
+        bool _EnsureIsSetup = true;
+        public bool EnsureIsSetup
+        {
+            get
+            {
+                return _EnsureIsSetup;
+            }
+            set
+            {
+                _EnsureIsSetup = value;
+            }
+        }
         public async Task IndexAsync(BlockFetcher blockFetcher)
         {
             SetThrottling();
-
-            await EnsureSetup().ConfigureAwait(false);
+            if (EnsureIsSetup)
+                await EnsureSetup().ConfigureAwait(false);
             BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
             foreach (var block in blockFetcher)
             {
