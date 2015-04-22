@@ -1,4 +1,5 @@
-﻿using NBitcoin.Protocol;
+﻿using NBitcoin.Indexer.IndexTasks;
+using NBitcoin.Protocol;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,7 +27,7 @@ namespace NBitcoin.Indexer
             set;
         }
     }
-    public class BlockFetcher : IEnumerable<BlockInfo>, IDisposable
+    public class BlockFetcher : IEnumerable<BlockInfo>
     {
 
         private readonly Checkpoint _Checkpoint;
@@ -37,12 +38,12 @@ namespace NBitcoin.Indexer
                 return _Checkpoint;
             }
         }
-        private readonly Node _Node;
-        public Node Node
+        private readonly IBlocksRepository _BlocksRepository;
+        public IBlocksRepository BlocksRepository
         {
             get
             {
-                return _Node;
+                return _BlocksRepository;
             }
         }
 
@@ -54,17 +55,29 @@ namespace NBitcoin.Indexer
                 return _BlockHeaders;
             }
         }
-        public BlockFetcher(Checkpoint checkpoint, Node node, ChainBase blockHeaders)
+
+        public BlockFetcher(Checkpoint checkpoint, Node node, ChainBase chain = null)
         {
+            if (checkpoint == null)
+                throw new ArgumentNullException("checkpoint");
             if (node == null)
                 throw new ArgumentNullException("node");
-            if (blockHeaders == null)
+            NeedSaveInterval = TimeSpan.FromMinutes(15);
+            _BlockHeaders = chain ?? node.GetChain();
+            _BlocksRepository = new NodeBlocksRepository(node);
+            _Checkpoint = checkpoint;
+        }
+        public BlockFetcher(Checkpoint checkpoint, IBlocksRepository blocksRepository, ChainBase chain)
+        {
+            if (blocksRepository == null)
+                throw new ArgumentNullException("blocksRepository");
+            if (chain == null)
                 throw new ArgumentNullException("blockHeaders");
             if (checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
             NeedSaveInterval = TimeSpan.FromMinutes(15);
-            _BlockHeaders = blockHeaders;
-            _Node = node;
+            _BlockHeaders = chain;
+            _BlocksRepository = blocksRepository;
             _Checkpoint = checkpoint;
         }
 
@@ -96,7 +109,7 @@ namespace NBitcoin.Indexer
                 height = 0;
             }
 
-            foreach (var block in _Node.GetBlocks(headers.Select(b => b.HashBlock)))
+            foreach (var block in _BlocksRepository.GetBlocks(headers.Select(b => b.HashBlock)))
             {
                 var header = _BlockHeaders.GetBlock(height);
                 _LastProcessed = header;
@@ -155,14 +168,5 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
-
-        #region IDisposable Members
-
-        public void Dispose()
-        {
-            _Node.Dispose();
-        }
-
-        #endregion
     }
 }

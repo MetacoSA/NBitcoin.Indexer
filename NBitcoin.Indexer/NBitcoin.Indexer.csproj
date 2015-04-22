@@ -101,6 +101,7 @@
     <Compile Include="ExponentialBackoff.cs" />
     <Compile Include="FastEncoder.cs" />
     <Compile Include="IndexTasks\BulkImport.cs" />
+    <Compile Include="IBlocksRepository.cs" />
     <Compile Include="IndexTasks\IndexTableEntitiesTask.cs" />
     <Compile Include="IndexTasks\IndexTask.cs" />
     <Compile Include="IndexTasks\IndexBlocksTask.cs" />
