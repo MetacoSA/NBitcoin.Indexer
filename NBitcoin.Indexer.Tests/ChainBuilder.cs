@@ -10,9 +10,9 @@ namespace NBitcoin.Indexer.Tests
     public class ChainBuilder
     {
         private IndexerTester _Tester;
-        PersistantChain _Chain = new PersistantChain(Network.TestNet);
+        ConcurrentChain _Chain = new ConcurrentChain(Network.TestNet);
 
-        public PersistantChain Chain
+        public ConcurrentChain Chain
         {
             get
             {
