@@ -11,7 +11,11 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer.IndexTasks
 {
-    public abstract class IndexTask<TIndexed>
+    public interface IIndexTask
+    {
+        Task IndexAsync(BlockFetcher blockFetcher);
+    }
+    public abstract class IndexTask<TIndexed> : IIndexTask
     {
         int _RunningTask = 0;
 
