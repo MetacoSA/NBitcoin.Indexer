@@ -14,6 +14,11 @@ namespace NBitcoin.Indexer.IndexTasks
     public interface IIndexTask
     {
         Task IndexAsync(BlockFetcher blockFetcher);
+        bool SaveProgression
+        {
+            get;
+            set;
+        }
     }
     public abstract class IndexTask<TIndexed> : IIndexTask
     {
@@ -60,8 +65,11 @@ namespace NBitcoin.Indexer.IndexTasks
                 ThrowIfException();
                 if (blockFetcher.NeedSave)
                 {
-                    if (!IgnoreCheckpoints)
+                    if (!SaveProgression)
+                    {
+                        EnqueueTasks(bulk, true);
                         await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
+                    }
                 }
                 ProcessBlock(block, bulk);
                 if (bulk.HasFullPartition)
@@ -69,7 +77,8 @@ namespace NBitcoin.Indexer.IndexTasks
                     EnqueueTasks(bulk, false);
                 }
             }
-            if (!IgnoreCheckpoints)
+            EnqueueTasks(bulk, true);
+            if (!SaveProgression)
                 await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
             await WaitRunningTaskIsBelow(0).ConfigureAwait(false);
         }
@@ -112,8 +121,6 @@ namespace NBitcoin.Indexer.IndexTasks
 
         private async Task SaveAsync(BlockFetcher fetcher, BulkImport<TIndexed> bulk)
         {
-
-            EnqueueTasks(bulk, true);
             await WaitRunningTaskIsBelow(0);
             ThrowIfException();
             fetcher.SaveCheckpoint();
@@ -147,7 +154,7 @@ namespace NBitcoin.Indexer.IndexTasks
             get;
             private set;
         }
-        public bool IgnoreCheckpoints
+        public bool SaveProgression
         {
             get;
             set;
