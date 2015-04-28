@@ -72,5 +72,14 @@ namespace NBitcoin.Indexer.IndexTasks
                 return _ReadyPartitions.Count > 0;
             }
         }
+
+        /// <summary>
+        /// If set to true, the indexer will skip future blocks, and consider the indexing done until the current tip
+        /// </summary>
+        public bool IsComplete
+        {
+            get;
+            set;
+        }
     }
 }

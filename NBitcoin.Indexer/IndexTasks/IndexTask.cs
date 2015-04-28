@@ -19,6 +19,11 @@ namespace NBitcoin.Indexer.IndexTasks
             get;
             set;
         }
+        bool EnsureIsSetup
+        {
+            get;
+            set;
+        }
     }
     public abstract class IndexTask<TIndexed> : IIndexTask
     {
@@ -63,6 +68,9 @@ namespace NBitcoin.Indexer.IndexTasks
             foreach (var block in blockFetcher)
             {
                 ThrowIfException();
+                if (bulk.IsComplete)
+                    continue;
+
                 if (blockFetcher.NeedSave)
                 {
                     if (!SaveProgression)
