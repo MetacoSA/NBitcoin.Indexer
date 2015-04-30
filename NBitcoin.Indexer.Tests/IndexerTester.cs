@@ -25,6 +25,7 @@ namespace NBitcoin.Indexer.Tests
         {
             TestUtils.EnsureNew(folder);
             var config = IndexerConfiguration.FromConfiguration();
+            config.Network = Network.TestNet;
             config.StorageNamespace = folder;
             _Importer = config.CreateIndexer();
 

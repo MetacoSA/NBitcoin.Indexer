@@ -13,7 +13,7 @@ namespace NBitcoin.Indexer.IndexTasks
 {
     public interface IIndexTask
     {
-        Task IndexAsync(BlockFetcher blockFetcher);
+        void Index(BlockFetcher blockFetcher);
         bool SaveProgression
         {
             get;
@@ -31,13 +31,39 @@ namespace NBitcoin.Indexer.IndexTasks
 
         volatile Exception _IndexingException;
 
-        
-
         public void Index(BlockFetcher blockFetcher)
         {
             try
             {
-                IndexAsync(blockFetcher).Wait();
+
+                SetThrottling();
+                if (EnsureIsSetup)
+                    EnsureSetup().Wait();
+                BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
+                foreach (var block in blockFetcher)
+                {
+                    ThrowIfException();
+                    if (bulk.IsComplete)
+                        continue;
+
+                    if (blockFetcher.NeedSave)
+                    {
+                        if (SaveProgression)
+                        {
+                            EnqueueTasks(bulk, true);
+                            SaveAsync(blockFetcher, bulk).Wait();
+                        }
+                    }
+                    ProcessBlock(block, bulk);
+                    if (bulk.HasFullPartition)
+                    {
+                        EnqueueTasks(bulk, false);
+                    }
+                }
+                EnqueueTasks(bulk, true);
+                if (SaveProgression)
+                    SaveAsync(blockFetcher, bulk).Wait();
+                WaitRunningTaskIsBelow(0).Wait();
             }
             catch (AggregateException aex)
             {
@@ -59,38 +85,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 _EnsureIsSetup = value;
             }
         }
-        public async Task IndexAsync(BlockFetcher blockFetcher)
-        {
-            SetThrottling();
-            if (EnsureIsSetup)
-                await EnsureSetup().ConfigureAwait(false);
-            BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
-            foreach (var block in blockFetcher)
-            {
-                ThrowIfException();
-                if (bulk.IsComplete)
-                    continue;
-
-                if (blockFetcher.NeedSave)
-                {
-                    if (!SaveProgression)
-                    {
-                        EnqueueTasks(bulk, true);
-                        await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
-                    }
-                }
-                ProcessBlock(block, bulk);
-                if (bulk.HasFullPartition)
-                {
-                    EnqueueTasks(bulk, false);
-                }
-            }
-            EnqueueTasks(bulk, true);
-            if (!SaveProgression)
-                await SaveAsync(blockFetcher, bulk).ConfigureAwait(false);
-            await WaitRunningTaskIsBelow(0).ConfigureAwait(false);
-        }
-
+       
         private void SetThrottling()
         {
             Helper.SetThrottling();
@@ -108,9 +103,6 @@ namespace NBitcoin.Indexer.IndexTasks
                 bulk.FlushUncompletePartitions();
 
             int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
-            if (runningTask > 500)
-                WaitRunningTaskIsBelow(70).Wait();
-
             while (bulk._ReadyPartitions.Count != 0)
             {
                 var item = bulk._ReadyPartitions.Dequeue();
@@ -183,6 +175,7 @@ namespace NBitcoin.Indexer.IndexTasks
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
             this.Configuration = configuration;
+            SaveProgression = true;
         }
     }
 }
