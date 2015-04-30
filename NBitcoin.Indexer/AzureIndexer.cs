@@ -69,7 +69,7 @@ namespace NBitcoin.Indexer
                     node.VersionHandshake();
 
                     var task = new IndexTransactionsTask(Configuration);
-                    task.SaveProgression = IgnoreCheckpoints;
+                    task.SaveProgression = !IgnoreCheckpoints;
                     task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain));
                     return task.IndexedEntities;
                 }
@@ -131,7 +131,7 @@ namespace NBitcoin.Indexer
                 {
                     node.VersionHandshake();
                     var task = new IndexBlocksTask(Configuration);
-                    task.SaveProgression = IgnoreCheckpoints;
+                    task.SaveProgression = !IgnoreCheckpoints;
                     task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), node, chain));
                     return task.IndexedBlocks;
                 }
@@ -196,7 +196,7 @@ namespace NBitcoin.Indexer
                 {
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, null);
-                    task.SaveProgression = IgnoreCheckpoints;
+                    task.SaveProgression = !IgnoreCheckpoints;
                     task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain));
                     return task.IndexedEntities;
                 }
@@ -216,7 +216,7 @@ namespace NBitcoin.Indexer
                 {
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, Configuration.CreateIndexerClient().GetAllWalletRules());
-                    task.SaveProgression = IgnoreCheckpoints;
+                    task.SaveProgression = !IgnoreCheckpoints;
                     task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain));
                     return task.IndexedEntities;
                 }
