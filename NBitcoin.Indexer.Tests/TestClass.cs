@@ -961,7 +961,16 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
-
+            var n = Node.ConnectToLocal(Network.Main);
+            var chain = n.GetChain();
+            foreach (var b in n.GetBlocks(chain.Tip.EnumerateToGenesis().Select(c => c.HashBlock)))
+            {
+                var height = chain.GetBlock(b.GetHash()).Height;
+                foreach (var tx in b.Transactions)
+                {
+                    OrderedBalanceChange.ExtractScriptBalances(tx);
+                }
+            }
         }
 
         [Fact]
