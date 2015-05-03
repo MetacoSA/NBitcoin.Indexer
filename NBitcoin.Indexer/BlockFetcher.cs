@@ -132,6 +132,13 @@ namespace NBitcoin.Indexer
             }
         }
 
+        internal void SkipToEnd()
+        {
+            var height = Math.Min(ToHeight, _BlockHeaders.Tip.Height);
+            _LastProcessed = _BlockHeaders.GetBlock(height);
+            IndexerTrace.Information("Skipped to the end at height " + height);
+        }
+
         #endregion
 
         #region IEnumerable Members
@@ -175,5 +182,7 @@ namespace NBitcoin.Indexer
             get;
             set;
         }
+
+
     }
 }

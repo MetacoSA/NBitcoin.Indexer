@@ -31,36 +31,51 @@ namespace NBitcoin.Indexer.IndexTasks
 
         volatile Exception _IndexingException;
 
+        /// <summary>
+        /// Fast forward indexing to the end (if scanning not useful)
+        /// </summary>
+        protected virtual bool SkipToEnd
+        {
+            get
+            {
+                return false;
+            }
+        }
+
+
+
         public void Index(BlockFetcher blockFetcher)
         {
             try
             {
-
                 SetThrottling();
                 if (EnsureIsSetup)
                     EnsureSetup().Wait();
                 BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
-                foreach (var block in blockFetcher)
+                if (!SkipToEnd)
                 {
-                    ThrowIfException();
-                    if (bulk.IsComplete)
-                        continue;
 
-                    if (blockFetcher.NeedSave)
+                    foreach (var block in blockFetcher)
                     {
-                        if (SaveProgression)
+                        ThrowIfException();
+                        if (blockFetcher.NeedSave)
                         {
-                            EnqueueTasks(bulk, true);
-                            SaveAsync(blockFetcher, bulk).Wait();
+                            if (SaveProgression)
+                            {
+                                EnqueueTasks(bulk, true);
+                                SaveAsync(blockFetcher, bulk).Wait();
+                            }
+                        }
+                        ProcessBlock(block, bulk);
+                        if (bulk.HasFullPartition)
+                        {
+                            EnqueueTasks(bulk, false);
                         }
                     }
-                    ProcessBlock(block, bulk);
-                    if (bulk.HasFullPartition)
-                    {
-                        EnqueueTasks(bulk, false);
-                    }
+                    EnqueueTasks(bulk, true);
                 }
-                EnqueueTasks(bulk, true);
+                else
+                    blockFetcher.SkipToEnd();
                 if (SaveProgression)
                     SaveAsync(blockFetcher, bulk).Wait();
                 WaitRunningTaskIsBelow(0).Wait();
@@ -85,7 +100,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 _EnsureIsSetup = value;
             }
         }
-       
+
         private void SetThrottling()
         {
             Helper.SetThrottling();

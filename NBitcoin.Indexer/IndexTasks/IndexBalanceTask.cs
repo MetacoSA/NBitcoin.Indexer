@@ -24,13 +24,16 @@ namespace NBitcoin.Indexer.IndexTasks
             return item.ToEntity();
         }
 
+        protected override bool SkipToEnd
+        {
+            get
+            {
+                return _WalletRules != null && _WalletRules.Count == 0;
+            }
+        }
+
         protected override void ProcessBlock(BlockInfo block, BulkImport<OrderedBalanceChange> bulk)
         {
-            if (_WalletRules != null && _WalletRules.Count == 0)
-            {
-                bulk.IsComplete = true;
-                return;
-            }
             foreach (var tx in block.Block.Transactions)
             {
                 var txId = tx.GetHash();
