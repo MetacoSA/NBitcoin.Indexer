@@ -23,7 +23,7 @@
             this.deltaBackoff = deltaBackoff;
         }
 
-        public async Task Do(Func<Task> act)
+        public async Task Do(Action act, TaskScheduler scheduler = null)
         {
             Exception lastException = null;
             int retryCount = -1;
@@ -34,7 +34,9 @@
             {
                 try
                 {
-                    await act().ConfigureAwait(false);
+                    var task = new Task(act);
+                    task.Start(scheduler);
+                    await task.ConfigureAwait(false);
                     break;
                 }
                 catch (OutOfMemoryException)

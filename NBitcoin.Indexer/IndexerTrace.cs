@@ -199,5 +199,6 @@ namespace NBitcoin.Indexer
 
         static decimal a = 0.0000221438236661323m;
         static decimal b = -8.492328726823666132321613096m;
+
     }
 }

@@ -947,7 +947,6 @@ namespace NBitcoin.Indexer.Tests
             var str = FastEncoder.Instance.EncodeData(bytes);
             byte[] actual = FastEncoder.Instance.DecodeData(str);
             Assert.True(bytes.SequenceEqual(actual));
-
             for (int i = 0 ; i < 1000 ; i++)
             {
                 bytes = RandomUtils.GetBytes(100);
@@ -958,19 +957,43 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+
+        [Fact]
+        public void CustomThreadPoolTaskWorks()
+        {
+            TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
+            var scheduler = new CustomThreadPoolTaskScheduler(10, 20);
+            for (int i = 0 ; i < 30 ; i++)
+            {
+                new Task(() => Task.WaitAll(completion.Task)).Start(scheduler);
+            }
+            Assert.Equal(0, scheduler.AvailableThreads);
+            Assert.Equal(20, scheduler.QueuedCount);
+            Assert.Equal(10, scheduler.ThreadsCount);
+            
+            completion.SetResult(1);
+            scheduler.WaitFinished();
+            Assert.Equal(10, scheduler.AvailableThreads);
+            Assert.Equal(0, scheduler.QueuedCount);
+            Assert.Equal(10, scheduler.ThreadsCount);
+        }
+
         [Fact]
         public void Play()
         {
-            var n = Node.ConnectToLocal(Network.Main);
-            var chain = n.GetChain();
-            foreach (var b in n.GetBlocks(chain.Tip.EnumerateToGenesis().Select(c => c.HashBlock)))
-            {
-                var height = chain.GetBlock(b.GetHash()).Height;
-                foreach (var tx in b.Transactions)
-                {
-                    OrderedBalanceChange.ExtractScriptBalances(tx);
-                }
-            }
+        
+
+            //var n = Node.ConnectToLocal(Network.Main);
+            //var chain = n.GetChain();
+            //foreach (var b in n.GetBlocks(chain.Tip.EnumerateToGenesis().Select(c => c.HashBlock)))
+            //{
+            //    var height = chain.GetBlock(b.GetHash()).Height;
+            //    foreach (var tx in b.Transactions)
+            //    {
+            //        OrderedBalanceChange.ExtractScriptBalances(tx);
+            //    }
+            //}
+            Thread.Sleep(1000000);
         }
 
         [Fact]

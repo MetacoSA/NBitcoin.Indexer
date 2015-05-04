@@ -50,14 +50,18 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public Task IndexAsync(params Block[] blocks)
         {
+            var scheduler = CreateScheduler();
             var tasks = blocks
-                .Select(b => IndexCore("o", new[]{new BlockInfo()
+                .Select(b => new Task(() => IndexCore("o", new[]{new BlockInfo()
                 {
                     Block = b,
                     BlockId = b.GetHash()
-                }}))
+                }})))
                 .ToArray();
-            return Task.WhenAll(tasks);
+            foreach (var t in tasks)
+                t.Start(scheduler);
+            return Task.WhenAll(tasks).ContinueWith(t => scheduler.Dispose());
+
         }
 
         protected async override Task EnsureSetup()
@@ -69,7 +73,7 @@ namespace NBitcoin.Indexer.IndexTasks
             bulk.Add("o", block);
         }
 
-        protected async override Task IndexCore(string partitionName, IEnumerable<BlockInfo> blocks)
+        protected override void IndexCore(string partitionName, IEnumerable<BlockInfo> blocks)
         {
             var first = blocks.First();
             var block = first.Block;
@@ -77,12 +81,8 @@ namespace NBitcoin.Indexer.IndexTasks
 
             Stopwatch watch = new Stopwatch();
             watch.Start();
-            bool failedBefore = false;
             while (true)
             {
-                if (failedBefore)
-                    await Task.Delay(5000).ConfigureAwait(false);
-
                 var container = Configuration.GetBlocksContainer();
                 var client = container.ServiceClient;
                 client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
@@ -98,15 +98,15 @@ namespace NBitcoin.Indexer.IndexTasks
 
                 try
                 {
-                    await blob.UploadFromByteArrayAsync(blockBytes, 0, blockBytes.Length, new AccessCondition()
+                    blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
                     {
                         //Will throw if already exist, save 1 call
-                        IfNotModifiedSinceTime = failedBefore ? (DateTimeOffset?)null : DateTimeOffset.MinValue
+                        IfNotModifiedSinceTime = DateTimeOffset.MinValue
                     }, new BlobRequestOptions()
                     {
                         MaximumExecutionTime = _Timeout,
                         ServerTimeout = _Timeout
-                    }, null).ConfigureAwait(false);
+                    });
                     watch.Stop();
                     IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
                     _IndexedBlocks++;

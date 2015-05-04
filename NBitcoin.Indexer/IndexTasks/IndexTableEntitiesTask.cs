@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Table;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -51,13 +52,18 @@ namespace NBitcoin.Indexer.IndexTasks
         }
         public Task IndexAsync(IEnumerable<ITableEntity> entities)
         {
+            var scheduler = CreateScheduler();
             var tasks = entities
                 .GroupBy(e => e.PartitionKey)
                 .SelectMany(group => group
-                                    .Partition(100)
-                                    .Select(batch => IndexCore(group.Key, batch)))
+                                    .Partition(PartitionSize)
+                                    .Select(batch => new Task(() => IndexCore(group.Key, batch))))
                 .ToArray();
-            return Task.WhenAll(tasks);
+            foreach (var t in tasks)
+            {
+                t.Start(scheduler);
+            }
+            return Task.WhenAll(tasks).ContinueWith(t => scheduler.Dispose());
         }
     }
     public abstract class IndexTableEntitiesTaskBase<TIndexed> : IndexTask<TIndexed>
@@ -85,9 +91,6 @@ namespace NBitcoin.Indexer.IndexTasks
         }
 
 
-
-
-
         protected override Task EnsureSetup()
         {
             return GetCloudTable().CreateIfNotExistsAsync();
@@ -96,7 +99,8 @@ namespace NBitcoin.Indexer.IndexTasks
         protected abstract CloudTable GetCloudTable();
         protected abstract ITableEntity ToTableEntity(TIndexed item);
 
-        protected override async Task IndexCore(string partitionName, IEnumerable<TIndexed> items)
+
+        protected override void IndexCore(string partitionName, IEnumerable<TIndexed> items)
         {
             var batch = new TableBatchOperation();
             foreach (var item in items)
@@ -113,6 +117,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 ServerTimeout = _Timeout,
             };
 
+
             Queue<TableBatchOperation> batches = new Queue<TableBatchOperation>();
             batches.Enqueue(batch);
 
@@ -121,14 +126,15 @@ namespace NBitcoin.Indexer.IndexTasks
                 batch = batches.Dequeue();
                 try
                 {
+                    Stopwatch watch = new Stopwatch();
+                    watch.Start();
                     if (batch.Count > 1)
-                        await table.ExecuteBatchAsync(batch, options, null).ConfigureAwait(false);
+                        table.ExecuteBatch(batch, options);
                     else
                     {
                         if (batch.Count == 1)
-                            await table.ExecuteAsync(batch[0], options, null).ConfigureAwait(false);
+                            table.Execute(batch[0], options);
                     }
-
                     Interlocked.Add(ref _IndexedEntities, batch.Count);
                 }
                 catch (Exception ex)

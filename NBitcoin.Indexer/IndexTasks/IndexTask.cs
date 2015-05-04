@@ -27,8 +27,6 @@ namespace NBitcoin.Indexer.IndexTasks
     }
     public abstract class IndexTask<TIndexed> : IIndexTask
     {
-        int _RunningTask = 0;
-
         volatile Exception _IndexingException;
 
         /// <summary>
@@ -51,40 +49,51 @@ namespace NBitcoin.Indexer.IndexTasks
                 SetThrottling();
                 if (EnsureIsSetup)
                     EnsureSetup().Wait();
-                BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
-                if (!SkipToEnd)
-                {
 
-                    foreach (var block in blockFetcher)
+
+                using (CustomThreadPoolTaskScheduler scheduler = CreateScheduler())
+                {
+                    BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
+                    if (!SkipToEnd)
                     {
-                        ThrowIfException();
-                        if (blockFetcher.NeedSave)
+
+                        foreach (var block in blockFetcher)
                         {
-                            if (SaveProgression)
+                            ThrowIfException();
+                            if (blockFetcher.NeedSave)
                             {
-                                EnqueueTasks(bulk, true);
-                                SaveAsync(blockFetcher, bulk).Wait();
+                                if (SaveProgression)
+                                {
+                                    EnqueueTasks(bulk, true, scheduler);
+                                    Save(blockFetcher, bulk, scheduler);
+                                }
+                            }
+                            ProcessBlock(block, bulk);
+                            if (bulk.HasFullPartition)
+                            {
+                                EnqueueTasks(bulk, false, scheduler);
                             }
                         }
-                        ProcessBlock(block, bulk);
-                        if (bulk.HasFullPartition)
-                        {
-                            EnqueueTasks(bulk, false);
-                        }
+                        EnqueueTasks(bulk, true, scheduler);
                     }
-                    EnqueueTasks(bulk, true);
+                    else
+                        blockFetcher.SkipToEnd();
+                    if (SaveProgression)
+                        Save(blockFetcher, bulk, scheduler);
+                    WaitFinished(scheduler);
                 }
-                else
-                    blockFetcher.SkipToEnd();
-                if (SaveProgression)
-                    SaveAsync(blockFetcher, bulk).Wait();
-                WaitRunningTaskIsBelow(0).Wait();
             }
             catch (AggregateException aex)
             {
                 ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
                 throw;
             }
+        }
+
+        protected CustomThreadPoolTaskScheduler CreateScheduler()
+        {
+            CustomThreadPoolTaskScheduler scheduler = new CustomThreadPoolTaskScheduler(ThreadCount, MaxQueued);
+            return scheduler;
         }
 
 
@@ -110,52 +119,38 @@ namespace NBitcoin.Indexer.IndexTasks
         ExponentialBackoff retry = new ExponentialBackoff(15, TimeSpan.FromMilliseconds(100),
                                                               TimeSpan.FromSeconds(10),
                                                               TimeSpan.FromMilliseconds(200));
-        private void EnqueueTasks(BulkImport<TIndexed> bulk, bool uncompletePartitions)
+        private void EnqueueTasks(BulkImport<TIndexed> bulk, bool uncompletePartitions, CustomThreadPoolTaskScheduler scheduler)
         {
             if (!uncompletePartitions && !bulk.HasFullPartition)
                 return;
             if (uncompletePartitions)
                 bulk.FlushUncompletePartitions();
 
-            int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
-            if (runningTask > 500)
-                WaitRunningTaskIsBelow(70).Wait();
             while (bulk._ReadyPartitions.Count != 0)
             {
                 var item = bulk._ReadyPartitions.Dequeue();
-                var task = retry.Do(() => IndexCore(item.Item1, item.Item2));
-                Interlocked.Increment(ref _RunningTask);
+                var task = retry.Do(() => IndexCore(item.Item1, item.Item2), scheduler);
                 task.ContinueWith(t =>
                 {
                     if (t.Exception != null)
                     {
                         _IndexingException = t.Exception.InnerException;
                     }
-                    Interlocked.Decrement(ref _RunningTask);
                 });
             }
         }
 
-        private async Task SaveAsync(BlockFetcher fetcher, BulkImport<TIndexed> bulk)
+        private void Save(BlockFetcher fetcher, BulkImport<TIndexed> bulk, CustomThreadPoolTaskScheduler scheduler)
         {
-            await WaitRunningTaskIsBelow(0);
-            ThrowIfException();
+            WaitFinished(scheduler);
             fetcher.SaveCheckpoint();
         }
 
         int[] wait = new int[] { 100, 200, 400, 800, 1600 };
-        private async Task WaitRunningTaskIsBelow(int taskCount)
+        private void WaitFinished(CustomThreadPoolTaskScheduler taskScheduler)
         {
-            int i = 0;
-            while (true)
-            {
-
-                int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
-                if (runningTask <= taskCount)
-                    break;
-                await Task.Delay(wait[Math.Min(wait.Length - 1, i)]).ConfigureAwait(false);
-                i++;
-            }
+            taskScheduler.WaitFinished();
+            ThrowIfException();
         }
 
         private void ThrowIfException()
@@ -185,14 +180,28 @@ namespace NBitcoin.Indexer.IndexTasks
 
         protected abstract Task EnsureSetup();
         protected abstract void ProcessBlock(BlockInfo block, BulkImport<TIndexed> bulk);
-        protected abstract Task IndexCore(string partitionName, IEnumerable<TIndexed> items);
+        protected abstract void IndexCore(string partitionName, IEnumerable<TIndexed> items);
 
         public IndexTask(IndexerConfiguration configuration)
         {
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
+            ThreadCount = 50;
+            MaxQueued = 100;
             this.Configuration = configuration;
             SaveProgression = true;
+        }
+
+        public int ThreadCount
+        {
+            get;
+            set;
+        }
+
+        public int MaxQueued
+        {
+            get;
+            set;
         }
     }
 }
