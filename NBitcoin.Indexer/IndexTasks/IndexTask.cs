@@ -118,6 +118,8 @@ namespace NBitcoin.Indexer.IndexTasks
                 bulk.FlushUncompletePartitions();
 
             int runningTask = Interlocked.CompareExchange(ref _RunningTask, 0, 0);
+            if (runningTask > 500)
+                WaitRunningTaskIsBelow(70).Wait();
             while (bulk._ReadyPartitions.Count != 0)
             {
                 var item = bulk._ReadyPartitions.Dequeue();
