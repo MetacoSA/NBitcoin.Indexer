@@ -993,7 +993,7 @@ namespace NBitcoin.Indexer.Tests
             //        OrderedBalanceChange.ExtractScriptBalances(tx);
             //    }
             //}
-            Thread.Sleep(1000000);
+            //Thread.Sleep(1000000);
         }
 
         [Fact]
