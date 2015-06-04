@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -26,50 +25,7 @@ namespace NBitcoin.Indexer.Tests
             new TestClass().Play();
         }
 
-        private static void SqlLite()
-        {
-
-            int count = 0;
-
-            var threads = Enumerable.Range(0, 30).Select(_ => new Thread(__ =>
-            {
-                SQLiteConnectionStringBuilder builder = new SQLiteConnectionStringBuilder();
-                string fileName = "dbsqlite" + _;
-                builder.DataSource = fileName;
-                builder.BaseSchemaName = "";
-
-                if (File.Exists(fileName))
-                    File.Delete(fileName);
-
-                SQLiteConnection.CreateFile(fileName);
-                var _Connection = new SQLiteConnection(builder.ToString());
-                _Connection.Open();
-                var comm = _Connection.CreateCommand();
-                comm.CommandText = "Create Table Test (data TEXT)";
-                comm.ExecuteNonQuery();
-                while (true)
-                {
-
-                    var comm2 = _Connection.CreateCommand();
-                    comm2.CommandText = "INSERT INTO Test (data) values ('hello')";
-                    comm2.ExecuteNonQuery();
-
-                    // Increment my stat-counter.
-                    Interlocked.Increment(ref count);
-                }
-            })).ToArray();
-            foreach (var test in threads)
-            {
-                test.Start();
-            }
-
-            while (true)
-            {
-                Thread.Sleep(2000);
-                Console.WriteLine((count / 2) + " / s");
-                Interlocked.Exchange(ref count, 0);
-            }
-        }
+     
 
         internal static void SetThrottling()
         {

@@ -109,7 +109,8 @@ namespace NBitcoin.Indexer
                 {
                     if (_PartitionKey == null && TxId != null)
                     {
-                        _PartitionKey = Helper.GetPartitionKey(10, new[] { TxId.GetByte(0), TxId.GetByte(1) }, 0, 2);
+                        var b = TxId.ToBytes();
+                        _PartitionKey = Helper.GetPartitionKey(10, new[] { b[0], b[1] }, 0, 2);
                     }
                     return _PartitionKey;
                 }

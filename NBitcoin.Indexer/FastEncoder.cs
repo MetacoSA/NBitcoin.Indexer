@@ -68,14 +68,14 @@ namespace NBitcoin.Indexer
             return result;
         }
 
-        public override string EncodeData(byte[] data, int length)
+        public override string EncodeData(byte[] data, int offset, int length)
         {
-            StringBuilder builder = new StringBuilder(length + 1);
+            char[] result = new char[length];
             for (int i = 0 ; i < length ; i++)
             {
-                 builder.Append(_BytesToChar[data[i]]);
+                result[i] = _BytesToChar[data[offset + i]];
             }
-            return builder.ToString();
+            return new String(result);
         }
     }
 }
