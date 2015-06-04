@@ -52,7 +52,6 @@ namespace NBitcoin.Indexer.IndexTasks
         }
         public Task IndexAsync(IEnumerable<ITableEntity> entities)
         {
-            var scheduler = CreateScheduler();
             var tasks = entities
                 .GroupBy(e => e.PartitionKey)
                 .SelectMany(group => group
@@ -61,9 +60,9 @@ namespace NBitcoin.Indexer.IndexTasks
                 .ToArray();
             foreach (var t in tasks)
             {
-                t.Start(scheduler);
+                t.Start();
             }
-            return Task.WhenAll(tasks).ContinueWith(t => scheduler.Dispose());
+            return Task.WhenAll(tasks);
         }
     }
     public abstract class IndexTableEntitiesTaskBase<TIndexed> : IndexTask<TIndexed>

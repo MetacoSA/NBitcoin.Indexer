@@ -50,7 +50,6 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public Task IndexAsync(params Block[] blocks)
         {
-            var scheduler = CreateScheduler();
             var tasks = blocks
                 .Select(b => new Task(() => IndexCore("o", new[]{new BlockInfo()
                 {
@@ -59,8 +58,8 @@ namespace NBitcoin.Indexer.IndexTasks
                 }})))
                 .ToArray();
             foreach (var t in tasks)
-                t.Start(scheduler);
-            return Task.WhenAll(tasks).ContinueWith(t => scheduler.Dispose());
+                t.Start();
+            return Task.WhenAll(tasks);
 
         }
 
