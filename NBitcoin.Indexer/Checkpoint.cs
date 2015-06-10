@@ -42,7 +42,8 @@ namespace NBitcoin.Indexer
             }
             var list = new List<uint256>();
             list.Add(network.GetGenesis().Header.GetHash());
-            _BlockLocator = new BlockLocator(list);
+            _BlockLocator = new BlockLocator();
+            _BlockLocator.Blocks.AddRange(list);
         }
 
         public uint256 Genesis

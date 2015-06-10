@@ -427,7 +427,11 @@ namespace NBitcoin.Indexer
             _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
 
             if (entity.Properties.ContainsKey("b0"))
-                _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin(s)).ToList());
+                _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin()
+                {
+                    Outpoint = s.OutPoint,
+                    TxOut = s.TxOut
+                }).ToList());
             else if (_SpentOutpoints.Count == 0)
                 _SpentCoins = new CoinCollection();
 
@@ -716,7 +720,7 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="assetId">The asset id, if null, returns uncolored satoshi</param>
         /// <returns></returns>
-        public long GetAssetAmount(BitcoinAssetId assetId)
+        public IMoney GetAssetAmount(BitcoinAssetId assetId)
         {
             if (assetId == null)
                 return Amount;
@@ -727,13 +731,13 @@ namespace NBitcoin.Indexer
         /// </summary>
         /// <param name="assetId">The asset id, if null, returns uncolored satoshi</param>
         /// <returns></returns>
-        public long GetAssetAmount(AssetId assetId)
+        public IMoney GetAssetAmount(AssetId assetId)
         {
             if (assetId == null)
                 return Amount;
             var amount = _ReceivedCoins.WhereColored(assetId)
-                .Select(c => c.Amount).Sum() - _SpentCoins.WhereColored(assetId).Select(c => c.Amount).Sum();
-            return amount.Satoshi;
+                .Select(c => c.Amount).Sum(assetId) - _SpentCoins.WhereColored(assetId).Select(c => c.Amount).Sum(assetId);
+            return amount;
         }
 
         internal bool IsEmpty
