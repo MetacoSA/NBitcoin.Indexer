@@ -35,11 +35,11 @@ namespace NBitcoin.Indexer.IndexTasks
         }
 
 
-        public void Index(params Block[] blocks)
+        public void Index(Block[] blocks, TaskScheduler taskScheduler)
         {
             try
             {
-                IndexAsync(blocks).Wait();
+                IndexAsync(blocks, taskScheduler).Wait();
             }
             catch (AggregateException aex)
             {
@@ -48,7 +48,7 @@ namespace NBitcoin.Indexer.IndexTasks
             }
         }
 
-        public Task IndexAsync(params Block[] blocks)
+        public Task IndexAsync(Block[] blocks, TaskScheduler taskScheduler)
         {
             var tasks = blocks
                 .Select(b => new Task(() => IndexCore("o", new[]{new BlockInfo()
@@ -58,9 +58,8 @@ namespace NBitcoin.Indexer.IndexTasks
                 }})))
                 .ToArray();
             foreach (var t in tasks)
-                t.Start();
+                t.Start(taskScheduler);
             return Task.WhenAll(tasks);
-
         }
 
         protected async override Task EnsureSetup()

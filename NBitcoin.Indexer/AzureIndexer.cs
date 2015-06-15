@@ -53,6 +53,7 @@ namespace NBitcoin.Indexer
         {
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
+            TaskScheduler = TaskScheduler.Default;
             CheckpointInterval = TimeSpan.FromMinutes(15.0);
             _Configuration = configuration;
             FromHeight = 0;
@@ -102,10 +103,19 @@ namespace NBitcoin.Indexer
 
         TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
 
+        /// <summary>
+        /// TaskScheduler to parallelize individual object Index methods
+        /// </summary>
+        public TaskScheduler TaskScheduler
+        {
+            get;
+            set;
+        }
+
         public void Index(params Block[] blocks)
         {
             var task = new IndexBlocksTask(Configuration);
-            task.Index(blocks);
+            task.Index(blocks, TaskScheduler);
         }
         public void Index(params TransactionEntry.Entity[] entities)
         {
@@ -119,7 +129,7 @@ namespace NBitcoin.Indexer
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
             var task = new IndexTableEntitiesTask(Configuration, table);
-            task.Index(entities);
+            task.Index(entities, TaskScheduler);
         }
 
 

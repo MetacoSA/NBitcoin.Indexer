@@ -38,11 +38,11 @@ namespace NBitcoin.Indexer.IndexTasks
         }
 
 
-        public void Index(IEnumerable<ITableEntity> entities)
+        public void Index(IEnumerable<ITableEntity> entities, TaskScheduler taskScheduler)
         {
             try
             {
-                IndexAsync(entities).Wait();
+                IndexAsync(entities, taskScheduler).Wait();
             }
             catch (AggregateException aex)
             {
@@ -50,8 +50,9 @@ namespace NBitcoin.Indexer.IndexTasks
                 throw;
             }
         }
-        public Task IndexAsync(IEnumerable<ITableEntity> entities)
+        public Task IndexAsync(IEnumerable<ITableEntity> entities, TaskScheduler taskScheduler)
         {
+            taskScheduler = taskScheduler ?? TaskScheduler.Default;
             var tasks = entities
                 .GroupBy(e => e.PartitionKey)
                 .SelectMany(group => group
@@ -60,7 +61,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 .ToArray();
             foreach (var t in tasks)
             {
-                t.Start();
+                t.Start(taskScheduler);
             }
             return Task.WhenAll(tasks);
         }
