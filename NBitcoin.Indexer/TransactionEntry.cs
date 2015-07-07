@@ -45,10 +45,10 @@ namespace NBitcoin.Indexer
                 var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.None);
                 _PartitionKey = entity.PartitionKey;
                 Timestamp = entity.Timestamp;
-                TxId = new uint256(splitted[0]);
+                TxId = uint256.Parse(splitted[0]);
                 Type = GetType(splitted[1]);
                 if (splitted.Length >= 3 && splitted[2] != string.Empty)
-                    BlockId = new uint256(splitted[2]);
+                    BlockId = uint256.Parse(splitted[2]);
                 var bytes = Helper.GetEntityProperty(entity, "a");
                 if (bytes != null && bytes.Length != 0)
                 {

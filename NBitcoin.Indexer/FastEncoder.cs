@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
-    public class FastEncoder : DataEncoder
+    public class FastEncoder
     {
         private static readonly FastEncoder _Instance = new FastEncoder();
         public static FastEncoder Instance
@@ -56,7 +56,7 @@ namespace NBitcoin.Indexer
 
         readonly char[] _BytesToChar;
         readonly byte[] _CharToBytes;
-        public override byte[] DecodeData(string encoded)
+        public byte[] DecodeData(string encoded)
         {
             var result = new byte[encoded.Length];
             int i = 0;
@@ -68,7 +68,7 @@ namespace NBitcoin.Indexer
             return result;
         }
 
-        public override string EncodeData(byte[] data, int offset, int length)
+        public string EncodeData(byte[] data, int offset, int length)
         {
             char[] result = new char[length];
             for (int i = 0 ; i < length ; i++)
@@ -76,6 +76,11 @@ namespace NBitcoin.Indexer
                 result[i] = _BytesToChar[data[offset + i]];
             }
             return new String(result);
+        }
+
+        public string EncodeData(byte[] data)
+        {
+            return EncodeData(data, 0, data.Length);
         }
     }
 }

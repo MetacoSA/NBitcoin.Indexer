@@ -115,7 +115,7 @@ namespace NBitcoin.Indexer.IndexTasks
                     var alreadyExist = ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 412;
                     if (!alreadyExist)
                     {
-                        IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+                        IndexerTrace.ErrorWhileImportingBlockToAzure(uint256.Parse(hash), ex);
                         throw;
                     }
                     watch.Stop();
@@ -125,7 +125,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 }
                 catch (Exception ex)
                 {
-                    IndexerTrace.ErrorWhileImportingBlockToAzure(new uint256(hash), ex);
+                    IndexerTrace.ErrorWhileImportingBlockToAzure(uint256.Parse(hash), ex);
                     throw;
                 }
             }
