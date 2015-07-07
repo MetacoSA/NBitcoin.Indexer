@@ -28,7 +28,12 @@ namespace NBitcoin.Indexer
                         .Where(c => !(c.IsCoinbase && c.MempoolEntry)) //There is no such thing as a Coinbase unconfirmed, by definition a coinbase appear in a block
                         .ToList(); 
             var confirmed = all.Where(o => o.BlockId != null).ToDictionary(o => o.TransactionId);
-            var unconfirmed = all.Where(o => o.MempoolEntry && !confirmed.ContainsKey(o.TransactionId)).ToDictionary(o => o.TransactionId);
+            Dictionary<uint256, OrderedBalanceChange> unconfirmed = new Dictionary<uint256, OrderedBalanceChange>();
+
+            foreach(var item in all.Where(o => o.MempoolEntry && !confirmed.ContainsKey(o.TransactionId)))
+            {
+                unconfirmed.AddOrReplace(item.TransactionId, item);
+            }
 
             _Prunable = all.Where(o => o.BlockId == null && confirmed.ContainsKey(o.TransactionId)).ToList();
             _All = all.Where(o => 
