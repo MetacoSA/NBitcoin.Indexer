@@ -32,7 +32,7 @@ namespace NBitcoin.Indexer
 
         public IndexerClient(IndexerConfiguration configuration)
         {
-            if (configuration == null)
+            if(configuration == null)
                 throw new ArgumentNullException("configuration");
             _Configuration = configuration;
             BalancePartitionSize = 50;
@@ -57,9 +57,9 @@ namespace NBitcoin.Indexer
                 b.ReadWrite(ms, false);
                 return b;
             }
-            catch (StorageException ex)
+            catch(StorageException ex)
             {
-                if (ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 404)
+                if(ex.RequestInformation != null && ex.RequestInformation.HttpStatusCode == 404)
                 {
                     return null;
                 }
@@ -95,7 +95,7 @@ namespace NBitcoin.Indexer
 
         public async Task<TransactionEntry> GetTransactionAsync(bool loadPreviousOutput, bool fetchColor, uint256 txId)
         {
-            if (txId == null)
+            if(txId == null)
                 return null;
             TransactionEntry result = null;
 
@@ -115,18 +115,18 @@ namespace NBitcoin.Indexer
             query.TakeCount = 10; //Should not have more
             var entities = (await table.ExecuteQuerySegmentedAsync(query, null).ConfigureAwait(false))
                                .Select(e => new TransactionEntry.Entity(e)).ToArray();
-            if (entities.Length == 0)
+            if(entities.Length == 0)
                 result = null;
             else
             {
                 result = new TransactionEntry(entities);
-                if (result.Transaction == null)
+                if(result.Transaction == null)
                 {
-                    foreach (var block in result.BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
+                    foreach(var block in result.BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
                     {
                         result.Transaction = block.Transactions.FirstOrDefault(t => t.GetHash() == txId);
                         entities[0].Transaction = result.Transaction;
-                        if (entities[0].Transaction != null)
+                        if(entities[0].Transaction != null)
                         {
                             await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
                         }
@@ -134,17 +134,17 @@ namespace NBitcoin.Indexer
                     }
                 }
 
-                if (fetchColor && result.ColoredTransaction == null)
+                if(fetchColor && result.ColoredTransaction == null)
                 {
                     result.ColoredTransaction = await ColoredTransaction.FetchColorsAsync(txId, result.Transaction, new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
                     entities[0].ColoredTransaction = result.ColoredTransaction;
-                    if (entities[0].ColoredTransaction != null)
+                    if(entities[0].ColoredTransaction != null)
                     {
                         await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
                     }
                 }
                 var needTxOut = result.SpentCoins == null && loadPreviousOutput && result.Transaction != null;
-                if (needTxOut)
+                if(needTxOut)
                 {
                     var inputs = result.Transaction.Inputs.Select(o => o.PrevOut).ToArray();
                     var parents = await
@@ -152,9 +152,9 @@ namespace NBitcoin.Indexer
                              .Select(i => i.Hash)
                              .ToArray()).ConfigureAwait(false);
 
-                    for (int i = 0 ; i < parents.Length ; i++)
+                    for(int i = 0; i < parents.Length; i++)
                     {
-                        if (parents[i] == null)
+                        if(parents[i] == null)
                         {
                             IndexerTrace.MissingTransactionFromDatabase(result.Transaction.Inputs[i].PrevOut.Hash);
                             return null;
@@ -169,7 +169,7 @@ namespace NBitcoin.Indexer
                                             .ToList();
                     entities[0].PreviousTxOuts.Clear();
                     entities[0].PreviousTxOuts.AddRange(outputs);
-                    if (entities[0].IsLoaded)
+                    if(entities[0].IsLoaded)
                     {
                         await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
                     }
@@ -188,10 +188,20 @@ namespace NBitcoin.Indexer
             var result = new TransactionEntry[txIds.Length];
             var queries = new TableQuery[txIds.Length];
             var tasks = Enumerable.Range(0, txIds.Length)
-                .Select(async (i) =>
-                {
-                    result[i] = await GetTransactionAsync(lazyLoadPreviousOutput, fetchColor, txIds[i]).ConfigureAwait(false);
-                }).ToArray();
+                        .Select(i => new
+                        {
+                            TxId = txIds[i],
+                            Index = i
+                        })
+                        .GroupBy(o => o.TxId, o => o.Index)
+                        .Select(async (o) =>
+                        {
+                            var transaction = await GetTransactionAsync(lazyLoadPreviousOutput, fetchColor, o.Key).ConfigureAwait(false);
+                            foreach(var index in o)
+                            {
+                                result[index] = transaction;
+                            }
+                        }).ToArray();
 
             await Task.WhenAll(tasks).ConfigureAwait(false);
             return result;
@@ -204,7 +214,7 @@ namespace NBitcoin.Indexer
             {
                 TakeCount = 1
             }).Select(e => new ChainPartEntry(e)).FirstOrDefault();
-            if (part == null)
+            if(part == null)
                 return null;
 
             var block = part.BlockHeaders[part.BlockHeaders.Count - 1];
@@ -221,7 +231,7 @@ namespace NBitcoin.Indexer
             var oldTip = currentTip;
             var table = Configuration.GetChainTable();
             List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
-            foreach (var chainPart in
+            foreach(var chainPart in
                 ExecuteBalanceQuery(table, new TableQuery(), new[] { 1, 2, 10 })
             .Concat(table.ExecuteQuery(new TableQuery()).Skip(2))
             .Select(e => new ChainPartEntry(e)))
@@ -229,20 +239,20 @@ namespace NBitcoin.Indexer
                 cancellation.ThrowIfCancellationRequested();
 
                 int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
-                foreach (var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
+                foreach(var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
                 {
-                    if (currentTip == null && oldTip != null)
+                    if(currentTip == null && oldTip != null)
                         throw new InvalidOperationException("No fork found, the chain stored in azure is probably different from the one of the provided input");
-                    if (oldTip == null || height > currentTip.Height)
+                    if(oldTip == null || height > currentTip.Height)
                         yield return CreateChainChange(height, block);
                     else
                     {
-                        if (height < currentTip.Height)
+                        if(height < currentTip.Height)
                             currentTip = currentTip.FindAncestorOrSelf(height);
                         var chainChange = CreateChainChange(height, block);
-                        if (chainChange.BlockId == currentTip.HashBlock)
+                        if(chainChange.BlockId == currentTip.HashBlock)
                         {
-                            if (forkIncluded)
+                            if(forkIncluded)
                                 yield return chainChange;
                             yield break;
                         }
@@ -354,9 +364,9 @@ namespace NBitcoin.Indexer
 
         private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
         {
-            foreach (var partition in GetOrderedBalanceCoreAsync(balanceId, query, cancel))
+            foreach(var partition in GetOrderedBalanceCoreAsync(balanceId, query, cancel))
             {
-                foreach (var change in partition.Result)
+                foreach(var change in partition.Result)
                 {
                     yield return change;
                 }
@@ -379,7 +389,7 @@ namespace NBitcoin.Indexer
 
         private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
         {
-            if (query == null)
+            if(query == null)
                 query = new BalanceQuery();
 
 
@@ -397,7 +407,7 @@ namespace NBitcoin.Indexer
                       })
                  .Partition(BalancePartitionSize);
 
-            if (!query.RawOrdering)
+            if(!query.RawOrdering)
             {
                 return GetOrderedBalanceCoreAsyncOrdered(partitions, cancel);
             }
@@ -407,11 +417,11 @@ namespace NBitcoin.Indexer
         private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncRaw(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
         {
             List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
-            foreach (var partition in partitions)
+            foreach(var partition in partitions)
             {
                 cancel.ThrowIfCancellationRequested();
                 var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
-                foreach (var change in partition.Select(p => p.Change))
+                foreach(var change in partition.Select(p => p.Change))
                 {
                     result.Add(change);
                 }
@@ -423,13 +433,13 @@ namespace NBitcoin.Indexer
         private bool Prepare(OrderedBalanceChange change)
         {
             change.UpdateToScriptCoins();
-            if (change.SpentCoins == null || change.ReceivedCoins == null)
+            if(change.SpentCoins == null || change.ReceivedCoins == null)
                 return false;
-            if (change.IsEmpty)
+            if(change.IsEmpty)
                 return false;
-            if (ColoredBalance)
+            if(ColoredBalance)
             {
-                if (change.ColoredTransaction == null)
+                if(change.ColoredTransaction == null)
                     return false;
                 change.UpdateToColoredCoins();
             }
@@ -442,23 +452,23 @@ namespace NBitcoin.Indexer
             List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
 
             List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
-            foreach (var partition in partitions)
+            foreach(var partition in partitions)
             {
                 cancel.ThrowIfCancellationRequested();
                 var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
-                foreach (var change in partition.Select(p => p.Change))
+                foreach(var change in partition.Select(p => p.Change))
                 {
-                    if (change.BlockId == null)
+                    if(change.BlockId == null)
                         unconfirmedList.Add(change);
                     else
                     {
-                        if (unconfirmedList != null)
+                        if(unconfirmedList != null)
                         {
                             unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
                             unconfirmedList = null;
                         }
 
-                        while (unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
+                        while(unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
                         {
                             var unconfirmedChange = unconfirmed.Dequeue();
                             result.Add(unconfirmedChange);
@@ -469,17 +479,17 @@ namespace NBitcoin.Indexer
                 yield return WaitAndReturn(partitionLoading, result);
                 result = new List<OrderedBalanceChange>();
             }
-            if (unconfirmedList != null)
+            if(unconfirmedList != null)
             {
                 unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
                 unconfirmedList = null;
             }
-            while (unconfirmed.Count != 0)
+            while(unconfirmed.Count != 0)
             {
                 var change = unconfirmed.Dequeue();
                 result.Add(change);
             }
-            if (result.Count > 0)
+            if(result.Count > 0)
                 yield return WaitAndReturn(null, result);
         }
 
@@ -493,25 +503,25 @@ namespace NBitcoin.Indexer
                 tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
                 var segment = table.ExecuteQuerySegmented(tableQuery, continuation);
                 continuation = segment.ContinuationToken;
-                foreach (var entity in segment)
+                foreach(var entity in segment)
                 {
                     yield return entity;
                 }
-            } while (continuation != null);
+            } while(continuation != null);
         }
 
         private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)
         {
-            if (partitionLoading != null)
+            if(partitionLoading != null)
                 await Task.WhenAll(partitionLoading).ConfigureAwait(false);
 
             List<OrderedBalanceChange> toDelete = new List<OrderedBalanceChange>();
-            foreach (var entity in result)
+            foreach(var entity in result)
             {
-                if (!Prepare(entity))
+                if(!Prepare(entity))
                     toDelete.Add(entity);
             }
-            foreach (var deletion in toDelete)
+            foreach(var deletion in toDelete)
             {
                 result.Remove(deletion);
             }
@@ -527,12 +537,12 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetBalanceTable();
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
-            foreach (var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))))
+            foreach(var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))))
             {
                 var change = new OrderedBalanceChange(c);
-                if (change.BlockId != null)
+                if(change.BlockId != null)
                     break;
-                if (DateTime.UtcNow - change.SeenUtc < olderThan)
+                if(DateTime.UtcNow - change.SeenUtc < olderThan)
                     continue;
                 unconfirmed.Add(c);
             }
@@ -547,9 +557,9 @@ namespace NBitcoin.Indexer
 
         public bool NeedLoading(OrderedBalanceChange change)
         {
-            if (change.SpentCoins != null)
+            if(change.SpentCoins != null)
             {
-                if (change.ColoredTransaction != null || !ColoredBalance)
+                if(change.ColoredTransaction != null || !ColoredBalance)
                 {
                     return false;
                 }
@@ -559,26 +569,32 @@ namespace NBitcoin.Indexer
 
         public async Task<bool> EnsurePreviousLoadedAsync(OrderedBalanceChange change)
         {
-            if (!NeedLoading(change))
+            if(!NeedLoading(change))
                 return true;
             var parentIds = change.SpentOutpoints.Select(s => s.Hash).ToArray();
             var parents =
                 await GetTransactionsAsync(false, ColoredBalance, parentIds).ConfigureAwait(false);
 
-            if (change.SpentCoins == null)
+            var cache = new NoSqlTransactionRepository();
+            foreach(var parent in parents.Where(p => p != null))
+                cache.Put(parent.TransactionId, parent.Transaction);
+
+            if(change.SpentCoins == null)
             {
-                var success = await change.EnsureSpentCoinsLoadedAsync(parentIds, parents.Select(t => t == null ? null : t.Transaction).ToArray()).ConfigureAwait(false);
-                if (!success)
+                var success = await change.EnsureSpentCoinsLoadedAsync(cache).ConfigureAwait(false);
+                if(!success)
                     return false;
             }
-            if (ColoredBalance && change.ColoredTransaction == null)
+            if(ColoredBalance && change.ColoredTransaction == null)
             {
-                var success = await change.EnsureColoredTransactionLoadedAsync(new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
-                if (!success)
+                var indexerRepo = new IndexerColoredTransactionRepository(Configuration);
+                indexerRepo.Transactions = new CompositeTransactionRepository(new[] { new ReadOnlyTransactionRepository(cache), indexerRepo.Transactions });
+                var success = await change.EnsureColoredTransactionLoadedAsync(indexerRepo).ConfigureAwait(false);
+                if(!success)
                     return false;
             }
             var entity = change.ToEntity();
-            if (!change.IsEmpty)
+            if(!change.IsEmpty)
             {
                 await Configuration.GetBalanceTable().ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
             }
@@ -588,9 +604,9 @@ namespace NBitcoin.Indexer
                 {
                     await Configuration.GetTransactionTable().ExecuteAsync(TableOperation.Delete(entity)).ConfigureAwait(false);
                 }
-                catch (StorageException ex)
+                catch(StorageException ex)
                 {
-                    if (ex.RequestInformation == null || ex.RequestInformation.HttpStatusCode != 404)
+                    if(ex.RequestInformation == null || ex.RequestInformation.HttpStatusCode != 404)
                         throw;
                 }
             }
@@ -615,9 +631,9 @@ namespace NBitcoin.Indexer
 
         public void SynchronizeChain(ChainBase chain)
         {
-            if (chain.Tip != null && chain.Genesis.HashBlock != Configuration.Network.GetGenesis().GetHash())
+            if(chain.Tip != null && chain.Genesis.HashBlock != Configuration.Network.GetGenesis().GetHash())
                 throw new ArgumentException("Incompatible Network between the indexer and the chain", "chain");
-            if (chain.Tip == null)
+            if(chain.Tip == null)
                 chain.SetTip(new ChainedBlock(Configuration.Network.GetGenesis().Header, 0));
             GetChainChangesUntilFork(chain.Tip, false)
                 .UpdateChain(chain);
@@ -654,27 +670,27 @@ namespace NBitcoin.Indexer
             };
             var sourcesByKey = GetOrderedBalanceCore(balanceId, query, cancel)
                 .ToDictionary(i => GetKey(i));
-            if (sourcesByKey.Count == 0)
+            if(sourcesByKey.Count == 0)
                 return false;
             var destByKey =
                 GetOrderedBalance(walletId, query, cancel)
                 .ToDictionary(i => GetKey(i));
 
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();
-            foreach (var kv in sourcesByKey)
+            foreach(var kv in sourcesByKey)
             {
                 var source = kv.Value;
                 var existing = destByKey.TryGet(kv.Key);
-                if (existing == null)
+                if(existing == null)
                 {
                     existing = new OrderedBalanceChange(walletId, source);
                 }
                 existing.Merge(kv.Value, rule);
                 entities.Add(existing);
-                if (entities.Count == 100)
+                if(entities.Count == 100)
                     indexer.Index(entities);
             }
-            if (entities.Count != 0)
+            if(entities.Count != 0)
                 indexer.Index(entities);
             return true;
         }

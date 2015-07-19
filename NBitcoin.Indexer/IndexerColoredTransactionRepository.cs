@@ -7,6 +7,58 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
+    internal class ReadOnlyTransactionRepository : ITransactionRepository
+    {
+        private NoSqlTransactionRepository cache;
+
+        public ReadOnlyTransactionRepository(NoSqlTransactionRepository cache)
+        {
+            this.cache = cache;
+        }
+        #region ITransactionRepository Members
+
+        public Task<Transaction> GetAsync(uint256 txId)
+        {
+            return cache.GetAsync(txId);
+        }
+
+        public Task PutAsync(uint256 txId, Transaction tx)
+        {
+            return Task.FromResult(false);
+        }
+
+        #endregion
+    }
+    internal class CompositeTransactionRepository : ITransactionRepository
+    {
+        public CompositeTransactionRepository(ITransactionRepository[] repositories)
+        {
+            _Repositories = repositories.ToArray();
+        }
+        ITransactionRepository[] _Repositories;
+        #region ITransactionRepository Members
+
+        public async Task<Transaction> GetAsync(uint256 txId)
+        {
+            foreach(var repo in _Repositories)
+            {
+                var result = await repo.GetAsync(txId).ConfigureAwait(false);
+                if(result != null)
+                    return result;
+            }
+            return null;
+        }
+
+        public async Task PutAsync(uint256 txId, Transaction tx)
+        {
+            foreach(var repo in _Repositories)
+            {
+                await repo.PutAsync(txId, tx).ConfigureAwait(false);
+            }
+        }
+
+        #endregion
+    }
     public class IndexerColoredTransactionRepository : IColoredTransactionRepository
     {
         private readonly IndexerConfiguration _Configuration;
@@ -49,6 +101,10 @@ namespace NBitcoin.Indexer
             get
             {
                 return _Transactions;
+            }
+            set
+            {
+                _Transactions = value;
             }
         }
 
