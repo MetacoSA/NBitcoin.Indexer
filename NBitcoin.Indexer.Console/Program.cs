@@ -33,6 +33,7 @@ namespace NBitcoin.Indexer.Console
                     }
 
                     var indexer = AzureIndexer.CreateIndexer();
+                    indexer.Configuration.EnsureSetup();
                     indexer.CheckpointInterval = TimeSpan.Parse(options.CheckpointInterval);
                     indexer.IgnoreCheckpoints = options.IgnoreCheckpoints;
                     indexer.FromHeight = options.From;
