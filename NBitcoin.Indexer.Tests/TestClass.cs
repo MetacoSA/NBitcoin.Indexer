@@ -237,6 +237,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(Money.Parse("1.0"), entry.Amount);
 
                 txBuilder = new TransactionBuilder();
+                txBuilder.StandardTransactionPolicy.MinRelayTxFee = new FeeRate(Money.Satoshis(1000));
                 var tx = txBuilder
                     .AddKeys(goldGuy)
                     .AddCoins(goldIssuanceCoin)
@@ -259,6 +260,7 @@ namespace NBitcoin.Indexer.Tests
                 var nicoGold = coloredCoins[0];
 
                 txBuilder = new TransactionBuilder(1);
+                txBuilder.StandardTransactionPolicy.MinRelayTxFee = new FeeRate(Money.Satoshis(1000));
                 //GoldGuy sends 20 gold to alice against 0.6 BTC. Nico sends 10 gold to alice + 0.02 BTC.
                 tx = txBuilder
                     .AddKeys(goldGuy)
@@ -288,7 +290,7 @@ namespace NBitcoin.Indexer.Tests
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
                 balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
                 coloredEntry = balance[0];
-                Assert.Equal(Money.Parse("-0.02") - txBuilder.ColoredDust, coloredEntry.Amount);
+                Assert.Equal(Money.Parse("-0.02") - Money.Satoshis(546), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(-10L) == 0);
 
                 //Alice, should have lost 0.58 BTC, but win 10 + 20 gold (one is a transfer, the other issuance)
