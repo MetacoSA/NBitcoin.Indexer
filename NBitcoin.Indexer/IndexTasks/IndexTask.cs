@@ -56,25 +56,33 @@ namespace NBitcoin.Indexer.IndexTasks
                     BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
                     if (!SkipToEnd)
                     {
-
-                        foreach (var block in blockFetcher)
+                        try
                         {
-                            ThrowIfException();
-                            if (blockFetcher.NeedSave)
+
+                            foreach(var block in blockFetcher)
                             {
-                                if (SaveProgression)
+                                ThrowIfException();
+                                if(blockFetcher.NeedSave)
                                 {
-                                    EnqueueTasks(bulk, true, scheduler);
-                                    Save(blockFetcher, bulk, scheduler);
+                                    if(SaveProgression)
+                                    {
+                                        EnqueueTasks(bulk, true, scheduler);
+                                        Save(blockFetcher, bulk, scheduler);
+                                    }
+                                }
+                                ProcessBlock(block, bulk);
+                                if(bulk.HasFullPartition)
+                                {
+                                    EnqueueTasks(bulk, false, scheduler);
                                 }
                             }
-                            ProcessBlock(block, bulk);
-                            if (bulk.HasFullPartition)
-                            {
-                                EnqueueTasks(bulk, false, scheduler);
-                            }
+                            EnqueueTasks(bulk, true, scheduler);
                         }
-                        EnqueueTasks(bulk, true, scheduler);
+                        catch(OperationCanceledException ex)
+                        {
+                            if(ex.CancellationToken != blockFetcher.CancellationToken)
+                                throw;
+                        }
                     }
                     else
                         blockFetcher.SkipToEnd();

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
@@ -58,9 +59,9 @@ namespace NBitcoin.Indexer
 
         public BlockFetcher(Checkpoint checkpoint, Node node, ChainBase chain = null)
         {
-            if (checkpoint == null)
+            if(checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
-            if (node == null)
+            if(node == null)
                 throw new ArgumentNullException("node");
             _BlockHeaders = chain ?? node.GetChain();
             _BlocksRepository = new NodeBlocksRepository(node);
@@ -76,11 +77,11 @@ namespace NBitcoin.Indexer
         }
         public BlockFetcher(Checkpoint checkpoint, IBlocksRepository blocksRepository, ChainBase chain)
         {
-            if (blocksRepository == null)
+            if(blocksRepository == null)
                 throw new ArgumentNullException("blocksRepository");
-            if (chain == null)
+            if(chain == null)
                 throw new ArgumentNullException("blockHeaders");
-            if (checkpoint == null)
+            if(checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
             _BlockHeaders = chain;
             _BlocksRepository = blocksRepository;
@@ -94,6 +95,11 @@ namespace NBitcoin.Indexer
             set;
         }
 
+        public CancellationToken CancellationToken
+        {
+            get;
+            set;
+        }
 
         #region IEnumerable<BlockInfo> Members
 
@@ -107,16 +113,16 @@ namespace NBitcoin.Indexer
             var headers = _BlockHeaders.EnumerateAfter(fork);
             headers = headers.Where(h => h.Height >= FromHeight && h.Height <= ToHeight);
             var first = headers.FirstOrDefault();
-            if (first == null)
+            if(first == null)
                 yield break;
             var height = first.Height;
-            if (first.Height == 1)
+            if(first.Height == 1)
             {
                 headers = new[] { fork }.Concat(headers);
                 height = 0;
             }
 
-            foreach (var block in _BlocksRepository.GetBlocks(headers.Select(b => b.HashBlock)).TakeWhile(b => b != null))
+            foreach(var block in _BlocksRepository.GetBlocks(headers.Select(b => b.HashBlock), CancellationToken).TakeWhile(b => b != null))
             {
                 var header = _BlockHeaders.GetBlock(height);
                 _LastProcessed = header;
@@ -163,7 +169,7 @@ namespace NBitcoin.Indexer
 
         public void SaveCheckpoint()
         {
-            if (_LastProcessed != null)
+            if(_LastProcessed != null)
             {
                 _Checkpoint.SaveProgress(_LastProcessed);
                 IndexerTrace.CheckpointSaved(_LastProcessed, _Checkpoint.CheckpointName);
