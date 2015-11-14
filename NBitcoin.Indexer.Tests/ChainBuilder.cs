@@ -101,7 +101,7 @@ namespace NBitcoin.Indexer.Tests
             {
                 var height = _Chain.GetBlock(b.GetHash()).Height;
                 _Tester.Indexer.IndexOrderedBalance(height, b);
-                foreach (var tx in b.Transactions.Where(t => t.IsCoinBase))
+                foreach (var tx in b.Transactions)
                 {
                     _Tester.Indexer.Index(new[] { new TransactionEntry.Entity(tx.GetHash(), tx, b.GetHash()) });
                 }

@@ -22,12 +22,13 @@ namespace NBitcoin.Indexer
             }
             public Entity(uint256 txId, Transaction tx, uint256 blockId)
             {
-                if (txId == null)
+                if(txId == null)
                     txId = tx.GetHash();
+                Timestamp = DateTimeOffset.UtcNow;
                 TxId = txId;
                 Transaction = tx;
                 BlockId = blockId;
-                if (blockId == null)
+                if(blockId == null)
                     Type = TransactionEntryType.Mempool;
                 else
                     Type = TransactionEntryType.ConfirmedTransaction;
@@ -35,8 +36,9 @@ namespace NBitcoin.Indexer
 
             public Entity(uint256 txId)
             {
-                if (txId == null)
+                if(txId == null)
                     throw new ArgumentNullException("txId");
+                Timestamp = DateTimeOffset.UtcNow;
                 TxId = txId;
             }
 
@@ -47,21 +49,38 @@ namespace NBitcoin.Indexer
                 Timestamp = entity.Timestamp;
                 TxId = uint256.Parse(splitted[0]);
                 Type = GetType(splitted[1]);
-                if (splitted.Length >= 3 && splitted[2] != string.Empty)
+                if(splitted.Length >= 3 && splitted[2] != string.Empty)
                     BlockId = uint256.Parse(splitted[2]);
                 var bytes = Helper.GetEntityProperty(entity, "a");
-                if (bytes != null && bytes.Length != 0)
+                if(bytes != null && bytes.Length != 0)
                 {
                     Transaction = new Transaction();
                     Transaction.ReadWrite(bytes);
                 }
                 bytes = Helper.GetEntityProperty(entity, "b");
-                if (bytes != null && bytes.Length != 0)
+                if(bytes != null && bytes.Length != 0)
                 {
                     ColoredTransaction = new ColoredTransaction();
                     ColoredTransaction.ReadWrite(bytes);
                 }
                 _PreviousTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "c"));
+
+                var timestamp = Helper.GetEntityProperty(entity, "d");
+                if(timestamp != null)
+                {
+                    Timestamp = new DateTimeOffset((long)ToUInt64(timestamp, 0), TimeSpan.Zero);
+                }
+            }
+            public static ulong ToUInt64(byte[] value, int index)
+            {
+                return value[index]
+                       + ((ulong)value[index + 1] << 8)
+                       + ((ulong)value[index + 2] << 16)
+                       + ((ulong)value[index + 3] << 24)
+                       + ((ulong)value[index + 4] << 32)
+                       + ((ulong)value[index + 5] << 40)
+                       + ((ulong)value[index + 6] << 48)
+                       + ((ulong)value[index + 7] << 56);
             }
 
             public DynamicTableEntity CreateTableEntity()
@@ -70,11 +89,12 @@ namespace NBitcoin.Indexer
                 entity.ETag = "*";
                 entity.PartitionKey = PartitionKey;
                 entity.RowKey = TxId + "-" + TypeLetter + "-" + BlockId;
-                if (Transaction != null)
+                if(Transaction != null)
                     Helper.SetEntityProperty(entity, "a", Transaction.ToBytes());
-                if (ColoredTransaction != null)
+                if(ColoredTransaction != null)
                     Helper.SetEntityProperty(entity, "b", ColoredTransaction.ToBytes());
                 Helper.SetEntityProperty(entity, "c", Helper.SerializeList(PreviousTxOuts));
+                Helper.SetEntityProperty(entity, "d", Utils.ToBytes((ulong)Timestamp.UtcTicks, true));
                 return entity;
             }
 
@@ -89,7 +109,7 @@ namespace NBitcoin.Indexer
             }
             public TransactionEntryType GetType(string letter)
             {
-                switch (letter[0])
+                switch(letter[0])
                 {
                     case 'c':
                         return TransactionEntryType.Colored;
@@ -107,7 +127,7 @@ namespace NBitcoin.Indexer
             {
                 get
                 {
-                    if (_PartitionKey == null && TxId != null)
+                    if(_PartitionKey == null && TxId != null)
                     {
                         var b = TxId.ToBytes();
                         _PartitionKey = Helper.GetPartitionKey(10, new[] { b[0], b[1] }, 0, 2);
@@ -116,7 +136,7 @@ namespace NBitcoin.Indexer
                 }
             }
 
-            public DateTimeOffset? Timestamp
+            public DateTimeOffset Timestamp
             {
                 get;
                 set;
@@ -124,7 +144,7 @@ namespace NBitcoin.Indexer
 
             public Entity(uint256 txId, ColoredTransaction colored)
             {
-                if (txId == null)
+                if(txId == null)
                     throw new ArgumentNullException("txId");
                 TxId = txId;
                 ColoredTransaction = colored;
@@ -189,23 +209,26 @@ namespace NBitcoin.Indexer
             TransactionId = entities[0].TxId;
             BlockIds = entities.Select(e => e.BlockId).Where(b => b != null).ToArray();
             MempoolDate = entities.Where(e => e.Type == Entity.TransactionEntryType.Mempool)
-                                  .Select(e => e.Timestamp)
+                                  .Select(e => new DateTimeOffset?(e.Timestamp))
                                   .Min();
+            FirstSeen = entities
+                            .Select(e => e.Timestamp)
+                            .Min();
 
             var loadedEntity = entities.FirstOrDefault(e => e.Transaction != null && e.IsLoaded);
-            if (loadedEntity == null)
+            if(loadedEntity == null)
                 loadedEntity = entities.FirstOrDefault(e => e.Transaction != null);
-            if (loadedEntity != null)
+            if(loadedEntity != null)
             {
                 Transaction = loadedEntity.Transaction;
-                if (loadedEntity.Transaction.IsCoinBase)
+                if(loadedEntity.Transaction.IsCoinBase)
                 {
                     SpentCoins = new List<Spendable>();
                 }
                 else if(loadedEntity.IsLoaded)
                 {
                     SpentCoins = new List<Spendable>();
-                    for (int i = 0 ; i < Transaction.Inputs.Count ; i++)
+                    for(int i = 0; i < Transaction.Inputs.Count; i++)
                     {
                         SpentCoins.Add(new Spendable(Transaction.Inputs[i].PrevOut, loadedEntity.PreviousTxOuts[i]));
                     }
@@ -213,7 +236,7 @@ namespace NBitcoin.Indexer
             }
 
             var coloredLoadedEntity = entities.FirstOrDefault(e => e.ColoredTransaction != null);
-            if (coloredLoadedEntity != null)
+            if(coloredLoadedEntity != null)
             {
                 ColoredTransaction = coloredLoadedEntity.ColoredTransaction;
             }
@@ -235,9 +258,9 @@ namespace NBitcoin.Indexer
         {
             get
             {
-                if (SpentCoins == null || Transaction == null)
+                if(SpentCoins == null || Transaction == null)
                     return null;
-                if (Transaction.IsCoinBase)
+                if(Transaction.IsCoinBase)
                     return Money.Zero;
                 return SpentCoins.Select(o => o.TxOut.Value).Sum() - Transaction.TotalOut;
             }
@@ -262,6 +285,12 @@ namespace NBitcoin.Indexer
         /// Coins spent during the transaction, can be null if the indexer miss parent transactions
         /// </summary>
         public List<Spendable> SpentCoins
+        {
+            get;
+            set;
+        }
+
+        public DateTimeOffset FirstSeen
         {
             get;
             set;
