@@ -66,7 +66,7 @@ namespace NBitcoin.Indexer
                 _PreviousTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "c"));
 
                 var timestamp = Helper.GetEntityProperty(entity, "d");
-                if(timestamp != null && bytes.Length != 0)
+                if(timestamp != null && bytes.Length == 8)
                 {
                     Timestamp = new DateTimeOffset((long)ToUInt64(timestamp, 0), TimeSpan.Zero);
                 }
