@@ -53,7 +53,8 @@ namespace NBitcoin.Indexer
             bool hasOpReturn = false;
             foreach (var output in transaction.Outputs)
             {
-                if (TxNullDataTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
+                var bytes = output.ScriptPubKey.ToBytes(true);
+                if (bytes.Length != 0 && bytes[0] == (byte)OpcodeType.OP_RETURN)
                 {
                     hasOpReturn = true;
                     i++;
