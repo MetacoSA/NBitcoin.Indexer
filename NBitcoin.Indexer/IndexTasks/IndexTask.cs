@@ -13,7 +13,7 @@ namespace NBitcoin.Indexer.IndexTasks
 {
     public interface IIndexTask
     {
-        void Index(BlockFetcher blockFetcher);
+        void Index(BlockFetcher blockFetcher, TaskScheduler scheduler);
         bool SaveProgression
         {
             get;
@@ -27,7 +27,6 @@ namespace NBitcoin.Indexer.IndexTasks
     }
     public abstract class IndexTask<TIndexed> : IIndexTask
     {
-        volatile Exception _IndexingException;
 
         /// <summary>
         /// Fast forward indexing to the end (if scanning not useful)
@@ -40,70 +39,59 @@ namespace NBitcoin.Indexer.IndexTasks
             }
         }
 
-
-
-        public void Index(BlockFetcher blockFetcher)
+        public void Index(BlockFetcher blockFetcher, TaskScheduler scheduler)
         {
+            ConcurrentDictionary<Task, Task> tasks = new ConcurrentDictionary<Task, Task>();
             try
             {
                 SetThrottling();
-                if (EnsureIsSetup)
+                if(EnsureIsSetup)
                     EnsureSetup().Wait();
 
-
-                using (CustomThreadPoolTaskScheduler scheduler = CreateScheduler())
+                BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
+                if(!SkipToEnd)
                 {
-                    BulkImport<TIndexed> bulk = new BulkImport<TIndexed>(PartitionSize);
-                    if (!SkipToEnd)
+                    try
                     {
-                        try
-                        {
 
-                            foreach(var block in blockFetcher)
+                        foreach(var block in blockFetcher)
+                        {
+                            ThrowIfException();
+                            if(blockFetcher.NeedSave)
                             {
-                                ThrowIfException();
-                                if(blockFetcher.NeedSave)
+                                if(SaveProgression)
                                 {
-                                    if(SaveProgression)
-                                    {
-                                        EnqueueTasks(bulk, true, scheduler);
-                                        Save(blockFetcher, bulk, scheduler);
-                                    }
-                                }
-                                ProcessBlock(block, bulk);
-                                if(bulk.HasFullPartition)
-                                {
-                                    EnqueueTasks(bulk, false, scheduler);
+                                    EnqueueTasks(tasks, bulk, true, scheduler);
+                                    Save(tasks, blockFetcher, bulk);
                                 }
                             }
-                            EnqueueTasks(bulk, true, scheduler);
+                            ProcessBlock(block, bulk);
+                            if(bulk.HasFullPartition)
+                            {
+                                EnqueueTasks(tasks, bulk, false, scheduler);
+                            }
                         }
-                        catch(OperationCanceledException ex)
-                        {
-                            if(ex.CancellationToken != blockFetcher.CancellationToken)
-                                throw;
-                        }
+                        EnqueueTasks(tasks, bulk, true, scheduler);
                     }
-                    else
-                        blockFetcher.SkipToEnd();
-                    if (SaveProgression)
-                        Save(blockFetcher, bulk, scheduler);
-                    WaitFinished(scheduler);
+                    catch(OperationCanceledException ex)
+                    {
+                        if(ex.CancellationToken != blockFetcher.CancellationToken)
+                            throw;
+                    }
                 }
+                else
+                    blockFetcher.SkipToEnd();
+                if(SaveProgression)
+                    Save(tasks, blockFetcher, bulk);
+                WaitFinished(tasks);
+                ThrowIfException();
             }
-            catch (AggregateException aex)
+            catch(AggregateException aex)
             {
                 ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
                 throw;
             }
         }
-
-        protected CustomThreadPoolTaskScheduler CreateScheduler()
-        {
-            CustomThreadPoolTaskScheduler scheduler = new CustomThreadPoolTaskScheduler(ThreadCount, MaxQueued);
-            return scheduler;
-        }
-
 
         bool _EnsureIsSetup = true;
         public bool EnsureIsSetup
@@ -127,45 +115,60 @@ namespace NBitcoin.Indexer.IndexTasks
         ExponentialBackoff retry = new ExponentialBackoff(15, TimeSpan.FromMilliseconds(100),
                                                               TimeSpan.FromSeconds(10),
                                                               TimeSpan.FromMilliseconds(200));
-        private void EnqueueTasks(BulkImport<TIndexed> bulk, bool uncompletePartitions, CustomThreadPoolTaskScheduler scheduler)
+        private void EnqueueTasks(ConcurrentDictionary<Task, Task> tasks, BulkImport<TIndexed> bulk, bool uncompletePartitions, TaskScheduler scheduler)
         {
-            if (!uncompletePartitions && !bulk.HasFullPartition)
+            if(!uncompletePartitions && !bulk.HasFullPartition)
                 return;
-            if (uncompletePartitions)
+            if(uncompletePartitions)
                 bulk.FlushUncompletePartitions();
 
-            while (bulk._ReadyPartitions.Count != 0)
+            while(bulk._ReadyPartitions.Count != 0)
             {
                 var item = bulk._ReadyPartitions.Dequeue();
                 var task = retry.Do(() => IndexCore(item.Item1, item.Item2), scheduler);
-                task.ContinueWith(t =>
+                tasks.TryAdd(task, task);
+                task.ContinueWith(prev =>
                 {
-                    if (t.Exception != null)
-                    {
-                        _IndexingException = t.Exception.InnerException;
-                    }
+                    _Exception = prev.Exception ?? _Exception;
+                    tasks.TryRemove(prev, out prev);
                 });
+                if(tasks.Count > MaxQueued)
+                {
+                    WaitFinished(tasks, MaxQueued / 2);
+                }
             }
         }
 
-        private void Save(BlockFetcher fetcher, BulkImport<TIndexed> bulk, CustomThreadPoolTaskScheduler scheduler)
+        public int MaxQueued
         {
-            WaitFinished(scheduler);
+            get;
+            set;
+        }
+
+        Exception _Exception;
+
+        private void Save(ConcurrentDictionary<Task, Task> tasks, BlockFetcher fetcher, BulkImport<TIndexed> bulk)
+        {
+            WaitFinished(tasks);
+            ThrowIfException();
             fetcher.SaveCheckpoint();
         }
 
         int[] wait = new int[] { 100, 200, 400, 800, 1600 };
-        private void WaitFinished(CustomThreadPoolTaskScheduler taskScheduler)
+        private void WaitFinished(ConcurrentDictionary<Task, Task> tasks, int queuedTarget = 0)
         {
-            taskScheduler.WaitFinished();
-            ThrowIfException();
+            while(tasks.Count > queuedTarget)
+            {
+                Thread.Sleep(100);
+            }
         }
 
         private void ThrowIfException()
         {
-            if (_IndexingException != null)
-                ExceptionDispatchInfo.Capture(_IndexingException).Throw();
+            if(_Exception != null)
+                ExceptionDispatchInfo.Capture(_Exception).Throw();
         }
+
 
 
         protected TimeSpan _Timeout = TimeSpan.FromMinutes(5.0);
@@ -192,24 +195,11 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public IndexTask(IndexerConfiguration configuration)
         {
-            if (configuration == null)
+            if(configuration == null)
                 throw new ArgumentNullException("configuration");
-            ThreadCount = 50;
-            MaxQueued = 100;
             this.Configuration = configuration;
             SaveProgression = true;
-        }
-
-        public int ThreadCount
-        {
-            get;
-            set;
-        }
-
-        public int MaxQueued
-        {
-            get;
-            set;
+            MaxQueued = 100;
         }
     }
 }

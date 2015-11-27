@@ -11,7 +11,7 @@ namespace NBitcoin.Indexer
     public class CustomThreadPoolTaskScheduler : TaskScheduler, IDisposable
     {
         int _ThreadCount;
-        public CustomThreadPoolTaskScheduler(int threadCount, int maxQueued)
+        public CustomThreadPoolTaskScheduler(int threadCount, int maxQueued, string name = null)
         {
             _ThreadCount = threadCount;
             _Tasks = new BlockingCollection<Task>(new ConcurrentQueue<Task>(), maxQueued);
@@ -20,7 +20,8 @@ namespace NBitcoin.Indexer
             {
                 new Thread(Do)
                 {
-                    IsBackground = true
+                    IsBackground = true,
+                    Name = name
                 }.Start();
             }
         }

@@ -51,7 +51,7 @@ namespace NBitcoin.Indexer
         }
         public AzureIndexer(IndexerConfiguration configuration)
         {
-            if (configuration == null)
+            if(configuration == null)
                 throw new ArgumentNullException("configuration");
             TaskScheduler = TaskScheduler.Default;
             CheckpointInterval = TimeSpan.FromMinutes(15.0);
@@ -62,25 +62,30 @@ namespace NBitcoin.Indexer
 
         public long IndexTransactions(ChainBase chain = null)
         {
-            using (IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
+            using(IndexerTrace.NewCorrelation("Import transactions to azure started").Open())
             {
-                using (var node = Configuration.ConnectToNode(false))
+                using(var node = Configuration.ConnectToNode(false))
                 {
 
                     node.VersionHandshake();
 
                     var task = new IndexTransactionsTask(Configuration);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain));
+                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain), CreateScheduler("Index transactions"));
                     return task.IndexedEntities;
                 }
             }
         }
 
+        private TaskScheduler CreateScheduler(string name)
+        {
+            return new CustomThreadPoolTaskScheduler(50, 100, name);
+        }
+
         private Checkpoint GetCheckpointInternal(IndexerCheckpoints checkpoint)
         {
             var chk = GetCheckpoint(checkpoint);
-            if (IgnoreCheckpoints)
+            if(IgnoreCheckpoints)
                 chk = new Checkpoint(chk.CheckpointName, Configuration.Network, null, null);
             return chk;
         }
@@ -135,14 +140,14 @@ namespace NBitcoin.Indexer
 
         public long IndexBlocks(ChainBase chain = null)
         {
-            using (IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
+            using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
             {
-                using (var node = Configuration.ConnectToNode(false))
+                using(var node = Configuration.ConnectToNode(false))
                 {
                     node.VersionHandshake();
                     var task = new IndexBlocksTask(Configuration);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), node, chain));
+                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), node, chain), CreateScheduler("Index blocks"));
                     return task.IndexedBlocks;
                 }
             }
@@ -171,9 +176,9 @@ namespace NBitcoin.Indexer
         /// <returns>A BlockFetcher for enumerating blocks and saving progression</returns>
         public BlockFetcher GetBlockFetcher(Checkpoint checkpoint, Node node, ChainBase chain = null)
         {
-            if (checkpoint == null)
+            if(checkpoint == null)
                 throw new ArgumentNullException("checkpoint");
-            if (node == null)
+            if(node == null)
                 throw new ArgumentNullException("node");
             chain = chain ?? GetNodeChain(node);
             IndexerTrace.CheckpointLoaded(chain.FindFork(checkpoint.BlockLocator), checkpoint.CheckpointName);
@@ -193,21 +198,21 @@ namespace NBitcoin.Indexer
         /// <returns>A BlockFetcher for enumerating blocks and saving progression</returns>
         public BlockFetcher GetBlockFetcher(string checkpointName, Node node, ChainBase chain = null)
         {
-            if (checkpointName == null)
+            if(checkpointName == null)
                 throw new ArgumentNullException("checkpointName");
             return GetBlockFetcher(GetCheckpointRepository().GetCheckpoint(checkpointName), node, chain);
         }
 
         public int IndexOrderedBalances(ChainBase chain)
         {
-            using (IndexerTrace.NewCorrelation("Import balances to azure started").Open())
+            using(IndexerTrace.NewCorrelation("Import balances to azure started").Open())
             {
-                using (var node = Configuration.ConnectToNode(false))
+                using(var node = Configuration.ConnectToNode(false))
                 {
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, null);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Balances), node, chain));
+                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Balances), node, chain), CreateScheduler("Index balances"));
                     return task.IndexedEntities;
                 }
             }
@@ -220,14 +225,14 @@ namespace NBitcoin.Indexer
 
         public int IndexWalletBalances(ChainBase chain)
         {
-            using (IndexerTrace.NewCorrelation("Import wallet balances to azure started").Open())
+            using(IndexerTrace.NewCorrelation("Import wallet balances to azure started").Open())
             {
-                using (var node = Configuration.ConnectToNode(false))
+                using(var node = Configuration.ConnectToNode(false))
                 {
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, Configuration.CreateIndexerClient().GetAllWalletRules());
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Wallets), node, chain));
+                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Wallets), node, chain), CreateScheduler("Index wallets"));
                     return task.IndexedEntities;
                 }
             }
@@ -287,7 +292,7 @@ namespace NBitcoin.Indexer
         public ChainBase GetNodeChain()
         {
             IndexerTrace.Information("Connecting to node " + Configuration.Node);
-            using (var node = Configuration.ConnectToNode(false))
+            using(var node = Configuration.ConnectToNode(false))
             {
                 IndexerTrace.Information("Handshaking");
                 node.VersionHandshake();
@@ -316,9 +321,9 @@ namespace NBitcoin.Indexer
             List<ChainPartEntry> entries = new List<ChainPartEntry>(((chain.Height - startHeight) / BlockHeaderPerRow) + 5);
             startHeight = startHeight - (startHeight % BlockHeaderPerRow);
             ChainPartEntry chainPart = null;
-            for (int i = startHeight ; i <= chain.Tip.Height ; i++)
+            for(int i = startHeight; i <= chain.Tip.Height; i++)
             {
-                if (chainPart == null)
+                if(chainPart == null)
                     chainPart = new ChainPartEntry()
                     {
                         ChainOffset = i
@@ -326,13 +331,13 @@ namespace NBitcoin.Indexer
 
                 var block = chain.GetBlock(i);
                 chainPart.BlockHeaders.Add(block.Header);
-                if (chainPart.BlockHeaders.Count == BlockHeaderPerRow)
+                if(chainPart.BlockHeaders.Count == BlockHeaderPerRow)
                 {
                     entries.Add(chainPart);
                     chainPart = null;
                 }
             }
-            if (chainPart != null)
+            if(chainPart != null)
                 entries.Add(chainPart);
             Index(entries);
         }
@@ -342,17 +347,17 @@ namespace NBitcoin.Indexer
             CloudTable table = Configuration.GetChainTable();
             TableBatchOperation batch = new TableBatchOperation();
             var last = chainParts[chainParts.Count - 1];
-            foreach (var entry in chainParts)
+            foreach(var entry in chainParts)
             {
                 batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
-                if (batch.Count == 100)
+                if(batch.Count == 100)
                 {
                     table.ExecuteBatch(batch);
                     batch = new TableBatchOperation();
                 }
                 IndexerTrace.RemainingBlockChain(entry.ChainOffset, last.ChainOffset + last.BlockHeaders.Count - 1);
             }
-            if (batch.Count > 0)
+            if(batch.Count > 0)
             {
                 table.ExecuteBatch(batch);
             }
@@ -379,11 +384,11 @@ namespace NBitcoin.Indexer
 
         public void IndexChain(ChainBase chain)
         {
-            if (chain == null)
+            if(chain == null)
                 throw new ArgumentNullException("chain");
             SetThrottling();
 
-            using (IndexerTrace.NewCorrelation("Index main chain to azure started").Open())
+            using(IndexerTrace.NewCorrelation("Index main chain to azure started").Open())
             {
                 Configuration.GetChainTable().CreateIfNotExists();
                 IndexerTrace.InputChainTip(chain.Tip);
@@ -391,16 +396,16 @@ namespace NBitcoin.Indexer
                 var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
 
                 var height = 0;
-                if (changes.Count != 0)
+                if(changes.Count != 0)
                 {
                     IndexerTrace.IndexedChainTip(changes[0].BlockId, changes[0].Height);
-                    if (changes[0].Height > chain.Tip.Height)
+                    if(changes[0].Height > chain.Tip.Height)
                     {
                         IndexerTrace.InputChainIsLate();
                         return;
                     }
                     height = changes[changes.Count - 1].Height + 1;
-                    if (height > chain.Height)
+                    if(height > chain.Height)
                     {
                         IndexerTrace.IndexedChainIsUpToDate(chain.Tip);
                         return;
