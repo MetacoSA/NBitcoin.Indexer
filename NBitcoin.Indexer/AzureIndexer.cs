@@ -71,13 +71,16 @@ namespace NBitcoin.Indexer
 
                     var task = new IndexTransactionsTask(Configuration);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain), CreateScheduler("Index transactions"));
+                    using(var scheduler = CreateScheduler("Index transactions"))
+                    {
+                        task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Transactions), node, chain), scheduler);
+                    }
                     return task.IndexedEntities;
                 }
             }
         }
 
-        private TaskScheduler CreateScheduler(string name)
+        private CustomThreadPoolTaskScheduler CreateScheduler(string name)
         {
             return new CustomThreadPoolTaskScheduler(50, 100, name);
         }
@@ -147,7 +150,10 @@ namespace NBitcoin.Indexer
                     node.VersionHandshake();
                     var task = new IndexBlocksTask(Configuration);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), node, chain), CreateScheduler("Index blocks"));
+                    using(var scheduler = CreateScheduler("Index blocks"))
+                    {
+                        task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Blocks), node, chain), scheduler);
+                    }
                     return task.IndexedBlocks;
                 }
             }
@@ -212,7 +218,10 @@ namespace NBitcoin.Indexer
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, null);
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Balances), node, chain), CreateScheduler("Index balances"));
+                    using(var scheduler = CreateScheduler("Index balances"))
+                    {
+                        task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Balances), node, chain), scheduler);
+                    }
                     return task.IndexedEntities;
                 }
             }
@@ -232,7 +241,10 @@ namespace NBitcoin.Indexer
                     node.VersionHandshake();
                     var task = new IndexBalanceTask(Configuration, Configuration.CreateIndexerClient().GetAllWalletRules());
                     task.SaveProgression = !IgnoreCheckpoints;
-                    task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Wallets), node, chain), CreateScheduler("Index wallets"));
+                    using(var scheduler = CreateScheduler("Index wallets"))
+                    {
+                        task.Index(GetBlockFetcher(GetCheckpointInternal(IndexerCheckpoints.Wallets), node, chain), scheduler);
+                    }
                     return task.IndexedEntities;
                 }
             }
