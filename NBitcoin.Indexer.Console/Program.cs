@@ -34,6 +34,7 @@ namespace NBitcoin.Indexer.Console
 
                     var indexer = AzureIndexer.CreateIndexer();
                     indexer.Configuration.EnsureSetup();
+                    indexer.TaskScheduler = new CustomThreadPoolTaskScheduler(30, 100);
                     indexer.CheckpointInterval = TimeSpan.Parse(options.CheckpointInterval);
                     indexer.IgnoreCheckpoints = options.IgnoreCheckpoints;
                     indexer.FromHeight = options.From;

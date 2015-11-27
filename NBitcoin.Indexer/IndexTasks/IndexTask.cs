@@ -43,7 +43,7 @@ namespace NBitcoin.Indexer.IndexTasks
         {
             ConcurrentDictionary<Task, Task> tasks = new ConcurrentDictionary<Task, Task>();
             try
-            {
+            {               
                 SetThrottling();
                 if(EnsureIsSetup)
                     EnsureSetup().Wait();

@@ -37,6 +37,8 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public void Index(Block[] blocks, TaskScheduler taskScheduler)
         {
+            if(taskScheduler == null)
+                throw new ArgumentNullException("taskScheduler");
             try
             {
                 IndexAsync(blocks, taskScheduler).Wait();
@@ -50,6 +52,8 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public Task IndexAsync(Block[] blocks, TaskScheduler taskScheduler)
         {
+            if(taskScheduler == null)
+                throw new ArgumentNullException("taskScheduler");
             var tasks = blocks
                 .Select(b => new Task(() => IndexCore("o", new[]{new BlockInfo()
                 {
