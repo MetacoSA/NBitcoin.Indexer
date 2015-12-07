@@ -117,22 +117,39 @@ namespace NBitcoin.Indexer
             var task = new IndexBlocksTask(Configuration);
             task.Index(blocks, TaskScheduler);
         }
+        public Task IndexAsync(params Block[] blocks)
+        {
+            var task = new IndexBlocksTask(Configuration);
+            return task.IndexAsync(blocks, TaskScheduler);
+        }
         public void Index(params TransactionEntry.Entity[] entities)
         {
             Index(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
+        }
+        public Task IndexAsync(params TransactionEntry.Entity[] entities)
+        {
+            return IndexAsync(entities.Select(e => e.CreateTableEntity()).ToArray(), Configuration.GetTransactionTable());
         }
 
         public void Index(IEnumerable<OrderedBalanceChange> balances)
         {
             Index(balances.Select(b => b.ToEntity()), Configuration.GetBalanceTable());
         }
+        public Task IndexAsync(IEnumerable<OrderedBalanceChange> balances)
+        {
+            return IndexAsync(balances.Select(b => b.ToEntity()), Configuration.GetBalanceTable());
+        }
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
             var task = new IndexTableEntitiesTask(Configuration, table);
             task.Index(entities, TaskScheduler);
         }
-
-
+        private Task IndexAsync(IEnumerable<ITableEntity> entities, CloudTable table)
+        {
+            var task = new IndexTableEntitiesTask(Configuration, table);
+            return task.IndexAsync(entities, TaskScheduler);
+        }        
+        
         public long IndexBlocks(ChainBase chain = null)
         {
             using(IndexerTrace.NewCorrelation("Import blocks to azure started").Open())
