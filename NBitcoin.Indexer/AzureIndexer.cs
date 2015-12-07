@@ -281,6 +281,17 @@ namespace NBitcoin.Indexer
 
         public void IndexWalletOrderedBalance(int height, Block block, WalletRuleEntryCollection walletRules)
         {
+            try
+            {
+                IndexWalletOrderedBalanceAsync(height, block, walletRules).Wait();
+            }
+            catch(AggregateException ex)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            }
+        }
+        public Task IndexWalletOrderedBalanceAsync(int height, Block block, WalletRuleEntryCollection walletRules)
+        {
             var table = Configuration.GetBalanceTable();
             var blockId = block == null ? null : block.GetHash();
 
@@ -291,7 +302,7 @@ namespace NBitcoin.Indexer
                     .Select(t => t.ToEntity())
                     .AsEnumerable();
 
-            Index(entities, table);
+            return IndexAsync(entities, table);
         }
 
         public void IndexOrderedBalance(Transaction tx)
@@ -299,6 +310,12 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetBalanceTable();
             var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity()).AsEnumerable();
             Index(entities, table);
+        }
+        public Task IndexOrderedBalanceAsync(Transaction tx)
+        {
+            var table = Configuration.GetBalanceTable();
+            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity()).AsEnumerable();
+            return IndexAsync(entities, table);
         }
 
         public ChainBase GetNodeChain()
