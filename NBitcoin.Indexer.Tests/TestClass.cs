@@ -112,6 +112,22 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(3, tester.Indexer.IndexBlocks()); //23,24,25
             }
         }
+
+        [Fact]
+        public void CanSerializeDeserializeTableEntity()
+        {
+            DynamicTableEntity entity = new DynamicTableEntity("partition", "row");
+            entity.Properties.Add("propertyname", new EntityProperty("propertyvalue"));
+            var val = entity.Serialize();
+
+            DynamicTableEntity entity2 = new DynamicTableEntity();
+            entity2.Deserialize(val);
+
+            Assert.Equal("partition", entity2.PartitionKey);
+            Assert.Equal("row", entity2.RowKey);
+            Assert.Equal("propertyvalue", entity2.Properties["propertyname"].StringValue);
+            Assert.True(entity2.Serialize().SequenceEqual(entity.Serialize()));
+        }
         [Fact]
         public void CanIndexTransactions()
         {
@@ -996,6 +1012,23 @@ namespace NBitcoin.Indexer.Tests
             //    }
             //}
             //Thread.Sleep(1000000);
+        }
+
+        [Fact]
+        public void CanIndexHugeTransaction()
+        {
+            using(var tester = CreateTester())
+            {
+                var builder = tester.CreateChainBuilder();
+                Transaction tx = new Transaction();
+                var k = new Script(RandomUtils.GetBytes(1000));
+                for(int i = 0; i < 2000; i++)
+                {
+                    tx.AddOutput(new TxOut(Money.Zero, k));
+                }
+                builder.Emit(tx);
+                Assert.NotNull(tester.Client.GetTransaction(false, tx.GetHash()));
+            }
         }
 
         [Fact]

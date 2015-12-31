@@ -1,6 +1,15 @@
-﻿using System;
+﻿using Microsoft.Data.OData;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Auth;
+using Microsoft.WindowsAzure.Storage.Table;
+using Microsoft.WindowsAzure.Storage.Table.Protocol;
+using NBitcoin.Crypto;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -29,21 +38,21 @@ namespace NBitcoin.Indexer
             CoinCollection result = new CoinCollection();
             Dictionary<OutPoint, ICoin> spentCoins = new Dictionary<OutPoint, ICoin>();
             Dictionary<OutPoint, ICoin> receivedCoins = new Dictionary<OutPoint, ICoin>();
-            foreach (var entry in entries)
+            foreach(var entry in entries)
             {
-                if (entry.SpentCoins != null)
+                if(entry.SpentCoins != null)
                 {
-                    foreach (var c in entry.SpentCoins)
+                    foreach(var c in entry.SpentCoins)
                     {
                         spentCoins.AddOrReplace(c.Outpoint, c);
                     }
                 }
-                foreach (var c in entry.ReceivedCoins)
+                foreach(var c in entry.ReceivedCoins)
                 {
                     receivedCoins.AddOrReplace(c.Outpoint, c);
                 }
             }
-            if (spent)
+            if(spent)
             {
                 result.AddRange(spentCoins.Values.Select(s => s));
             }
@@ -96,13 +105,104 @@ namespace NBitcoin.Indexer
 
         private static bool IsMinConf(OrderedBalanceChange e, int minConfirmation, ChainBase chain)
         {
-            if (e.BlockId == null)
+            if(e.BlockId == null)
                 return minConfirmation == 0;
 
             var b = chain.GetBlock(e.BlockId);
-            if (b == null)
+            if(b == null)
                 return false;
             return (chain.Height - b.Height) + 1 >= minConfirmation;
+        }
+
+        public static void MakeFat(this DynamicTableEntity entity, int size)
+        {
+            entity.Properties.Clear();
+            entity.Properties.Add("fat", new EntityProperty(size));
+        }
+        public static bool IsFat(this DynamicTableEntity entity)
+        {
+            return entity.Properties.Any(p => p.Key.Equals("fat", StringComparison.OrdinalIgnoreCase) &&
+                                              p.Value.PropertyType == EdmType.Int32);
+        }
+        public static string GetFatBlobName(this ITableEntity entity)
+        {
+            return "unk" + Hashes.Hash256(Encoding.UTF8.GetBytes(entity.PartitionKey + entity.RowKey)).ToString();
+        }
+        public static byte[] Serialize(this ITableEntity entity)
+        {
+            MemoryStream ms = new MemoryStream();
+            using(var messageWriter = new ODataMessageWriter(new Message(ms), new ODataMessageWriterSettings()))
+            {
+                // Create an entry writer to write a top-level entry to the message.
+                ODataWriter entryWriter = messageWriter.CreateODataEntryWriter();
+                var writeODataEntity = typeof(TableConstants).Assembly.GetType("Microsoft.WindowsAzure.Storage.Table.Protocol.TableOperationHttpWebRequestFactory")
+                    .GetMethod("WriteOdataEntity", BindingFlags.NonPublic | BindingFlags.Static);
+
+                writeODataEntity.Invoke(null, new object[] { entity, TableOperationType.Insert, null, entryWriter });
+                return ms.ToArray();
+            }
+        }
+
+        public static void Deserialize(this ITableEntity entity, byte[] value)
+        {
+            MemoryStream ms = new MemoryStream(value);
+            using(ODataMessageReader messageReader = new ODataMessageReader(new Message(ms), new ODataMessageReaderSettings()
+            {
+                MessageQuotas = new ODataMessageQuotas()
+                {
+                    MaxReceivedMessageSize = 20 * 1024 * 1024
+                }
+            }))
+            {
+                ODataReader reader = messageReader.CreateODataEntryReader();
+                var readAndUpdateTableEntity = typeof(TableConstants).Assembly.GetType("Microsoft.WindowsAzure.Storage.Table.Protocol.TableOperationHttpResponseParsers")
+                    .GetMethod("ReadAndUpdateTableEntity", BindingFlags.NonPublic | BindingFlags.Static);
+                reader.Read();
+                readAndUpdateTableEntity.Invoke(null, new object[] { entity, reader.Item, 31, null });
+            }
+        }
+
+        internal class Message : IODataResponseMessage
+        {
+            private readonly Stream stream;
+            private readonly Dictionary<string, string> headers = new Dictionary<string, string>();
+
+            public Message(Stream stream)
+            {
+                this.stream = stream;
+                SetHeader("Content-Type", "application/atom+xml");
+            }
+
+            public string GetHeader(string headerName)
+            {
+                string value;
+                headers.TryGetValue(headerName, out value);
+                return value;
+            }
+
+            public void SetHeader(string headerName, string headerValue)
+            {
+                this.headers.Add(headerName, headerValue);
+            }
+
+            public Stream GetStream()
+            {
+                return this.stream;
+            }
+
+            public IEnumerable<KeyValuePair<string, string>> Headers
+            {
+                get
+                {
+                    return this.headers;
+                }
+            }
+
+            public int StatusCode
+            {
+                get;
+                set;
+            }
         }
     }
 }

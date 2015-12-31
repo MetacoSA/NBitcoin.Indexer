@@ -150,7 +150,13 @@ namespace NBitcoin.Indexer.IndexTasks
                     else if (IsError(ex, "EntityTooLarge"))
                     {
                         var op = GetFaultyOperation(ex, batch);
-                        batch.Remove(op);
+                        var entity = (DynamicTableEntity)GetEntity(op);
+                        var serialized = entity.Serialize();
+                        Configuration
+                            .GetBlocksContainer()
+                            .GetBlockBlobReference(entity.GetFatBlobName())
+                            .UploadFromByteArray(serialized, 0, serialized.Length);
+                        entity.MakeFat(serialized.Length);                       
                         batches.Enqueue(batch);
                     }
                     else
@@ -183,6 +189,8 @@ namespace NBitcoin.Indexer.IndexTasks
 
         private TableOperation GetFaultyOperation(Exception ex, TableBatchOperation batch)
         {
+            if(batch.Count == 1)
+                return batch[0];
             var storage = ex as StorageException;
             if (storage == null)
                 return null;

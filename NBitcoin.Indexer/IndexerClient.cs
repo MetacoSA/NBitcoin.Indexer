@@ -113,13 +113,19 @@ namespace NBitcoin.Indexer
                                         )
                                   ));
             query.TakeCount = 10; //Should not have more
-            var entities = (await table.ExecuteQuerySegmentedAsync(query, null).ConfigureAwait(false))
-                               .Select(e => new TransactionEntry.Entity(e)).ToArray();
-            if(entities.Length == 0)
+            List<TransactionEntry.Entity> entities = new List<TransactionEntry.Entity>();
+            foreach(var e in await table.ExecuteQuerySegmentedAsync(query, null).ConfigureAwait(false))
+            {
+                if(e.IsFat())
+                    entities.Add(new TransactionEntry.Entity(await FetchFatEntity(e).ConfigureAwait(false)));
+                else
+                    entities.Add(new TransactionEntry.Entity(e));
+            }
+            if(entities.Count == 0)
                 result = null;
             else
             {
-                result = new TransactionEntry(entities);
+                result = new TransactionEntry(entities.ToArray());
                 if(result.Transaction == null)
                 {
                     foreach(var block in result.BlockIds.Select(id => GetBlock(id)).Where(b => b != null))
@@ -136,6 +142,7 @@ namespace NBitcoin.Indexer
 
                 if(fetchColor && result.ColoredTransaction == null)
                 {
+                    OrderedBalanceChange a;a.CustomData
                     result.ColoredTransaction = await ColoredTransaction.FetchColorsAsync(txId, result.Transaction, new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
                     entities[0].ColoredTransaction = result.ColoredTransaction;
                     if(entities[0].ColoredTransaction != null)
@@ -176,6 +183,19 @@ namespace NBitcoin.Indexer
                 }
             }
             return result != null && result.Transaction != null ? result : null;
+        }
+
+        private async Task<DynamicTableEntity> FetchFatEntity(DynamicTableEntity e)
+        {
+            var size = e.Properties["fat"].Int32Value.Value;
+            byte[] bytes = new byte[size];
+            await Configuration
+                .GetBlocksContainer()
+                .GetBlockBlobReference(e.GetFatBlobName())
+                .DownloadRangeToByteArrayAsync(bytes, 0, 0, bytes.Length).ConfigureAwait(false);
+            e = new DynamicTableEntity();
+            e.Deserialize(bytes);
+            return e;
         }
 
         /// <summary>
