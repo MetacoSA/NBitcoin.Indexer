@@ -147,7 +147,7 @@ namespace NBitcoin.Indexer.IndexTasks
                         batches.Enqueue(ToBatch(batch1));
                         batches.Enqueue(ToBatch(batch2));
                     }
-                    else if (IsError(ex, "EntityTooLarge"))
+                    else if (Helper.IsError(ex, "EntityTooLarge"))
                     {
                         var op = GetFaultyOperation(ex, batch);
                         var entity = (DynamicTableEntity)GetEntity(op);
@@ -206,20 +206,10 @@ namespace NBitcoin.Indexer.IndexTasks
         private TableBatchOperation ToBatch(List<TableOperation> ops)
         {
             var op = new TableBatchOperation();
-            foreach (var operation in ops)
+            foreach(var operation in ops)
                 op.Add(operation);
             return op;
-        }
-
-        private bool IsError(Exception ex, string code)
-        {
-            var storage = ex as StorageException;
-            if (storage == null)
-                return false;
-            return storage.RequestInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation.ErrorCode == code;
-        }
+        }        
 
 
     }

@@ -1021,13 +1021,24 @@ namespace NBitcoin.Indexer.Tests
             {
                 var builder = tester.CreateChainBuilder();
                 Transaction tx = new Transaction();
-                var k = new Script(RandomUtils.GetBytes(1000));
-                for(int i = 0; i < 2000; i++)
-                {
-                    tx.AddOutput(new TxOut(Money.Zero, k));
-                }
-                builder.Emit(tx);
-                Assert.NotNull(tester.Client.GetTransaction(false, tx.GetHash()));
+                for(int i = 0; i < 4; i++)
+                    tx.AddOutput(new TxOut(Money.Zero, new Script(new byte[500 * 1024])));
+                tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
+
+                var indexed = tester.Client.GetTransaction(tx.GetHash());
+                Assert.NotNull(indexed);
+                Assert.True(tx.GetHash() == indexed.Transaction.GetHash());
+
+                Transaction tx2 = new Transaction();
+                var txhash = tx.GetHash();
+                for(int i = 0; i < 4; i++)
+                    tx2.Inputs.Add(new TxIn(new OutPoint(txhash, i)));
+                tx2.AddOutput(new TxOut(Money.Zero, new Script(RandomUtils.GetBytes(500 * 1024))));
+                tester.Indexer.Index(new TransactionEntry.Entity(null, tx2, null));
+                indexed = tester.Client.GetTransaction(tx2.GetHash());
+                Assert.NotNull(indexed);
+                Assert.True(tx2.GetHash() == indexed.Transaction.GetHash());
+                Assert.True(indexed.SpentCoins.Count == 4);
             }
         }
 

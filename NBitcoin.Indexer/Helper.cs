@@ -1,4 +1,5 @@
-﻿using Microsoft.WindowsAzure.Storage.Table;
+﻿using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.DataEncoders;
 using NBitcoin.Indexer.Converters;
 using Newtonsoft.Json;
@@ -148,6 +149,16 @@ namespace NBitcoin.Indexer
         internal static T DeserializeObject<T>(string str)
         {
             return JsonConvert.DeserializeObject<T>(str, Settings);
+        }
+
+        public static bool IsError(Exception ex, string code)
+        {
+            var storage = ex as StorageException;
+            if(storage == null)
+                return false;
+            return storage.RequestInformation != null
+                && storage.RequestInformation.ExtendedErrorInformation != null
+                && storage.RequestInformation.ExtendedErrorInformation.ErrorCode == code;
         }
 
         internal static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());

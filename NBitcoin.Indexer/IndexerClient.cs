@@ -134,7 +134,7 @@ namespace NBitcoin.Indexer
                         entities[0].Transaction = result.Transaction;
                         if(entities[0].Transaction != null)
                         {
-                            await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                            await UpdateEntity(table, entities[0].CreateTableEntity()).ConfigureAwait(false);
                         }
                         break;
                     }
@@ -142,12 +142,11 @@ namespace NBitcoin.Indexer
 
                 if(fetchColor && result.ColoredTransaction == null)
                 {
-                    OrderedBalanceChange a;a.CustomData
                     result.ColoredTransaction = await ColoredTransaction.FetchColorsAsync(txId, result.Transaction, new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
                     entities[0].ColoredTransaction = result.ColoredTransaction;
                     if(entities[0].ColoredTransaction != null)
                     {
-                        await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                        await UpdateEntity(table, entities[0].CreateTableEntity()).ConfigureAwait(false);
                     }
                 }
                 var needTxOut = result.SpentCoins == null && loadPreviousOutput && result.Transaction != null;
@@ -178,11 +177,32 @@ namespace NBitcoin.Indexer
                     entities[0].PreviousTxOuts.AddRange(outputs);
                     if(entities[0].IsLoaded)
                     {
-                        await table.ExecuteAsync(TableOperation.Merge(entities[0].CreateTableEntity())).ConfigureAwait(false);
+                        await UpdateEntity(table, entities[0].CreateTableEntity()).ConfigureAwait(false);
                     }
                 }
             }
             return result != null && result.Transaction != null ? result : null;
+        }
+
+        private async Task UpdateEntity(CloudTable table, DynamicTableEntity entity)
+        {
+            try
+            {
+                await table.ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
+                return;
+            }
+            catch(StorageException ex)
+            {
+                if(!Helper.IsError(ex, "EntityTooLarge"))
+                    throw;
+            }
+            var serialized = entity.Serialize();
+            Configuration
+                    .GetBlocksContainer()
+                    .GetBlockBlobReference(entity.GetFatBlobName())
+                    .UploadFromByteArray(serialized, 0, serialized.Length);
+            entity.MakeFat(serialized.Length);
+            await table.ExecuteAsync(TableOperation.InsertOrReplace(entity)).ConfigureAwait(false);
         }
 
         private async Task<DynamicTableEntity> FetchFatEntity(DynamicTableEntity e)
