@@ -1,4 +1,5 @@
-﻿using NBitcoin.Indexer.Internal;
+﻿using NBitcoin.Crypto;
+using NBitcoin.Indexer.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,21 +10,31 @@ namespace NBitcoin.Indexer
 {
     public class WalletRuleEntryCollection : IEnumerable<WalletRuleEntry>
     {
-        List<WalletRuleEntry> _WalletRules;
+        readonly List<WalletRuleEntry> _WalletRules;
+        readonly HashSet<Tuple<string,string>> _WalletsIds = new HashSet<Tuple<string,string>>();
 
-        MultiValueDictionary<string, WalletRuleEntry> _EntriesByWallet;
-        ILookup<string, WalletRuleEntry> _EntriesByWalletLookup;
+        readonly MultiValueDictionary<string, WalletRuleEntry> _EntriesByWallet;
+        readonly ILookup<string, WalletRuleEntry> _EntriesByWalletLookup;
 
-        MultiValueDictionary<Script, WalletRuleEntry> _EntriesByAddress;
-        ILookup<Script, WalletRuleEntry> _EntriesByAddressLookup;
+        readonly MultiValueDictionary<Script, WalletRuleEntry> _EntriesByAddress;
+        readonly ILookup<Script, WalletRuleEntry> _EntriesByAddressLookup;
 
 
         internal WalletRuleEntryCollection(IEnumerable<WalletRuleEntry> walletRules)
         {
-            if (walletRules == null)
+            if(walletRules == null)
                 throw new ArgumentNullException("walletRules");
 
-            _WalletRules = new List<WalletRuleEntry>(walletRules);
+            _WalletRules = new List<WalletRuleEntry>();            
+            _EntriesByWallet = new MultiValueDictionary<string, WalletRuleEntry>();
+            _EntriesByWalletLookup = _EntriesByWallet.AsLookup();
+
+            _EntriesByAddress = new MultiValueDictionary<Script, WalletRuleEntry>();
+            _EntriesByAddressLookup = _EntriesByAddress.AsLookup();
+            foreach(var rule in walletRules)
+            {
+                Add(rule);
+            }
         }
 
         public int Count
@@ -34,43 +45,30 @@ namespace NBitcoin.Indexer
             }
         }
 
-        public void Add(WalletRuleEntry entry)
+        public bool Add(WalletRuleEntry entry)
         {
+            if(!_WalletsIds.Add(GetId(entry)))
+                return false;
             _WalletRules.Add(entry);
-            Added(entry);
+            _EntriesByWallet.Add(entry.WalletId, entry);
+            var rule = entry.Rule as ScriptRule;
+            if(rule != null)
+                _EntriesByAddress.Add(rule.ScriptPubKey, entry);
+            return true;
         }
 
-        private void Added(WalletRuleEntry entry)
+        private Tuple<string,string> GetId(WalletRuleEntry entry)
         {
-            if (_EntriesByWalletLookup != null)
-            {
-                _EntriesByWallet.Add(entry.WalletId, entry);
-            }
-            if (_EntriesByAddress != null)
-            {
-                var rule = entry.Rule as ScriptRule;
-                if (rule != null)
-                    _EntriesByAddress.Add(rule.ScriptPubKey, entry);
-            }
+            return Tuple.Create(entry.WalletId, entry.Rule.Id);
         }
         public void AddRange(IEnumerable<WalletRuleEntry> entries)
         {
-            _WalletRules.AddRange(entries);
-            foreach (var e in entries)
-                Added(e);
+            foreach(var entry in entries)
+                Add(entry);
         }
 
         public IEnumerable<WalletRuleEntry> GetRulesForWallet(string walletName)
         {
-            if (_EntriesByWalletLookup == null)
-            {
-                _EntriesByWallet = new MultiValueDictionary<string, WalletRuleEntry>();
-                foreach (var entry in this)
-                {
-                    _EntriesByWallet.Add(entry.WalletId, entry);
-                }
-                _EntriesByWalletLookup = _EntriesByWallet.AsLookup();
-            }
             return _EntriesByWalletLookup[walletName];
         }
 
@@ -82,24 +80,8 @@ namespace NBitcoin.Indexer
 
         public IEnumerable<WalletRuleEntry> GetRulesFor(Script script)
         {
-            if (_EntriesByAddress == null)
-            {
-                _EntriesByAddress = new MultiValueDictionary<Script, WalletRuleEntry>();
-                foreach (var entry in this)
-                {
-                    var rule = entry.Rule as ScriptRule;
-                    if (rule != null)
-                    {
-                        _EntriesByAddress.Add(rule.ScriptPubKey, entry);
-                    }
-                }
-                _EntriesByAddressLookup = _EntriesByAddress.AsLookup();
-            }
             return _EntriesByAddressLookup[script];
         }
-
-
-
 
         #region IEnumerable<WalletRuleEntry> Members
 
