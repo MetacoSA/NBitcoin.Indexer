@@ -24,21 +24,26 @@ namespace NBitcoin.Indexer
             return config;
         }
 
-        public void EnsureSetup()
+        public Task EnsureSetupAsync()
         {
             var tasks = EnumerateTables()
                 .Select(t => t.CreateIfNotExistsAsync())
-                .ToArray();
+                .OfType<Task>()
+                .ToList();
+            tasks.Add(GetBlocksContainer().CreateIfNotExistsAsync());
+            return Task.WhenAll(tasks.ToArray());
+        }
+        public void EnsureSetup()
+        {
             try
             {
-                Task.WaitAll(tasks);
+                EnsureSetupAsync().Wait();
             }
             catch (AggregateException aex)
             {
                 ExceptionDispatchInfo.Capture(aex).Throw();
                 throw;
             }
-            GetBlocksContainer().CreateIfNotExists();
         }
 
         protected static void Fill(IndexerConfiguration config)
