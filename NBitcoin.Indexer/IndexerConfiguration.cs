@@ -56,9 +56,12 @@ namespace NBitcoin.Indexer
             config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
                                     Network.Main :
                              network.Equals("test", StringComparison.OrdinalIgnoreCase) ?
-                             Network.TestNet : null;
+                             Network.TestNet : 
+                             network.Equals("seg", StringComparison.OrdinalIgnoreCase) ?
+                             Network.SegNet :
+                             null;
             if (config.Network == null)
-                throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main or Test)");
+                throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
             config.Node = GetValue("Node", false);
             config.CheckpointSetName = GetValue("CheckpointSetName", false);
             if (string.IsNullOrWhiteSpace(config.CheckpointSetName))

@@ -1192,6 +1192,86 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [Fact]
+        public void CanGetOrderedBalancesP2WPKH()
+        {
+            using(var tester = CreateTester())
+            {
+                var bob = new Key();
+                var alice = new Key();
+                var satoshi = new Key();
+
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.EmitMoney(bob.PubKey.WitHash, "20.0");
+                chainBuilder.EmitMoney(alice.PubKey.WitHash, "50.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.SyncIndexer();
+
+                var aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArray();
+                Assert.True(aliceBalance.Length == 1);
+
+                var tx = new TransactionBuilder()
+                    .AddCoins(aliceBalance[0].ReceivedCoins)
+                    .AddKeys(alice)
+                    .Send(bob.PubKey.WitHash, "5.0")
+                    .SetChange(alice.PubKey.WitHash)
+                    .BuildTransaction(true);
+                chainBuilder.Emit(tx);
+
+                var block = chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArray();
+                Assert.True(aliceBalance.Length == 2);
+                Assert.True(aliceBalance[0].Amount == -Money.Coins(5.0m));
+
+                var bobBalance = tester.Client.GetOrderedBalance(bob.PubKey.WitHash).ToArray();
+                Assert.True(bobBalance.Length == 2);
+                Assert.True(bobBalance[0].Amount == Money.Coins(5.0m));
+            }
+        }
+
+        [Fact]
+        public void CanGetOrderedBalancesP2WSH()
+        {
+            using(var tester = CreateTester())
+            {
+                var bob = new Key();
+                var alice = new Key();
+                var satoshi = new Key();
+
+                var chainBuilder = tester.CreateChainBuilder();
+                chainBuilder.EmitMoney(bob.PubKey.ScriptPubKey.WitHash, "20.0");
+                chainBuilder.EmitMoney(alice.PubKey.ScriptPubKey.WitHash, "50.0");
+                chainBuilder.SubmitBlock();
+
+                chainBuilder.SyncIndexer();
+
+                var aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArray();
+                Assert.True(aliceBalance.Length == 1);
+
+                var tx = new TransactionBuilder()
+                    .AddCoins(new WitScriptCoin((Coin)aliceBalance[0].ReceivedCoins[0], alice.PubKey.ScriptPubKey))
+                    .AddKeys(alice)
+                    .Send(bob.PubKey.ScriptPubKey.WitHash, "5.0")
+                    .SetChange(alice.PubKey.ScriptPubKey.WitHash)
+                    .BuildTransaction(true);
+                chainBuilder.Emit(tx);
+
+                var block = chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArray();
+                Assert.True(aliceBalance.Length == 2);
+                Assert.True(aliceBalance[0].Amount == -Money.Coins(5.0m));
+
+                var bobBalance = tester.Client.GetOrderedBalance(bob.PubKey.ScriptPubKey.WitHash).ToArray();
+                Assert.True(bobBalance.Length == 2);
+                Assert.True(bobBalance[0].Amount == Money.Coins(5.0m));
+            }
+        }
+
+        [Fact]
         public void CanGetOrderedBalances()
         {
             using(var tester = CreateTester())
