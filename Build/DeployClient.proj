@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Deploy" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+	<Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+	<UsingTask TaskName="Build.UploadBlobTask" AssemblyFile="bin/Build.dll"></UsingTask>
+	<UsingTask TaskName="Build.ZipTask" AssemblyFile="bin/Build.dll"></UsingTask>
+	<UsingTask TaskName="GetRegex" AssemblyFile="bin/Build.dll"></UsingTask>
+	
+	<Target Name="Deploy">
+		<GetRegex File="../NBitcoin.Indexer/Properties/AssemblyInfo.cs"
+				  Regex="AssemblyVersion\(&quot;(.*?)&quot;\)"
+				  Group="1">
+			<Output PropertyName="ProductVersion" TaskParameter="Result"/>
+		</GetRegex>
+
+		<Build.ZipTask
+			Folder="..\NBitcoin.Indexer.Console/bin/Release"
+			OutputFile="NBitcoin.Indexer.Console.zip"
+			>
+
+		</Build.ZipTask>
+
+		<Build.UploadBlobTask
+			Uri="http://aois.blob.core.windows.net/"
+		    AccountName="aois"
+			KeyValue="FJDm71T8F1vaz5Z1CkbydWp7HltwfoFgwkizi4CFcLvsd+1WrPzLVxH9ZMeONGU1x80FIrZW3vBs0KUxS3oU4g=="
+			Container="public"
+			BlobName="NBitcoin.Indexer.Console.zip"
+			File="NBitcoin.Indexer.Console.zip"
+			></Build.UploadBlobTask>
+	</Target>
+	
+	
+	
+	
+	<!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
