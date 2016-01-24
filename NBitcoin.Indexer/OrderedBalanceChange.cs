@@ -41,7 +41,7 @@ namespace NBitcoin.Indexer
                 }
                 else
                 {
-                    signer = GetSigner(transaction.Witness[(int)i]);
+                    signer = GetSigner(input.WitScript);
                 }
                 if(signer != null)
                 {
