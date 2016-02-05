@@ -715,7 +715,8 @@ namespace NBitcoin.Indexer
                 this.UpdateToColoredCoins();
                 return true;
             }
-
+            if(!(repository is CachedColoredTransactionRepository))
+                repository = new CachedColoredTransactionRepository(repository);
             var tx = await repository.Transactions.GetAsync(TransactionId).ConfigureAwait(false);
             if(tx == null)
                 return false;

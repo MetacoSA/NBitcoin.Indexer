@@ -142,7 +142,7 @@ namespace NBitcoin.Indexer
 
                 if(fetchColor && result.ColoredTransaction == null)
                 {
-                    result.ColoredTransaction = await ColoredTransaction.FetchColorsAsync(txId, result.Transaction, new IndexerColoredTransactionRepository(Configuration)).ConfigureAwait(false);
+                    result.ColoredTransaction = await ColoredTransaction.FetchColorsAsync(txId, result.Transaction, new CachedColoredTransactionRepository(new IndexerColoredTransactionRepository(Configuration))).ConfigureAwait(false);
                     entities[0].ColoredTransaction = result.ColoredTransaction;
                     if(entities[0].ColoredTransaction != null)
                     {
