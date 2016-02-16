@@ -59,6 +59,8 @@ namespace NBitcoin.Indexer
                              Network.TestNet : 
                              network.Equals("seg", StringComparison.OrdinalIgnoreCase) ?
                              Network.SegNet :
+                             network.Equals("regtest", StringComparison.OrdinalIgnoreCase) ?
+                             Network.RegTest :
                              null;
             if (config.Network == null)
                 throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
@@ -66,6 +68,8 @@ namespace NBitcoin.Indexer
             config.CheckpointSetName = GetValue("CheckpointSetName", false);
             if (string.IsNullOrWhiteSpace(config.CheckpointSetName))
                 config.CheckpointSetName = "default";
+
+            config.AzureStorageEmulatorUsed = bool.Parse(GetValue("AzureStorageEmulatorUsed", false));
         }
 
         protected static string GetValue(string config, bool required)
@@ -81,6 +85,12 @@ namespace NBitcoin.Indexer
             Network = Network.Main;
         }
         public Network Network
+        {
+            get;
+            set;
+        }
+
+        public bool AzureStorageEmulatorUsed
         {
             get;
             set;
@@ -123,7 +133,7 @@ namespace NBitcoin.Indexer
         }
         public CloudBlobClient CreateBlobClient()
         {
-            return new CloudBlobClient(MakeUri("blob"), StorageCredentials);
+            return new CloudBlobClient(MakeUri("blob", AzureStorageEmulatorUsed), StorageCredentials);
         }
         public IndexerClient CreateIndexerClient()
         {
@@ -160,15 +170,37 @@ namespace NBitcoin.Indexer
             return CreateBlobClient().GetContainerReference(GetFullName(_Container));
         }
 
-        private Uri MakeUri(string clientType)
+        private Uri MakeUri(string clientType, bool azureStorageEmulatorUsed = false)
         {
-            return new Uri(String.Format("http://{0}.{1}.core.windows.net/", StorageCredentials.AccountName, clientType), UriKind.Absolute);
+            if (!azureStorageEmulatorUsed)
+            {
+                return new Uri(String.Format("http://{0}.{1}.core.windows.net/", StorageCredentials.AccountName,
+                    clientType), UriKind.Absolute);
+            }
+            else
+            {
+                if (clientType.Equals("blob"))
+                {
+                    return new Uri("http://127.0.0.1:10000/devstoreaccount1");
+                }
+                else
+                {
+                    if (clientType.Equals("table"))
+                    {
+                        return new Uri("http://127.0.0.1:10002/devstoreaccount1");
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+            }
         }
 
 
         public CloudTableClient CreateTableClient()
         {
-            return new CloudTableClient(MakeUri("table"), StorageCredentials);
+            return new CloudTableClient(MakeUri("table", AzureStorageEmulatorUsed), StorageCredentials);
         }
 
 
