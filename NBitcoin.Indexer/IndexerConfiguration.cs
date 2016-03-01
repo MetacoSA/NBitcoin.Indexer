@@ -53,15 +53,7 @@ namespace NBitcoin.Indexer
             config.StorageCredentials = new StorageCredentials(account, key);
             config.StorageNamespace = GetValue("StorageNamespace", false);
             var network = GetValue("Bitcoin.Network", false) ?? "Main";
-            config.Network = network.Equals("main", StringComparison.OrdinalIgnoreCase) ?
-                                    Network.Main :
-                             network.Equals("test", StringComparison.OrdinalIgnoreCase) ?
-                             Network.TestNet : 
-                             network.Equals("seg", StringComparison.OrdinalIgnoreCase) ?
-                             Network.SegNet :
-                             network.Equals("regtest", StringComparison.OrdinalIgnoreCase) ?
-                             Network.RegTest :
-                             null;
+            config.Network = Network.GetNetwork(network);
             if (config.Network == null)
                 throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
             config.Node = GetValue("Node", false);
@@ -69,7 +61,9 @@ namespace NBitcoin.Indexer
             if (string.IsNullOrWhiteSpace(config.CheckpointSetName))
                 config.CheckpointSetName = "default";
 
-            config.AzureStorageEmulatorUsed = bool.Parse(GetValue("AzureStorageEmulatorUsed", false));
+            var emulator = GetValue("AzureStorageEmulatorUsed", false);
+            if(!string.IsNullOrWhiteSpace(emulator))
+                config.AzureStorageEmulatorUsed = bool.Parse(emulator);
         }
 
         protected static string GetValue(string config, bool required)
