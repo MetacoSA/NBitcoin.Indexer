@@ -10,19 +10,13 @@ namespace NBitcoin.Indexer
 {
     public class ScriptRule : WalletRule
     {
-        public ScriptRule(Script destination, bool isRedeemScript = false)
+        public ScriptRule(Script destination, Script redeemScript = null)
         {
-            if (isRedeemScript)
-            {
-
-                ScriptPubKey = destination.Hash.ScriptPubKey;
-                RedeemScript = destination;
-            }
-            else
-                ScriptPubKey = destination;
+            ScriptPubKey = destination;
+            RedeemScript = redeemScript;
         }
-        public ScriptRule(IDestination destination, bool isRedeemScript = false)
-            : this(destination.ScriptPubKey, isRedeemScript)
+        public ScriptRule(IDestination destination, Script redeemScript = null)
+            : this(destination.ScriptPubKey, redeemScript)
         {
         }
         public ScriptRule()

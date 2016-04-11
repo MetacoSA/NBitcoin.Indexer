@@ -713,8 +713,8 @@ namespace NBitcoin.Indexer.Tests
 
                 //Send money to P2SH address, should receive script coins
 
-                tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey, true));
-                tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, false));
+                tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey.ScriptPubKey.Hash, alice1.PubKey.ScriptPubKey));
+                tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, null));
 
                 tx = new TransactionBuilder()
                         .ContinueToBuild(newtx)
@@ -1252,7 +1252,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(aliceBalance.Length == 1);
 
                 var tx = new TransactionBuilder()
-                    .AddCoins(new WitScriptCoin((Coin)aliceBalance[0].ReceivedCoins[0], alice.PubKey.ScriptPubKey))
+                    .AddCoins(new ScriptCoin((Coin)aliceBalance[0].ReceivedCoins[0], alice.PubKey.ScriptPubKey))
                     .AddKeys(alice)
                     .Send(bob.PubKey.ScriptPubKey.WitHash, "5.0")
                     .SetChange(alice.PubKey.ScriptPubKey.WitHash)
