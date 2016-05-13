@@ -1,5 +1,6 @@
 impvs
 del *.nupkg 
+msbuild.exe NBitcoin.Indexer.csproj /p:Configuration=Release
 .\GitLink.exe ".." -ignore "build,nbitcoin.indexer.console,nbitcoin.indexer.tests"
 nuGet pack NBitcoin.Indexer.csproj -Build -Properties Configuration=Release -includereferencedprojects
 forfiles /m *.nupkg /c "cmd /c NuGet.exe push @FILE"
