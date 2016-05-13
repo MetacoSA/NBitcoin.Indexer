@@ -999,9 +999,16 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
-            Transaction tx = new Transaction("0100000003965e5a8e59fe2a419f9d1b9d0695a38ac88a3697164d66c64cca81fe3573456e010000006b483045022100db3b79dc13023c315ff295cc94ce18aef4834970a301b47fd116f6dbd00d2702022053cdb6bddee603d118ade80b50546ad66d6a262e3193b55fad2ca5bb3fabbd8c0121023f6c18f1e48961db70f1f8d4156f461de5f65a9b66e19f22309948ee059231adffffffff6db0286a1e9d08a6d1761fd9aee1cf7540b973fd0a9d668fbf323d02b489897302000000fd0a0100483045022100845f271694bd2ca046af2de0bc9cfc84c61f1086e70413f5510e41dbc12453da022071fa9c59bc859542c2a625f9b5fc14723f500f8c0d1f85fc24d51c2de547bdf201483045022100c77f028f9a0fef02bb0240a67ff882d445ea8760f5f827d98389ee57e0f1a75e022040f0b7d7c062f68c7b55b570cbda9fcf2797217835c5f6e693c0420866aebc3d01514c7463522102bb2d9443eb24eb1be1637bc48fbf63bb9943ab662a4ddb7bea43f20bf077904721023f6c18f1e48961db70f1f8d4156f461de5f65a9b66e19f22309948ee059231ad52ae672102bb2d9443eb24eb1be1637bc48fbf63bb9943ab662a4ddb7bea43f20bf0779047ac0470209156b17568ffffffff6db0286a1e9d08a6d1761fd9aee1cf7540b973fd0a9d668fbf323d02b48989730e0000006a473044022056eaac3cd081bb4797d370082605767e79497cfb536c572015b5e9dbbdf9882902203d4add1b75e227ea7c732303e0ae526ed4029aa6a316b976591f955f3be4b6a90121023f6c18f1e48961db70f1f8d4156f461de5f65a9b66e19f22309948ee059231adffffffff0500000000000000000d6a0b4f41010003f20dd2010100aa0a0000000000001976a91474bd8470485bad09749b68a766d78129d34f6b0988acaa0a0000000000001976a91416391f5792853cc65a93ccbfe9986f521f010ccd88acaa0a0000000000001976a91474bd8470485bad09749b68a766d78129d34f6b0988acbc3be80b000000001976a91474bd8470485bad09749b68a766d78129d34f6b0988ac00000000");
 
-            IndexerConfiguration.FromConfiguration().CreateIndexer().Index(OrderedBalanceChange.ExtractScriptBalances(tx));
+            var conf = IndexerConfiguration.FromConfiguration();
+            var client = conf.CreateIndexerClient();
+            //var chain = client.GetMainChain();
+            var block = client.GetBlock(new uint256("000000000000000002d7cfa9a44fc9ac7f5f92ed8097434e14eb008e8b66bcf2"));
+            var tt = client.GetTransaction(new uint256("3f0151f8ec7f25faa4b92ba332a36122f195986fd981e655ca5c86a123e4651e"));
+            var aaa = block.Transactions.FirstOrDefault(t => t.GetHash() == tt.TransactionId);
+            var indexer = conf.CreateIndexer();
+            indexer.IndexTransactions(410945, block);
+
             //var n = Node.ConnectToLocal(Network.Main);
             //var chain = n.GetChain();
             //foreach (var b in n.GetBlocks(chain.Tip.EnumerateToGenesis().Select(c => c.HashBlock)))
