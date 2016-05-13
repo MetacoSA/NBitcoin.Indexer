@@ -1,6 +1,6 @@
 impvs
 del *.nupkg 
-nuGet pack NBitcoin.Indexer.csproj -Build -Properties Configuration=Release -includereferencedprojects
+nuGet pack NBitcoin.Indexer.csproj -Build -Properties Configuration=Release -Properties GitLink=True -includereferencedprojects
 forfiles /m *.nupkg /c "cmd /c NuGet.exe push @FILE"
 (((dir *.nupkg).Name) -match "[0-9]+?\.[0-9]+?\.[0-9]+?\.[0-9]+")
 $ver = $Matches.Item(0)

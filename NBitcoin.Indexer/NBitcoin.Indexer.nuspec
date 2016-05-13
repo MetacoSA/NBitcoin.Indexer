@@ -13,5 +13,7 @@
 		<copyright>Copyright 2014</copyright>
 		<tags>bitcoin</tags>
 	</metadata>
-	<files></files>
+	<files>
+		<file src="bin\Release\NBitcoin.Indexer.pdb" target="lib\net45" />
+	</files>
 </package>
