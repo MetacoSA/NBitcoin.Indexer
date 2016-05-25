@@ -999,27 +999,6 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
-
-            var conf = IndexerConfiguration.FromConfiguration();
-            var client = conf.CreateIndexerClient();
-            //var chain = client.GetMainChain();
-            var block = client.GetBlock(new uint256("000000000000000002d7cfa9a44fc9ac7f5f92ed8097434e14eb008e8b66bcf2"));
-            var tt = client.GetTransaction(new uint256("3f0151f8ec7f25faa4b92ba332a36122f195986fd981e655ca5c86a123e4651e"));
-            var aaa = block.Transactions.FirstOrDefault(t => t.GetHash() == tt.TransactionId);
-            var indexer = conf.CreateIndexer();
-            indexer.IndexTransactions(410945, block);
-
-            //var n = Node.ConnectToLocal(Network.Main);
-            //var chain = n.GetChain();
-            //foreach (var b in n.GetBlocks(chain.Tip.EnumerateToGenesis().Select(c => c.HashBlock)))
-            //{
-            //    var height = chain.GetBlock(b.GetHash()).Height;
-            //    foreach (var tx in b.Transactions)
-            //    {
-            //        OrderedBalanceChange.ExtractScriptBalances(tx);
-            //    }
-            //}
-            //Thread.Sleep(1000000);
         }
 
         [Fact]
