@@ -159,7 +159,6 @@ $RECYCLE.BIN/
 
 Build/DeployClient.proj
 /NBitcoin.Indexer.Tests/Data/blocks/StoreLock
-/NBitcoin.Indexer/NBitcoin.Indexer.2.0.7.12.nupkg
 /NBitcoin.Indexer/GitLink.exe
 /Build/NBitcoin.Indexer.Console.zip
-/NBitcoin.Indexer/NBitcoin.Indexer.2.0.7.13.nupkg
+/NBitcoin.Indexer/*.nupkg
