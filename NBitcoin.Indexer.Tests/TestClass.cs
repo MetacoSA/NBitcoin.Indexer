@@ -999,6 +999,8 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
+            var client = IndexerConfiguration.FromConfiguration().CreateIndexerClient();
+            var t = client.GetTransactionAsync(true, false, new uint256("4ea17dc952919506e729a9c52bf045cd49f10eb97bef3aa94cb4af487a56dd65")).Result;
         }
 
         [Fact]

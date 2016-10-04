@@ -211,9 +211,10 @@ namespace NBitcoin.Indexer
             MempoolDate = entities.Where(e => e.Type == Entity.TransactionEntryType.Mempool)
                                   .Select(e => new DateTimeOffset?(e.Timestamp))
                                   .Min();
-            FirstSeen = entities
-                            .Select(e => e.Timestamp)
-                            .Min();
+            FirstSeen = MempoolDate != null ?  MempoolDate.Value : 
+                                    entities.Where(e => e.Type == Entity.TransactionEntryType.ConfirmedTransaction)
+                                  .Select(e => new DateTimeOffset?(e.Timestamp))
+                                  .Min().Value;
 
             var loadedEntity = entities.FirstOrDefault(e => e.Transaction != null && e.IsLoaded);
             if(loadedEntity == null)
