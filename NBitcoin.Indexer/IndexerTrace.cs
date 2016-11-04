@@ -162,17 +162,19 @@ namespace NBitcoin.Indexer
             {
                 if (lastHeights.Count > 0)
                 {
-                    var lastHeight = lastHeights.Peek();
-                    var time = DateTimeOffset.UtcNow - lastLogs.Peek();
+                    var lastHeight = lastHeights.Last();
+                    var time = DateTimeOffset.UtcNow - lastLogs.Last();
+                    var remaining = totalHeight - height;
+                    var block = height - lastHeight;
+                    var blocksRemaining = remaining/block;
+                    var remainingTime = blocksRemaining * (int)time.TotalSeconds;
+                    var estimatedTime = totalHeight == 0 ? TimeSpan.FromDays(999.0) : TimeSpan.FromSeconds(remainingTime);
 
-                    var downloadedSize = GetSize(lastHeight, height);
-                    var remainingSize = GetSize(height, totalHeight);
-                    var estimatedTime = downloadedSize == 0.0m ? TimeSpan.FromDays(999.0)
-                        : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
-                    _Trace.TraceInformation("Blocks {0}/{1} (estimate : {2})", height, totalHeight, Pretty(estimatedTime));
+                    _Trace.TraceInformation("Blocks {0}/{1} (processed {2} blocks in: {3} seconds | estimate : {4})", height, totalHeight, block, (int)time.TotalSeconds, Pretty(estimatedTime));
                 }
                 lastLogs.Enqueue(DateTime.UtcNow);
                 lastHeights.Enqueue(height);
+
                 while (lastLogs.Count > 20)
                 {
                     lastLogs.Dequeue();
@@ -180,25 +182,5 @@ namespace NBitcoin.Indexer
                 }
             }
         }
-
-        private static decimal GetSize(int t1, int t2)
-        {
-            decimal cumul = 0.0m;
-            for (int i = t1 ; i < t2 ; i++)
-            {
-                var size = Math.Exp((double)(a * i + b));
-                cumul += (decimal)size;
-            }
-            return cumul;
-        }
-
-        private static decimal EstimateSize(decimal height)
-        {
-            return (decimal)Math.Exp((double)(a * height + b));
-        }
-
-        static decimal a = 0.0000221438236661323m;
-        static decimal b = -8.492328726823666132321613096m;
-
     }
 }
