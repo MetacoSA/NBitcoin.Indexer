@@ -167,7 +167,7 @@ namespace NBitcoin.Indexer
 
                     var downloadedSize = GetSize(lastHeight, height);
                     var remainingSize = GetSize(height, totalHeight);
-                    var estimatedTime = downloadedSize == 0.0m ? TimeSpan.FromDays(999.0)
+                    var estimatedTime = downloadedSize > 1.0m ? TimeSpan.FromDays(999.0)
                         : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
                     _Trace.TraceInformation("Blocks {0}/{1} (estimate : {2})", height, totalHeight, Pretty(estimatedTime));
                 }
@@ -186,14 +186,18 @@ namespace NBitcoin.Indexer
             decimal cumul = 0.0m;
             for (int i = t1 ; i < t2 ; i++)
             {
-                var size = Math.Exp((double)(a * i + b));
+				var size = EstimateSize(i);
                 cumul += (decimal)size;
             }
             return cumul;
         }
 
-        private static decimal EstimateSize(decimal height)
+		static int OneMBHeight = 390000;
+
+		private static decimal EstimateSize(decimal height)
         {
+			if(height > OneMBHeight)
+				return 1.0m;
             return (decimal)Math.Exp((double)(a * height + b));
         }
 
