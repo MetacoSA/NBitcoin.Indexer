@@ -167,7 +167,7 @@ namespace NBitcoin.Indexer
 
                     var downloadedSize = GetSize(lastHeight, height);
                     var remainingSize = GetSize(height, totalHeight);
-                    var estimatedTime = downloadedSize > 1.0m ? TimeSpan.FromDays(999.0)
+                    var estimatedTime = downloadedSize < 1.0m ? TimeSpan.FromDays(999.0)
                         : TimeSpan.FromTicks((long)((remainingSize / downloadedSize) * time.Ticks));
                     _Trace.TraceInformation("Blocks {0}/{1} (estimate : {2})", height, totalHeight, Pretty(estimatedTime));
                 }
