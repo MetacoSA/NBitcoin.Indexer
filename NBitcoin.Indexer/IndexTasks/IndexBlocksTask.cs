@@ -37,7 +37,7 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public void Index(Block[] blocks, TaskScheduler taskScheduler)
         {
-            if(taskScheduler == null)
+            if (taskScheduler == null)
                 throw new ArgumentNullException("taskScheduler");
             try
             {
@@ -52,7 +52,7 @@ namespace NBitcoin.Indexer.IndexTasks
 
         public Task IndexAsync(Block[] blocks, TaskScheduler taskScheduler)
         {
-            if(taskScheduler == null)
+            if (taskScheduler == null)
                 throw new ArgumentNullException("taskScheduler");
             var tasks = blocks
                 .Select(b => new Task(() => IndexCore("o", new[]{new BlockInfo()
@@ -100,15 +100,17 @@ namespace NBitcoin.Indexer.IndexTasks
 
                 try
                 {
-                    blob.UploadFromByteArray(blockBytes, 0, blockBytes.Length, new AccessCondition()
-                    {
-                        //Will throw if already exist, save 1 call
-                        IfNotModifiedSinceTime = DateTimeOffset.MinValue
-                    }, new BlobRequestOptions()
-                    {
-                        MaximumExecutionTime = _Timeout,
-                        ServerTimeout = _Timeout
-                    });
+                    blob.
+                        UploadFromByteArrayAsync(blockBytes, 0, blockBytes.Length, new AccessCondition()
+                        {
+                            //Will throw if already exist, save 1 call
+                            IfNotModifiedSinceTime = DateTimeOffset.MinValue
+                        }, new BlobRequestOptions()
+                        {
+                            MaximumExecutionTime = _Timeout,
+                            ServerTimeout = _Timeout
+                        }
+                    , new OperationContext()).GetAwaiter().GetResult();
                     watch.Stop();
                     IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
                     _IndexedBlocks++;

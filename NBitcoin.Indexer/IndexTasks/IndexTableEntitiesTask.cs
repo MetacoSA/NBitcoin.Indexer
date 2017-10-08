@@ -117,7 +117,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 ServerTimeout = _Timeout,
             };
 
-
+            var context = new OperationContext();
             Queue<TableBatchOperation> batches = new Queue<TableBatchOperation>();
             batches.Enqueue(batch);
 
@@ -129,11 +129,11 @@ namespace NBitcoin.Indexer.IndexTasks
                     Stopwatch watch = new Stopwatch();
                     watch.Start();
                     if (batch.Count > 1)
-                        table.ExecuteBatch(batch, options);
+                        table.ExecuteBatchAsync(batch, options, context).GetAwaiter().GetResult();
                     else
                     {
                         if (batch.Count == 1)
-                            table.Execute(batch[0], options);
+                            table.ExecuteAsync(batch[0], options, context).GetAwaiter().GetResult();
                     }
                     Interlocked.Add(ref _IndexedEntities, batch.Count);
                 }
@@ -152,10 +152,11 @@ namespace NBitcoin.Indexer.IndexTasks
                         var op = GetFaultyOperation(ex, batch);
                         var entity = (DynamicTableEntity)GetEntity(op);
                         var serialized = entity.Serialize();
+
                         Configuration
                             .GetBlocksContainer()
                             .GetBlockBlobReference(entity.GetFatBlobName())
-                            .UploadFromByteArray(serialized, 0, serialized.Length);
+                            .UploadFromByteArrayAsync(serialized, 0, serialized.Length).GetAwaiter().GetResult();
                         entity.MakeFat(serialized.Length);                       
                         batches.Enqueue(batch);
                     }

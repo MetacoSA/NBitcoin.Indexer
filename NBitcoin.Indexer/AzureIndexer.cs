@@ -12,7 +12,6 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -381,14 +380,14 @@ namespace NBitcoin.Indexer
                 batch.Add(TableOperation.InsertOrReplace(entry.ToEntity()));
                 if(batch.Count == 100)
                 {
-                    table.ExecuteBatch(batch);
+                    table.ExecuteBatchAsync(batch).GetAwaiter().GetResult();
                     batch = new TableBatchOperation();
                 }
                 IndexerTrace.RemainingBlockChain(entry.ChainOffset, last.ChainOffset + last.BlockHeaders.Count - 1);
             }
             if(batch.Count > 0)
             {
-                table.ExecuteBatch(batch);
+                table.ExecuteBatchAsync(batch).GetAwaiter().GetResult();
             }
         }
 
@@ -419,7 +418,7 @@ namespace NBitcoin.Indexer
 
             using(IndexerTrace.NewCorrelation("Index main chain to azure started").Open())
             {
-                Configuration.GetChainTable().CreateIfNotExists();
+                Configuration.GetChainTable().CreateIfNotExistsAsync().GetAwaiter().GetResult();
                 IndexerTrace.InputChainTip(chain.Tip);
                 var client = Configuration.CreateIndexerClient();
                 var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
