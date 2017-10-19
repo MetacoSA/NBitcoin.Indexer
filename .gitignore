@@ -162,3 +162,4 @@ Build/DeployClient.proj
 /NBitcoin.Indexer/GitLink.exe
 /Build/NBitcoin.Indexer.Console.zip
 /NBitcoin.Indexer/*.nupkg
+/.vs/NBitcoin.Indexer/v15/sqlite3/storage.ide
