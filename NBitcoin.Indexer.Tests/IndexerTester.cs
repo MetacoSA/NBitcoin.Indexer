@@ -86,7 +86,7 @@ namespace NBitcoin.Indexer.Tests
 
         internal void ImportCachedBlocks()
         {
-            CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
+            CreateLocalNode().ChainBuilder.Load(@"..\..\..\Data\blocks");
             if (Client.GetBlock(KnownBlockId) == null)
             {
                 Indexer.IgnoreCheckpoints = true;
@@ -97,7 +97,7 @@ namespace NBitcoin.Indexer.Tests
 
         internal void ImportCachedTransactions()
         {
-            CreateLocalNode().ChainBuilder.Load(@"..\..\Data\blocks");
+            CreateLocalNode().ChainBuilder.Load(@"..\..\..\Data\blocks");
             if (Client.GetTransaction(KnownTransactionId) == null)
             {
                 Indexer.IgnoreCheckpoints = true;

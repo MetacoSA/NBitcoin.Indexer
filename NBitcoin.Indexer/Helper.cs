@@ -153,13 +153,9 @@ namespace NBitcoin.Indexer
 
         public static bool IsError(Exception ex, string code)
         {
-            var storage = ex as StorageException;
-            if(storage == null)
-                return false;
-            return storage.RequestInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation != null
-                && storage.RequestInformation.ExtendedErrorInformation.ErrorCode == code;
-        }
+			var actualCode = (ex as StorageException)?.RequestInformation?.ExtendedErrorInformation?.ErrorCode;
+			return actualCode == code;
+		}
 
         internal static string format = new string(Enumerable.Range(0, int.MaxValue.ToString().Length).Select(c => '0').ToArray());
         static char[] Digit = Enumerable.Range(0, 10).Select(c => c.ToString()[0]).ToArray();

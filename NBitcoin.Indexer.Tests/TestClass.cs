@@ -66,7 +66,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void DoesNotCrashExtractingAddressFromBigTransaction()
         {
-            var tx = new Transaction(Encoders.Hex.DecodeData(File.ReadAllText("Data/BigTransaction.txt")));
+            var tx = new Transaction(Encoders.Hex.DecodeData(File.ReadAllText("../../../Data/BigTransaction.txt")));
             var txId = tx.GetHash();
             var result = OrderedBalanceChange.ExtractScriptBalances(txId, tx, null, null, 0);
             foreach(var e in result)
@@ -80,7 +80,7 @@ namespace NBitcoin.Indexer.Tests
             using(var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
-                node.ChainBuilder.Load("../../Data/blocks");
+                node.ChainBuilder.Load("../../../Data/blocks");
 
                 Assert.Equal(138, tester.Indexer.IndexBlocks());
                 Assert.Equal(0, tester.Indexer.IndexBlocks());
@@ -133,7 +133,7 @@ namespace NBitcoin.Indexer.Tests
         {
             using(var tester = CreateTester())
             {
-                tester.CreateLocalNode().ChainBuilder.Load("../../Data/blocks");
+                tester.CreateLocalNode().ChainBuilder.Load("../../../Data/blocks");
                 Assert.Equal(138, tester.Indexer.IndexTransactions());
                 Assert.Equal(0, tester.Indexer.IndexTransactions());
             }
@@ -1455,7 +1455,7 @@ namespace NBitcoin.Indexer.Tests
     {
         public ColoredCoinTester([CallerMemberName]string test = null)
         {
-            var testcase = JsonConvert.DeserializeObject<TestCase[]>(File.ReadAllText("Data/openasset-known-tx.json"))
+            var testcase = JsonConvert.DeserializeObject<TestCase[]>(File.ReadAllText("../../../Data/openasset-known-tx.json"))
                 .First(t => t.test == test);
             NoSqlTransactionRepository repository = new NoSqlTransactionRepository();
             foreach(var tx in testcase.txs)
