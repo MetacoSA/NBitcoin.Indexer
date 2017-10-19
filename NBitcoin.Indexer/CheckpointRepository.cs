@@ -1,9 +1,11 @@
 ﻿using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.WindowsAzure.Storage.Table;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
@@ -50,7 +52,8 @@ namespace NBitcoin.Indexer
         public Task<Checkpoint[]> GetCheckpointsAsync()
         {
             List<Task<Checkpoint>> checkpoints = new List<Task<Checkpoint>>();
-            foreach (var blob in _Container.ListBlobs("Checkpoints/" + GetSetPart(), true, BlobListingDetails.None).OfType<CloudBlockBlob>())
+
+            foreach (var blob in _Container.ListBlobsAsync("Checkpoints/" + GetSetPart(), true, BlobListingDetails.None).GetAwaiter().GetResult().OfType<CloudBlockBlob>())
             {
                 checkpoints.Add(Checkpoint.LoadBlobAsync(blob, _Network));
             }
@@ -91,6 +94,26 @@ namespace NBitcoin.Indexer
                 ExceptionDispatchInfo.Capture(aex.InnerException).Throw();
                 return null;
             }
+        }
+    }
+
+    public static class CloudBlobContainerExtensions
+    {
+        public static async Task<IList<IListBlobItem>> ListBlobsAsync(this CloudBlobContainer blobContainer, string prefix, bool useFlatBlobListing, BlobListingDetails blobListingDetails, CancellationToken ct = default(CancellationToken), Action<IList<IListBlobItem>> onProgress = null)
+        {
+            var items = new List<IListBlobItem>();
+            BlobContinuationToken token = null;
+
+            do
+            {
+                var seg = await blobContainer.ListBlobsSegmentedAsync(prefix, useFlatBlobListing, blobListingDetails, null, token, null, null);
+                token = seg.ContinuationToken;
+                items.AddRange(seg.Results);
+                if (onProgress != null) onProgress(items);
+
+            } while (token != null && !ct.IsCancellationRequested);
+
+            return items;
         }
     }
 }

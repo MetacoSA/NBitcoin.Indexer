@@ -478,7 +478,7 @@ namespace NBitcoin.Indexer
             if(entity.Properties.ContainsKey("g"))
             {
                 var ctx = new ColoredTransaction();
-                ctx.FromBytes(entity["g"].BinaryValue);
+                ctx.FromBytes(entity.Properties["g"].BinaryValue);
                 ColoredTransaction = ctx;
             }
 

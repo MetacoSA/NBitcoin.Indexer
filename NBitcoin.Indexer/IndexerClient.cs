@@ -50,8 +50,7 @@ namespace NBitcoin.Indexer
             var container = Configuration.GetBlocksContainer();
             try
             {
-
-                container.GetPageBlobReference(blockId.ToString()).DownloadToStream(ms);
+                container.GetPageBlobReference(blockId.ToString()).DownloadToStreamAsync(ms).GetAwaiter().GetResult();
                 ms.Position = 0;
                 Block b = new Block();
                 b.ReadWrite(ms, false);
@@ -200,7 +199,7 @@ namespace NBitcoin.Indexer
             Configuration
                     .GetBlocksContainer()
                     .GetBlockBlobReference(entity.GetFatBlobName())
-                    .UploadFromByteArray(serialized, 0, serialized.Length);
+                    .UploadFromByteArrayAsync(serialized, 0, serialized.Length).GetAwaiter().GetResult();
             entity.MakeFat(serialized.Length);
             await table.ExecuteAsync(TableOperation.InsertOrReplace(entity)).ConfigureAwait(false);
         }
@@ -250,10 +249,10 @@ namespace NBitcoin.Indexer
         public ChainBlockHeader GetBestBlock()
         {
             var table = Configuration.GetChainTable();
-            var part = table.ExecuteQuery(new TableQuery()
+            var part = table.ExecuteQueryAsync(new TableQuery()
             {
                 TakeCount = 1
-            }).Select(e => new ChainPartEntry(e)).FirstOrDefault();
+            }).GetAwaiter().GetResult().Select(e => new ChainPartEntry(e)).FirstOrDefault();
             if(part == null)
                 return null;
 
@@ -273,7 +272,9 @@ namespace NBitcoin.Indexer
             List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
             foreach(var chainPart in
                 ExecuteBalanceQuery(table, new TableQuery(), new[] { 1, 2, 10 })
-            .Concat(table.ExecuteQuery(new TableQuery()).Skip(2))
+            .Concat(
+                    table.ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult().Skip(2)
+                    )
             .Select(e => new ChainPartEntry(e)))
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -307,11 +308,11 @@ namespace NBitcoin.Indexer
         private ChainBlockHeader CreateChainChange(int height, BlockHeader block)
         {
             return new ChainBlockHeader()
-                       {
-                           Height = height,
-                           Header = block,
-                           BlockId = block.GetHash()
-                       };
+            {
+                Height = height,
+                Header = block,
+                BlockId = block.GetHash()
+            };
         }
 
         Dictionary<string, Func<WalletRule>> _Rules = new Dictionary<string, Func<WalletRule>>();
@@ -322,7 +323,7 @@ namespace NBitcoin.Indexer
             var query = new TableQuery()
                                     .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
             return
-                table.ExecuteQuery(query)
+                table.ExecuteQueryAsync(query).GetAwaiter().GetResult()
                  .Select(e => new WalletRuleEntry(e, this))
                  .ToArray();
         }
@@ -334,7 +335,7 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetWalletRulesTable();
             var entry = new WalletRuleEntry(walletId, walletRule);
             var entity = entry.CreateTableEntity();
-            table.Execute(TableOperation.InsertOrReplace(entity));
+            table.ExecuteAsync(TableOperation.InsertOrReplace(entity)).GetAwaiter().GetResult();
             return entry;
         }
 
@@ -345,7 +346,7 @@ namespace NBitcoin.Indexer
             return
                 new WalletRuleEntryCollection(
                 Configuration.GetWalletRulesTable()
-                .ExecuteQuery(new TableQuery())
+                .ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult()
                 .Select(e => new WalletRuleEntry(e, this)));
         }
 
@@ -441,10 +442,10 @@ namespace NBitcoin.Indexer
                   tableQuery
                  .Select(c => new OrderedBalanceChange(c))
                  .Select(c => new LoadingTransactionTask
-                      {
-                          Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
-                          Change = c
-                      })
+                 {
+                     Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
+                     Change = c
+                 })
                  .Partition(BalancePartitionSize);
 
             if(!query.RawOrdering)
@@ -541,7 +542,8 @@ namespace NBitcoin.Indexer
             do
             {
                 tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
-                var segment = table.ExecuteQuerySegmented(tableQuery, continuation);
+
+                var segment = table.ExecuteQuerySegmentedAsync(tableQuery, continuation).GetAwaiter().GetResult();
                 continuation = segment.ContinuationToken;
                 foreach(var entity in segment)
                 {
@@ -573,11 +575,14 @@ namespace NBitcoin.Indexer
             CleanUnconfirmedChanges(destination.ScriptPubKey, olderThan);
         }
 
+
+
         public void CleanUnconfirmedChanges(Script scriptPubKey, TimeSpan olderThan)
         {
             var table = Configuration.GetBalanceTable();
             List<DynamicTableEntity> unconfirmed = new List<DynamicTableEntity>();
-            foreach(var c in table.ExecuteQuery(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))))
+
+            foreach(var c in table.ExecuteQueryAsync(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))).GetAwaiter().GetResult())
             {
                 var change = new OrderedBalanceChange(c);
                 if(change.BlockId != null)
@@ -591,7 +596,7 @@ namespace NBitcoin.Indexer
             {
                 var t = Configuration.GetBalanceTable();
                 c.ETag = "*";
-                t.Execute(TableOperation.Delete(c));
+                t.ExecuteAsync(TableOperation.Delete(c)).GetAwaiter().GetResult();
             });
         }
 
@@ -658,7 +663,7 @@ namespace NBitcoin.Indexer
             Parallel.ForEach(balances, b =>
             {
                 var table = Configuration.GetBalanceTable();
-                table.Execute(TableOperation.Delete(b.ToEntity()));
+                table.ExecuteAsync(TableOperation.Delete(b.ToEntity())).GetAwaiter().GetResult();
             });
         }
 
@@ -738,6 +743,28 @@ namespace NBitcoin.Indexer
         private string GetKey(OrderedBalanceChange change)
         {
             return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId + "-" + change.SeenUtc.Ticks;
+        }
+    }
+
+    public static class CloudTableExtensions
+    {
+        // From: https://stackoverflow.com/questions/24234350/how-to-execute-an-azure-table-storage-query-async-client-version-4-0-1
+        public static async Task<IList<DynamicTableEntity>> ExecuteQueryAsync(this CloudTable table, TableQuery query, CancellationToken ct = default(CancellationToken), Action<IList<DynamicTableEntity>> onProgress = null)
+        {
+
+            var items = new List<DynamicTableEntity>();
+            TableContinuationToken token = null;
+
+            do
+            {
+                var seg = await table.ExecuteQuerySegmentedAsync(query, token);
+                token = seg.ContinuationToken;
+                items.AddRange(seg);
+                if(onProgress != null) onProgress(items);
+
+            } while(token != null && !ct.IsCancellationRequested);
+
+            return items;
         }
     }
 }
