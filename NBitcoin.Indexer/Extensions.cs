@@ -129,8 +129,6 @@ namespace NBitcoin.Indexer
             return "unk" + Hashes.Hash256(Encoding.UTF8.GetBytes(entity.PartitionKey + entity.RowKey)).ToString();
         }
 
-		static readonly MethodInfo WriteODataEntity = typeof(TableConstants).Assembly.GetType("Microsoft.WindowsAzure.Storage.Table.Protocol.TableOperationHttpWebRequestFactory")
-					.GetMethod("WriteOdataEntity", BindingFlags.NonPublic | BindingFlags.Static);
 		public static byte[] Serialize(this ITableEntity entity)
         {
             MemoryStream ms = new MemoryStream();
@@ -138,13 +136,11 @@ namespace NBitcoin.Indexer
             {
                 // Create an entry writer to write a top-level entry to the message.
                 ODataWriter entryWriter = messageWriter.CreateODataEntryWriter();
-				WriteODataEntity.Invoke(null, new object[] { entity, TableOperationType.Insert, null, entryWriter, null, true });
+				TableOperationHttpWebRequestFactory.WriteOdataEntity(entity, TableOperationType.Insert, null, entryWriter, null, true);
                 return ms.ToArray();
             }
         }
 
-		static readonly MethodInfo ReadODataEntity = typeof(TableConstants).Assembly.GetType("Microsoft.WindowsAzure.Storage.Table.Protocol.TableOperationHttpResponseParsers")
-					.GetMethod("ReadAndUpdateTableEntity", BindingFlags.NonPublic | BindingFlags.Static);
 		public static void Deserialize(this ITableEntity entity, byte[] value)
         {
             MemoryStream ms = new MemoryStream(value);
@@ -158,7 +154,7 @@ namespace NBitcoin.Indexer
             {
                 ODataReader reader = messageReader.CreateODataEntryReader();
                 reader.Read();
-				ReadODataEntity.Invoke(null, new object[] { entity, reader.Item, 31, null });
+				TableOperationHttpWebRequestFactory.ReadAndUpdateTableEntity(entity, (ODataEntry)reader.Item, null);
             }
         }
 

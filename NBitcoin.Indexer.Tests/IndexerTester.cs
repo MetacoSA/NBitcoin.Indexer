@@ -1,4 +1,5 @@
-﻿using Microsoft.WindowsAzure.Storage.Blob;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Protocol;
 using System;
@@ -20,22 +21,32 @@ namespace NBitcoin.Indexer.Tests
                 return _Importer;
             }
         }
+
+		public static IndexerConfiguration CreateConfiguration()
+		{
+			var confBuilder = new ConfigurationBuilder();
+			confBuilder.AddUserSecrets(typeof(IndexerTester).Assembly);
+			var config = IndexerConfiguration.FromConfiguration(confBuilder.Build());
+			return config;
+		}
+
         string _Folder;
         public IndexerTester(string folder)
         {
             TestUtils.EnsureNew(folder);
-            var config = IndexerConfiguration.FromConfiguration();
+			var config = CreateConfiguration();
             config.Network = Network.TestNet;
             config.StorageNamespace = folder;
             _Importer = config.CreateIndexer();
 
-
+			List<Task> creating = new List<Task>();
             foreach (var table in config.EnumerateTables())
             {
-                table.CreateIfNotExists();
+				creating.Add(table.CreateIfNotExistsAsync());
             }
 
-            config.GetBlocksContainer().CreateIfNotExists();
+			creating.Add(config.GetBlocksContainer().CreateIfNotExistsAsync());
+			Task.WaitAll(creating.ToArray());
             config.EnsureSetup();
             _Folder = folder;
         }
@@ -51,22 +62,22 @@ namespace NBitcoin.Indexer.Tests
             {
                 foreach (var table in _Importer.Configuration.EnumerateTables())
                 {
-                    table.CreateIfNotExists();
-                    var entities = table.ExecuteQuery(new TableQuery()).ToList();
+					table.CreateIfNotExistsAsync().GetAwaiter().GetResult();
+                    var entities = table.ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult().ToList();
                     Parallel.ForEach(entities, e =>
                     {
-                        table.Execute(TableOperation.Delete(e));
+                        table.ExecuteAsync(TableOperation.Delete(e)).GetAwaiter().GetResult();
                     });
                 }
                 var container = _Importer.Configuration.GetBlocksContainer();
-                var blobs = container.ListBlobs(useFlatBlobListing: true).ToList();
+                var blobs = container.ListBlobsAsync("", true, BlobListingDetails.None).GetAwaiter().GetResult().ToList();
 
                 Parallel.ForEach(blobs, b =>
                 {
                     if (b is CloudPageBlob)
-                        ((CloudPageBlob)b).Delete();
+                        ((CloudPageBlob)b).DeleteAsync().GetAwaiter().GetResult();
                     else
-                        ((CloudBlockBlob)b).Delete();
+                        ((CloudBlockBlob)b).DeleteAsync().GetAwaiter().GetResult();
                 });
             }
         }

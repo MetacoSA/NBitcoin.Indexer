@@ -1,4 +1,5 @@
-﻿using Microsoft.WindowsAzure.Storage.Auth;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using NBitcoin.Indexer.Converters;
@@ -17,11 +18,11 @@ namespace NBitcoin.Indexer
 {
     public class IndexerConfiguration
     {
-        public static IndexerConfiguration FromConfiguration()
+        public static IndexerConfiguration FromConfiguration(IConfiguration configuration)
         {
-            IndexerConfiguration config = new IndexerConfiguration();
-            Fill(config);
-            return config;
+            IndexerConfiguration indexerConfig = new IndexerConfiguration();
+            Fill(configuration, indexerConfig);
+            return indexerConfig;
         }
 
         public Task EnsureSetupAsync()
@@ -46,32 +47,33 @@ namespace NBitcoin.Indexer
             }
         }
 
-        protected static void Fill(IndexerConfiguration config)
+        protected static void Fill(IConfiguration config, IndexerConfiguration indexerConfig)
         {
-            var account = GetValue("Azure.AccountName", true);
-            var key = GetValue("Azure.Key", true);
-            config.StorageCredentials = new StorageCredentials(account, key);
-            config.StorageNamespace = GetValue("StorageNamespace", false);
-            var network = GetValue("Bitcoin.Network", false) ?? "Main";
-            config.Network = Network.GetNetwork(network);
-            if (config.Network == null)
-                throw new ConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
-            config.Node = GetValue("Node", false);
-            config.CheckpointSetName = GetValue("CheckpointSetName", false);
-            if (string.IsNullOrWhiteSpace(config.CheckpointSetName))
-                config.CheckpointSetName = "default";
+            var account = GetValue(config, "Azure.AccountName", true);
+            var key = GetValue(config, "Azure.Key", true);
+            indexerConfig.StorageCredentials = new StorageCredentials(account, key);
+            indexerConfig.StorageNamespace = GetValue(config, "StorageNamespace", false);
+            var network = GetValue(config, "Bitcoin.Network", false) ?? "Main";
+            indexerConfig.Network = Network.GetNetwork(network);
+            if (indexerConfig.Network == null)
+                throw new IndexerConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
+            indexerConfig.Node = GetValue(config, "Node", false);
+            indexerConfig.CheckpointSetName = GetValue(config, "CheckpointSetName", false);
+            if (string.IsNullOrWhiteSpace(indexerConfig.CheckpointSetName))
+                indexerConfig.CheckpointSetName = "default";
 
-            var emulator = GetValue("AzureStorageEmulatorUsed", false);
+            var emulator = GetValue(config, "AzureStorageEmulatorUsed", false);
             if(!string.IsNullOrWhiteSpace(emulator))
-                config.AzureStorageEmulatorUsed = bool.Parse(emulator);
+                indexerConfig.AzureStorageEmulatorUsed = bool.Parse(emulator);
         }
 
-        protected static string GetValue(string config, bool required)
+        protected static string GetValue(IConfiguration config, string setting, bool required)
         {
-            var result = ConfigurationManager.AppSettings[config];
+			
+            var result = config[setting];
             result = String.IsNullOrWhiteSpace(result) ? null : result;
             if (result == null && required)
-                throw new ConfigurationErrorsException("AppSetting " + config + " not found");
+                throw new IndexerConfigurationErrorsException("AppSetting " + setting + " not found");
             return result;
         }
         public IndexerConfiguration()
@@ -98,7 +100,7 @@ namespace NBitcoin.Indexer
         public Node ConnectToNode(bool isRelay)
         {
             if (String.IsNullOrEmpty(Node))
-                throw new ConfigurationErrorsException("Node setting is not configured");
+                throw new IndexerConfigurationErrorsException("Node setting is not configured");
             return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
         }
 
