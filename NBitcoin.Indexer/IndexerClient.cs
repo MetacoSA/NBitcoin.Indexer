@@ -249,7 +249,7 @@ namespace NBitcoin.Indexer
         public ChainBlockHeader GetBestBlock()
         {
             var table = Configuration.GetChainTable();
-            var part = table.ExecuteQueryAsync(new TableQuery()
+            var part = table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()
             {
                 TakeCount = 1
             }).GetAwaiter().GetResult().Select(e => new ChainPartEntry(e)).FirstOrDefault();
@@ -271,9 +271,9 @@ namespace NBitcoin.Indexer
             var table = Configuration.GetChainTable();
             List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
             foreach(var chainPart in
-                ExecuteBalanceQuery(table, new TableQuery(), new[] { 1, 2, 10 })
+                ExecuteBalanceQuery(table, new TableQuery<DynamicTableEntity>(), new[] { 1, 2, 10 })
             .Concat(
-                    table.ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult().Skip(2)
+                    table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()).GetAwaiter().GetResult().Skip(2)
                     )
             .Select(e => new ChainPartEntry(e)))
             {
@@ -320,7 +320,7 @@ namespace NBitcoin.Indexer
         {
             var table = Configuration.GetWalletRulesTable();
             var searchedEntity = new WalletRuleEntry(walletId, null).CreateTableEntity();
-            var query = new TableQuery()
+            var query = new TableQuery<DynamicTableEntity>()
                                     .Where(TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey));
             return
                 table.ExecuteQueryAsync(query).GetAwaiter().GetResult()
@@ -346,7 +346,7 @@ namespace NBitcoin.Indexer
             return
                 new WalletRuleEntryCollection(
                 Configuration.GetWalletRulesTable()
-                .ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult()
+                .ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()).GetAwaiter().GetResult()
                 .Select(e => new WalletRuleEntry(e, this)));
         }
 
@@ -534,7 +534,7 @@ namespace NBitcoin.Indexer
                 yield return WaitAndReturn(null, result);
         }
 
-        private IEnumerable<DynamicTableEntity> ExecuteBalanceQuery(CloudTable table, TableQuery tableQuery, IEnumerable<int> pages)
+        private IEnumerable<DynamicTableEntity> ExecuteBalanceQuery(CloudTable table, TableQuery<DynamicTableEntity> tableQuery, IEnumerable<int> pages)
         {
             pages = pages ?? new int[0];
             var pagesEnumerator = pages.GetEnumerator();
@@ -543,7 +543,7 @@ namespace NBitcoin.Indexer
             {
                 tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
 
-                var segment = table.ExecuteQuerySegmentedAsync(tableQuery, continuation).GetAwaiter().GetResult();
+                var segment = table.ExecuteQuerySegmentedAsync<DynamicTableEntity>(tableQuery, continuation).GetAwaiter().GetResult();
                 continuation = segment.ContinuationToken;
                 foreach(var entity in segment)
                 {
@@ -749,7 +749,7 @@ namespace NBitcoin.Indexer
     public static class CloudTableExtensions
     {
         // From: https://stackoverflow.com/questions/24234350/how-to-execute-an-azure-table-storage-query-async-client-version-4-0-1
-        public static async Task<IList<DynamicTableEntity>> ExecuteQueryAsync(this CloudTable table, TableQuery query, CancellationToken ct = default(CancellationToken), Action<IList<DynamicTableEntity>> onProgress = null)
+        public static async Task<IList<DynamicTableEntity>> ExecuteQueryAsync(this CloudTable table, TableQuery<DynamicTableEntity> query, CancellationToken ct = default(CancellationToken), Action<IList<DynamicTableEntity>> onProgress = null)
         {
 
             var items = new List<DynamicTableEntity>();

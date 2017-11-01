@@ -66,7 +66,6 @@ namespace NBitcoin.Indexer
         /// <summary>
         /// Remove unconfirmed for 30minutes
         /// </summary>
-        /// <typeparam name="TBalanceChangeEntry"></typeparam>
         /// <param name="entries"></param>
         /// <returns></returns>
         public static IEnumerable<OrderedBalanceChange> WhereNotExpired(this IEnumerable<OrderedBalanceChange> entries)
@@ -77,7 +76,6 @@ namespace NBitcoin.Indexer
         /// <summary>
         /// Remove unconfirmed entries for expiration
         /// </summary>
-        /// <typeparam name="TBalanceChangeEntry"></typeparam>
         /// <param name="entries"></param>
         /// <param name="expiration"></param>
         /// <returns></returns>

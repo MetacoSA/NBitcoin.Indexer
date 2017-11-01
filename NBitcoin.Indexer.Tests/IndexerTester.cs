@@ -63,7 +63,7 @@ namespace NBitcoin.Indexer.Tests
                 foreach (var table in _Importer.Configuration.EnumerateTables())
                 {
 					table.CreateIfNotExistsAsync().GetAwaiter().GetResult();
-                    var entities = table.ExecuteQueryAsync(new TableQuery()).GetAwaiter().GetResult().ToList();
+                    var entities = table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()).GetAwaiter().GetResult().ToList();
                     Parallel.ForEach(entities, e =>
                     {
                         table.ExecuteAsync(TableOperation.Delete(e)).GetAwaiter().GetResult();

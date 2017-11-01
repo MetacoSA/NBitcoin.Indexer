@@ -272,12 +272,12 @@ namespace NBitcoin.Indexer
         }
 
 
-        public TableQuery CreateTableQuery(BalanceId balanceId)
+        public TableQuery<DynamicTableEntity> CreateTableQuery(BalanceId balanceId)
         {
             return CreateTableQuery(balanceId.PartitionKey, balanceId.ToString());
         }
 
-        public TableQuery CreateTableQuery(string partitionId, string scope)
+        public TableQuery<DynamicTableEntity> CreateTableQuery(string partitionId, string scope)
         {
             BalanceLocator from = From ?? new UnconfirmedBalanceLocator();
             BalanceLocator to = To ?? new ConfirmedBalanceLocator(0);
@@ -301,7 +301,7 @@ namespace NBitcoin.Indexer
             to = toIncluded ? to.Ceil() : to.Floor();
             /////
 
-            return new TableQuery()
+            return new TableQuery<DynamicTableEntity>()
             {
                 FilterString =
                 TableQuery.CombineFilters(
