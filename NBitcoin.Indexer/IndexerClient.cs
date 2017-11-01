@@ -100,7 +100,7 @@ namespace NBitcoin.Indexer
 
             var table = Configuration.GetTransactionTable();
             var searchedEntity = new TransactionEntry.Entity(txId);
-            var query = new TableQuery()
+            var query = new TableQuery<DynamicTableEntity>()
                             .Where(
                                     TableQuery.CombineFilters(
                                         TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, searchedEntity.PartitionKey),
