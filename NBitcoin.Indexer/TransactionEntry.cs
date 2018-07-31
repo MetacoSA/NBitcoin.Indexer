@@ -42,7 +42,7 @@ namespace NBitcoin.Indexer
                 TxId = txId;
             }
 
-            public Entity(DynamicTableEntity entity)
+            public Entity(DynamicTableEntity entity, ConsensusFactory consensusFactory)
             {
                 var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.None);
                 _PartitionKey = entity.PartitionKey;
@@ -54,7 +54,7 @@ namespace NBitcoin.Indexer
                 var bytes = Helper.GetEntityProperty(entity, "a");
                 if(bytes != null && bytes.Length != 0)
                 {
-                    Transaction = new Transaction();
+                    Transaction = consensusFactory.CreateTransaction();
                     Transaction.ReadWrite(bytes);
                 }
                 bytes = Helper.GetEntityProperty(entity, "b");

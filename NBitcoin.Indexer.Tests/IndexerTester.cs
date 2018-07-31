@@ -22,6 +22,8 @@ namespace NBitcoin.Indexer.Tests
             }
         }
 
+
+
 		public static IndexerConfiguration CreateConfiguration()
 		{
 			var confBuilder = new ConfigurationBuilder();
@@ -50,6 +52,8 @@ namespace NBitcoin.Indexer.Tests
             config.EnsureSetup();
             _Folder = folder;
         }
+
+        public Network Network => Indexer.Configuration.Network;
 
 
         #region IDisposable Members

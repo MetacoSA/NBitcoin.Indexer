@@ -14,13 +14,13 @@ namespace NBitcoin.Indexer
             BlockHeaders = new List<BlockHeader>();
         }
 
-        public ChainPartEntry(DynamicTableEntity entity)
+        public ChainPartEntry(DynamicTableEntity entity, ConsensusFactory consensusFactory)
         {
             ChainOffset = Helper.StringToHeight(entity.RowKey);
             BlockHeaders = new List<BlockHeader>();         
             foreach (var prop in entity.Properties)
             {
-                var header = new BlockHeader();
+                var header = consensusFactory.CreateBlockHeader();
                 header.FromBytes(prop.Value.BinaryValue);
                 BlockHeaders.Add(header);
             }

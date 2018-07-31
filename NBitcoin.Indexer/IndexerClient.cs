@@ -52,7 +52,7 @@ namespace NBitcoin.Indexer
             {
                 container.GetPageBlobReference(blockId.ToString()).DownloadToStreamAsync(ms).GetAwaiter().GetResult();
                 ms.Position = 0;
-                Block b = new Block();
+                Block b = Configuration.Network.Consensus.ConsensusFactory.CreateBlock();
                 b.ReadWrite(ms, false);
                 return b;
             }
@@ -116,9 +116,9 @@ namespace NBitcoin.Indexer
             foreach(var e in await table.ExecuteQuerySegmentedAsync(query, null).ConfigureAwait(false))
             {
                 if(e.IsFat())
-                    entities.Add(new TransactionEntry.Entity(await FetchFatEntity(e).ConfigureAwait(false)));
+                    entities.Add(new TransactionEntry.Entity(await FetchFatEntity(e).ConfigureAwait(false), ConsensuFactory));
                 else
-                    entities.Add(new TransactionEntry.Entity(e));
+                    entities.Add(new TransactionEntry.Entity(e, ConsensuFactory));
             }
             if(entities.Count == 0)
                 result = null;
@@ -252,7 +252,7 @@ namespace NBitcoin.Indexer
             var part = table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()
             {
                 TakeCount = 1
-            }).GetAwaiter().GetResult().Select(e => new ChainPartEntry(e)).FirstOrDefault();
+            }).GetAwaiter().GetResult().Select(e => new ChainPartEntry(e, ConsensuFactory)).FirstOrDefault();
             if(part == null)
                 return null;
 
@@ -265,6 +265,8 @@ namespace NBitcoin.Indexer
             };
         }
 
+        ConsensusFactory ConsensuFactory => Configuration.Network.Consensus.ConsensusFactory;
+
         public IEnumerable<ChainBlockHeader> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
         {
             var oldTip = currentTip;
@@ -275,7 +277,7 @@ namespace NBitcoin.Indexer
             .Concat(
                     table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()).GetAwaiter().GetResult().Skip(2)
                     )
-            .Select(e => new ChainPartEntry(e)))
+            .Select(e => new ChainPartEntry(e, ConsensuFactory)))
             {
                 cancellation.ThrowIfCancellationRequested();
 

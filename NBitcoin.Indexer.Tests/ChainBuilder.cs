@@ -43,7 +43,7 @@ namespace NBitcoin.Indexer.Tests
 
         public Transaction EmitMoney(IDestination destination, Money amount, bool isCoinbase = true, bool indexBalance = false)
         {
-            Transaction transaction = new Transaction();
+            Transaction transaction = ConsensusFactory.CreateTransaction();
             if (isCoinbase)
                 transaction.AddInput(new TxIn()
                 {
@@ -69,10 +69,13 @@ namespace NBitcoin.Indexer.Tests
                     _Tester.Indexer.IndexOrderedBalance(tx);
             }
         }
+
+        ConsensusFactory ConsensusFactory => _Tester.Indexer.Configuration.Network.Consensus.ConsensusFactory;
+
         uint nonce = 0;
         private Block CreateNewBlock()
         {
-            var b = new Block();
+            var b = ConsensusFactory.CreateBlock();
             b.Header.Nonce = nonce;
             nonce++;
             b.Header.HashPrevBlock = _Chain.Tip.HashBlock;
@@ -155,7 +158,9 @@ namespace NBitcoin.Indexer.Tests
 
         public void Load(string blockFolder)
         {
+#pragma warning disable CS0612 // Type or member is obsolete
             var store = new BlockStore(blockFolder, this._Tester.Client.Configuration.Network);
+#pragma warning restore CS0612 // Type or member is obsolete
             foreach (var block in store.Enumerate(false))
             {
                 SubmitBlock(block.Item);
