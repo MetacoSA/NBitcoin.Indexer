@@ -475,7 +475,7 @@ namespace NBitcoin.Indexer.Tests
 
                 //Merge alice2 into Alice with a tx involving alice1
                 tx
-                   = new TransactionBuilder()
+                   = new TransactionBuilder() { MergeOutputs = false }
                        .AddKeys(alice1)
                        .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey)) //Alice1 10
                        .Send(alice2, "2.0")
@@ -511,9 +511,9 @@ namespace NBitcoin.Indexer.Tests
                 newtx.Inputs.AddRange(new[]
                 {
                     new TxIn(new OutPoint(tx,0)), //alice2 2
-                        new TxIn(new OutPoint(tx,1)), //alice1 3.9
-                        new TxIn(new OutPoint(tx,2)), //bob 2.1
-                        new TxIn(new OutPoint(tx,3)), //alice1 0.1
+                    new TxIn(new OutPoint(tx,1)), //alice1 3.9
+                    new TxIn(new OutPoint(tx,2)), //bob 2.1
+                    new TxIn(new OutPoint(tx,3)), //alice1 0.1
                 });
 
                 tx = new TransactionBuilder()
@@ -615,7 +615,7 @@ namespace NBitcoin.Indexer.Tests
 
 
                 tx
-                    = new TransactionBuilder()
+                    = new TransactionBuilder() { MergeOutputs = false }
                         .AddKeys(alice1)
                         .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey))
                         .Send(alice2, "2.0")
@@ -658,7 +658,7 @@ namespace NBitcoin.Indexer.Tests
                 newtx.AddInput(new TxIn(new OutPoint(tx, 2))); //bob 2.1
                 newtx.AddInput(new TxIn(new OutPoint(tx, 3))); //alice1 0.1
 
-                tx = new TransactionBuilder()
+                tx = new TransactionBuilder() { MergeOutputs = false }
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
                         .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
@@ -699,7 +699,7 @@ namespace NBitcoin.Indexer.Tests
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey.ScriptPubKey.Hash, alice1.PubKey.ScriptPubKey));
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, null));
 
-                tx = new TransactionBuilder()
+                tx = new TransactionBuilder() { MergeOutputs = false }
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
                         .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
@@ -982,8 +982,6 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void Play()
         {
-            var client = IndexerTester.CreateConfiguration().CreateIndexerClient();
-            var t = client.GetTransactionAsync(true, false, new uint256("4ea17dc952919506e729a9c52bf045cd49f10eb97bef3aa94cb4af487a56dd65")).Result;
         }
 
         [Fact]
@@ -1084,6 +1082,7 @@ namespace NBitcoin.Indexer.Tests
                 tx = Transaction.Create(tester.Network);
                 foreach(var coin in bobCoins)
                 {
+                    coin.ScriptPubKey = bob.ScriptPubKey;
                     tx.Inputs.Add(new TxIn()
                     {
                         PrevOut = coin.Outpoint,
@@ -1139,10 +1138,12 @@ namespace NBitcoin.Indexer.Tests
             Assert.True(bobBalance.Length == 1);
 
             tx = Transaction.Create(tester.Network);
+            var bobCoin = prev.Outputs.AsCoins().First();
+            bobCoin.ScriptPubKey = bob.ScriptPubKey;
             tx.Inputs.Add(new TxIn()
             {
-                PrevOut = prev.Outputs.AsCoins().First().Outpoint,
-                ScriptSig = bob.ScriptPubKey
+                PrevOut = bobCoin.Outpoint,
+                ScriptSig = bobCoin.ScriptPubKey
             });
             tx.Outputs.Add(new TxOut(Money.Coins(0.1m), alice));
             tx.Sign(bob, prev.Outputs.AsCoins().ToArray());
@@ -1264,7 +1265,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(bobBalance[1].Amount == Money.Parse("50.0"));
 
                 var aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
-                var tx = new TransactionBuilder()
+                var tx = new TransactionBuilder() { MergeOutputs = false }
                     .AddCoins(bobBalance[0].ReceivedCoins)
                     .AddKeys(bob)
                     .Send(alice, "5.0")

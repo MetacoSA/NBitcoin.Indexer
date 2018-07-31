@@ -333,7 +333,7 @@ namespace NBitcoin.Indexer
         {
             var chain = new ConcurrentChain(Configuration.Network);
             IndexerTrace.Information("Synchronizing with local node");
-            node.SynchronizeChain(chain);
+            node.SynchronizeChain(chain, new SynchronizeChainOptions() { SkipPoWCheck = true });
             IndexerTrace.Information("Chain loaded with height " + chain.Height);
             return chain;
         }

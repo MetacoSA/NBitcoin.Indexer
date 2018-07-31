@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer.IndexTasks
@@ -113,7 +114,7 @@ namespace NBitcoin.Indexer.IndexTasks
                     , new OperationContext()).GetAwaiter().GetResult();
                     watch.Stop();
                     IndexerTrace.BlockUploaded(watch.Elapsed, blockBytes.Length);
-                    _IndexedBlocks++;
+                    Interlocked.Increment(ref _IndexedBlocks);
                     break;
                 }
                 catch (StorageException ex)
@@ -126,7 +127,7 @@ namespace NBitcoin.Indexer.IndexTasks
                     }
                     watch.Stop();
                     IndexerTrace.BlockAlreadyUploaded();
-                    _IndexedBlocks++;
+                    Interlocked.Increment(ref _IndexedBlocks);
                     break;
                 }
                 catch (Exception ex)
