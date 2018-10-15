@@ -53,23 +53,61 @@ namespace NBitcoin.Indexer
             var key = GetValue(config, "Azure.Key", true);
             indexerConfig.StorageCredentials = new StorageCredentials(account, key);
             indexerConfig.StorageNamespace = GetValue(config, "StorageNamespace", false);
-            var network = GetValue(config, "Bitcoin.Network", false) ?? "Main";
+            var network = GetValue(config, "Bitcoin.Network", false);
+            if (network == null)
+            {
+                network = GetValue(config, "Network", false);
+                if (network == null)
+                {
+                    network = "Main";
+                }
+                else
+                {
+                    var chainType = Network.GetNetwork(network)?.NetworkType;
+                    if(chainType == null)
+                        throw new IndexerConfigurationErrorsException("Invalid value " + network + " in appsettings for key `Network` (expecting mainnet, testnet, regtest)");
+                    var chain = GetValue(config, "Chain", true);
+                    var networkSet = GetNetworkSet(chain);
+                    if (networkSet == null)
+                    {
+                        var parts = Altcoins.AltNetworkSets.GetAll().Select(s => s.CryptoCode).Concat(new[] { "BTC" }).ToArray();
+                        throw new IndexerConfigurationErrorsException($"Invalid value {chain} in appsettings for key `Chain` (expecting {String.Join(", ", parts)})");
+                    }
+                    network = networkSet.GetNetwork(chainType.Value).ToString();
+                }
+            }
+
             indexerConfig.Network = Network.GetNetwork(network);
             if (indexerConfig.Network == null)
-                throw new IndexerConfigurationErrorsException("Invalid value " + network + " in appsettings (expecting Main, Test or Seg)");
+                throw new IndexerConfigurationErrorsException("Invalid value " + network + " in appsettings for key `Bitcoin.Network` (expecting Main, Test or Seg)");
+
+            // Make sure we don't use the same objects for different cryptos
+            if(indexerConfig.Network.NetworkSet != NBitcoin.Bitcoin.Instance)
+            {
+                indexerConfig.StorageNamespace = indexerConfig.StorageNamespace ?? "";
+                indexerConfig.StorageNamespace = $"{network.ToString().Replace("-","")}{indexerConfig.StorageNamespace}";
+            }
+
             indexerConfig.Node = GetValue(config, "Node", false);
             indexerConfig.CheckpointSetName = GetValue(config, "CheckpointSetName", false);
             if (string.IsNullOrWhiteSpace(indexerConfig.CheckpointSetName))
                 indexerConfig.CheckpointSetName = "default";
 
             var emulator = GetValue(config, "AzureStorageEmulatorUsed", false);
-            if(!string.IsNullOrWhiteSpace(emulator))
+            if (!string.IsNullOrWhiteSpace(emulator))
                 indexerConfig.AzureStorageEmulatorUsed = bool.Parse(emulator);
+        }
+
+        private static INetworkSet GetNetworkSet(string chain)
+        {
+            if (chain.Equals("BTC", StringComparison.OrdinalIgnoreCase))
+                return NBitcoin.Bitcoin.Instance;
+            return Altcoins.AltNetworkSets.GetAll().FirstOrDefault(set => set.CryptoCode.Equals(chain, StringComparison.OrdinalIgnoreCase));
         }
 
         protected static string GetValue(IConfiguration config, string setting, bool required)
         {
-			
+
             var result = config[setting];
             result = String.IsNullOrWhiteSpace(result) ? null : result;
             if (result == null && required)
