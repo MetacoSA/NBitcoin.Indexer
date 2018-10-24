@@ -26,6 +26,7 @@ namespace NBitcoin.Indexer.Tests
 {
     public class TestClass
     {
+        public ConsensusFactory ConsensusFactory => Network.Main.Consensus.ConsensusFactory;
         [Fact]
         public void CanSerializeOrderedBalanceToEntity()
         {
@@ -33,17 +34,17 @@ namespace NBitcoin.Indexer.Tests
             Script script = CreateScript(512);
             OrderedBalanceChange balance = new OrderedBalanceChange(txId, script, null, null, 0);
             Assert.Equal(script, balance.ScriptPubKey);
-            var entity = balance.ToEntity();
+            var entity = balance.ToEntity(Network.Main.Consensus.ConsensusFactory);
             Assert.False(entity.Properties.ContainsKey("h"));
-            balance = new OrderedBalanceChange(entity);
+            balance = new OrderedBalanceChange(entity, ConsensusFactory);
             Assert.Equal(script, balance.ScriptPubKey);
 
             script = CreateScript(513);
             balance = new OrderedBalanceChange(txId, script, null, null, 0);
             Assert.Equal(script, balance.ScriptPubKey);
-            entity = balance.ToEntity();
+            entity = balance.ToEntity(ConsensusFactory);
             Assert.True(entity.Properties.ContainsKey("h"));
-            balance = new OrderedBalanceChange(entity);
+            balance = new OrderedBalanceChange(entity, ConsensusFactory);
             Assert.Equal(script, balance.ScriptPubKey);
         }
 
@@ -56,7 +57,7 @@ namespace NBitcoin.Indexer.Tests
         public void CanSpreadBytes()
         {
             var bytes =
-                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new OrderedBalanceChange.IntCompactVarInt((uint)e)).ToArray());
+                Helper.SerializeList(Enumerable.Range(0, 300000).Select(e => new OrderedBalanceChange.IntCompactVarInt((uint)e)).ToArray(), ConsensusFactory);
 
             DynamicTableEntity entity = new DynamicTableEntity();
             Helper.SetEntityProperty(entity, "a", bytes);
@@ -71,7 +72,7 @@ namespace NBitcoin.Indexer.Tests
             var result = OrderedBalanceChange.ExtractScriptBalances(txId, tx, null, null, 0);
             foreach(var e in result)
             {
-                var entity = e.ToEntity();
+                var entity = e.ToEntity(ConsensusFactory);
             }
         }
         [Fact]
@@ -319,7 +320,7 @@ namespace NBitcoin.Indexer.Tests
         {
             if(prev == null)
                 prev = Network.Main.GetGenesis();
-            var b = Network.Main.Consensus.ConsensusFactory.CreateBlock();
+            var b = ConsensusFactory.CreateBlock();
             b.Header.Nonce = RandomUtils.GetUInt32();
             b.Header.HashPrevBlock = prev.GetHash();
             b.Transactions.Add(tx);
@@ -653,10 +654,10 @@ namespace NBitcoin.Indexer.Tests
 
                 var prevTx = tx;
                 var newtx = Transaction.Create(tester.Network);
-                newtx.AddInput(new TxIn(new OutPoint(tx, 0))); //alice2 2
-                newtx.AddInput(new TxIn(new OutPoint(tx, 1))); //alice1 3.9
-                newtx.AddInput(new TxIn(new OutPoint(tx, 2))); //bob 2.1
-                newtx.AddInput(new TxIn(new OutPoint(tx, 3))); //alice1 0.1
+                newtx.Inputs.Add(new OutPoint(tx, 0)); //alice2 2
+                newtx.Inputs.Add(new OutPoint(tx, 1)); //alice1 3.9
+                newtx.Inputs.Add(new OutPoint(tx, 2)); //bob 2.1
+                newtx.Inputs.Add(new OutPoint(tx, 3)); //alice1 0.1
 
                 tx = new TransactionBuilder() { MergeOutputs = false }
                         .ContinueToBuild(newtx)
@@ -992,7 +993,7 @@ namespace NBitcoin.Indexer.Tests
                 var builder = tester.CreateChainBuilder();
                 Transaction tx = Transaction.Create(tester.Network);
                 for(int i = 0; i < 4; i++)
-                    tx.AddOutput(new TxOut(Money.Zero, new Script(new byte[500 * 1024])));
+                    tx.Outputs.Add(Money.Zero, new Script(new byte[500 * 1024]));
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
 
                 var indexed = tester.Client.GetTransaction(tx.GetHash());
@@ -1003,7 +1004,7 @@ namespace NBitcoin.Indexer.Tests
                 var txhash = tx.GetHash();
                 for(int i = 0; i < 4; i++)
                     tx2.Inputs.Add(new TxIn(new OutPoint(txhash, i)));
-                tx2.AddOutput(new TxOut(Money.Zero, new Script(RandomUtils.GetBytes(500 * 1024))));
+                tx2.Outputs.Add(Money.Zero, new Script(RandomUtils.GetBytes(500 * 1024)));
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx2, null));
                 indexed = tester.Client.GetTransaction(tx2.GetHash());
                 Assert.NotNull(indexed);
@@ -1277,7 +1278,7 @@ namespace NBitcoin.Indexer.Tests
                     .SendFees("0.05")
                     .SetChange(alice)
                     .BuildTransaction(true);
-                tx.AddOutput(new TxOut(Money.Zero, TxNullDataTemplate.Instance.GenerateScriptPubKey(RandomUtils.GetBytes(3)))); //Add OP_RETURN
+                tx.Outputs.Add(Money.Zero, TxNullDataTemplate.Instance.GenerateScriptPubKey(RandomUtils.GetBytes(3))); //Add OP_RETURN
                 chainBuilder.Emit(tx, false);
                 var mempoolDate1 = tester.Client.GetTransaction(tx.GetHash()).MempoolDate.Value;
 

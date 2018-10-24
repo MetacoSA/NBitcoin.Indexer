@@ -55,15 +55,15 @@ namespace NBitcoin.Indexer
                 if(bytes != null && bytes.Length != 0)
                 {
                     Transaction = consensusFactory.CreateTransaction();
-                    Transaction.ReadWrite(bytes);
+                    Transaction.ReadWrite(bytes, consensusFactory);
                 }
                 bytes = Helper.GetEntityProperty(entity, "b");
                 if(bytes != null && bytes.Length != 0)
                 {
                     ColoredTransaction = new ColoredTransaction();
-                    ColoredTransaction.ReadWrite(bytes);
+                    ColoredTransaction.ReadWrite(bytes, consensusFactory);
                 }
-                _PreviousTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "c"));
+                _PreviousTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "c"), consensusFactory);
 
                 var timestamp = Helper.GetEntityProperty(entity, "d");
                 if(timestamp != null && timestamp.Length == 8)
@@ -93,7 +93,7 @@ namespace NBitcoin.Indexer
                     Helper.SetEntityProperty(entity, "a", Transaction.ToBytes());
                 if(ColoredTransaction != null)
                     Helper.SetEntityProperty(entity, "b", ColoredTransaction.ToBytes());
-                Helper.SetEntityProperty(entity, "c", Helper.SerializeList(PreviousTxOuts));
+                Helper.SetEntityProperty(entity, "c", Helper.SerializeList(PreviousTxOuts, Transaction?.GetConsensusFactory() ?? PreviousTxOuts.Select(t => t.GetConsensusFactory()).FirstOrDefault()));
                 Helper.SetEntityProperty(entity, "d", Utils.ToBytes((ulong)Timestamp.UtcTicks, true));
                 return entity;
             }

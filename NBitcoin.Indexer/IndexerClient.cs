@@ -29,7 +29,7 @@ namespace NBitcoin.Indexer
                 return _Configuration;
             }
         }
-
+        public ConsensusFactory ConsensusFactory => Configuration.Network.Consensus.ConsensusFactory;
         public IndexerClient(IndexerConfiguration configuration)
         {
             if(configuration == null)
@@ -52,8 +52,8 @@ namespace NBitcoin.Indexer
             {
                 container.GetPageBlobReference(blockId.ToString()).DownloadToStreamAsync(ms).GetAwaiter().GetResult();
                 ms.Position = 0;
-                Block b = Configuration.Network.Consensus.ConsensusFactory.CreateBlock();
-                b.ReadWrite(ms, false);
+                Block b = ConsensusFactory.CreateBlock();
+                b.ReadWrite(ms, false, Configuration.Network);
                 return b;
             }
             catch(StorageException ex)
@@ -442,7 +442,7 @@ namespace NBitcoin.Indexer
 
             var partitions =
                   tableQuery
-                 .Select(c => new OrderedBalanceChange(c))
+                 .Select(c => new OrderedBalanceChange(c, ConsensusFactory))
                  .Select(c => new LoadingTransactionTask
                  {
                      Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
@@ -586,7 +586,7 @@ namespace NBitcoin.Indexer
 
             foreach(var c in table.ExecuteQueryAsync(new BalanceQuery().CreateTableQuery(new BalanceId(scriptPubKey))).GetAwaiter().GetResult())
             {
-                var change = new OrderedBalanceChange(c);
+                var change = new OrderedBalanceChange(c, ConsensusFactory);
                 if(change.BlockId != null)
                     break;
                 if(DateTime.UtcNow - change.SeenUtc < olderThan)
@@ -640,7 +640,7 @@ namespace NBitcoin.Indexer
                 if(!success)
                     return false;
             }
-            var entity = change.ToEntity();
+            var entity = change.ToEntity(ConsensusFactory);
             if(!change.IsEmpty)
             {
                 await Configuration.GetBalanceTable().ExecuteAsync(TableOperation.Merge(entity)).ConfigureAwait(false);
@@ -665,7 +665,7 @@ namespace NBitcoin.Indexer
             Parallel.ForEach(balances, b =>
             {
                 var table = Configuration.GetBalanceTable();
-                table.ExecuteAsync(TableOperation.Delete(b.ToEntity())).GetAwaiter().GetResult();
+                table.ExecuteAsync(TableOperation.Delete(b.ToEntity(ConsensusFactory))).GetAwaiter().GetResult();
             });
         }
 

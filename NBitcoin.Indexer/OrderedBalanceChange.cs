@@ -420,7 +420,7 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal OrderedBalanceChange(DynamicTableEntity entity)
+        internal OrderedBalanceChange(DynamicTableEntity entity, ConsensusFactory consensusFactory)
         {
             var splitted = entity.RowKey.Split(new string[] { "-" }, StringSplitOptions.RemoveEmptyEntries);
             Height = Helper.StringToHeight(splitted[1]);
@@ -443,10 +443,10 @@ namespace NBitcoin.Indexer
 
             SeenUtc = entity.Properties["s"].DateTime.Value;
 
-            _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"));
+            _SpentOutpoints = Helper.DeserializeList<OutPoint>(Helper.GetEntityProperty(entity, "a"), consensusFactory);
 
             if(entity.Properties.ContainsKey("b0"))
-                _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b")).Select(s => new Coin()
+                _SpentCoins = new CoinCollection(Helper.DeserializeList<Spendable>(Helper.GetEntityProperty(entity, "b"), consensusFactory).Select(s => new Coin()
                 {
                     Outpoint = s.OutPoint,
                     TxOut = s.TxOut
@@ -454,10 +454,10 @@ namespace NBitcoin.Indexer
             else if(_SpentOutpoints.Count == 0)
                 _SpentCoins = new CoinCollection();
 
-            _SpentIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "ss")).Select(i => (uint)i.ToLong()).ToList();
+            _SpentIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "ss"), consensusFactory).Select(i => (uint)i.ToLong()).ToList();
 
-            var receivedIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "c")).Select(i => (uint)i.ToLong()).ToList();
-            var receivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"));
+            var receivedIndices = Helper.DeserializeList<IntCompactVarInt>(Helper.GetEntityProperty(entity, "c"), consensusFactory).Select(i => (uint)i.ToLong()).ToList();
+            var receivedTxOuts = Helper.DeserializeList<TxOut>(Helper.GetEntityProperty(entity, "d"), consensusFactory);
 
             _ReceivedCoins = new CoinCollection();
             for(int i = 0; i < receivedIndices.Count; i++)
@@ -610,7 +610,7 @@ namespace NBitcoin.Indexer
                 return new ConfirmedBalanceLocator(this);
         }
 
-        internal DynamicTableEntity ToEntity()
+        internal DynamicTableEntity ToEntity(ConsensusFactory consensusFactory)
         {
             DynamicTableEntity entity = new DynamicTableEntity();
             entity.ETag = "*";
@@ -620,13 +620,13 @@ namespace NBitcoin.Indexer
             entity.RowKey = BalanceId + "-" + locator.ToString(true);
 
             entity.Properties.Add("s", new EntityProperty(SeenUtc));
-            Helper.SetEntityProperty(entity, "ss", Helper.SerializeList(SpentIndices.Select(e => new IntCompactVarInt(e))));
+            Helper.SetEntityProperty(entity, "ss", Helper.SerializeList(SpentIndices.Select(e => new IntCompactVarInt(e)), consensusFactory));
 
-            Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints));
+            Helper.SetEntityProperty(entity, "a", Helper.SerializeList(SpentOutpoints, consensusFactory));
             if(SpentCoins != null)
-                Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentCoins.Select(c => new Spendable(c.Outpoint, c.TxOut))));
-            Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedCoins.Select(e => new IntCompactVarInt(e.Outpoint.N))));
-            Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedCoins.Select(e => e.TxOut)));
+                Helper.SetEntityProperty(entity, "b", Helper.SerializeList(SpentCoins.Select(c => new Spendable(c.Outpoint, c.TxOut)), consensusFactory));
+            Helper.SetEntityProperty(entity, "c", Helper.SerializeList(ReceivedCoins.Select(e => new IntCompactVarInt(e.Outpoint.N)), consensusFactory));
+            Helper.SetEntityProperty(entity, "d", Helper.SerializeList(ReceivedCoins.Select(e => e.TxOut), consensusFactory));
             var flags = (HasOpReturn ? "o" : "n") + (IsCoinbase ? "o" : "n");
             entity.Properties.AddOrReplace("e", new EntityProperty(flags));
             entity.Properties.AddOrReplace("f", new EntityProperty(Helper.Serialize(MatchedRules)));

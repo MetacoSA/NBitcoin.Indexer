@@ -177,6 +177,7 @@ namespace NBitcoin.Indexer.IndexTasks
             get;
             private set;
         }
+        public ConsensusFactory ConsensusFactory => Configuration.Network.Consensus.ConsensusFactory;
         public bool SaveProgression
         {
             get;

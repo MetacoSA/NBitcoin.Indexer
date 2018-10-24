@@ -45,15 +45,8 @@ namespace NBitcoin.Indexer.Tests
         {
             Transaction transaction = ConsensusFactory.CreateTransaction();
             if (isCoinbase)
-                transaction.AddInput(new TxIn()
-                {
-                    ScriptSig = new Script(NoRandom ? new uint256(0).ToBytes() : RandomUtils.GetBytes(32)),
-                });
-            transaction.AddOutput(new TxOut()
-            {
-                ScriptPubKey = destination.ScriptPubKey,
-                Value = amount
-            });
+                transaction.Inputs.Add(scriptSig: new Script(NoRandom ? new uint256(0).ToBytes() : RandomUtils.GetBytes(32)));
+            transaction.Outputs.Add(amount, destination);
             Add(transaction, indexBalance);
             return transaction;
         }

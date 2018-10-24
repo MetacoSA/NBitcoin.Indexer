@@ -15,7 +15,7 @@ namespace NBitcoin.Indexer
 {
     internal static class Helper
     {
-        internal static List<T> DeserializeList<T>(byte[] bytes) where T : IBitcoinSerializable, new()
+        internal static List<T> DeserializeList<T>(byte[] bytes, ConsensusFactory consensusFactory) where T : IBitcoinSerializable, new()
         {
             List<T> outpoints = new List<T>();
             if (bytes == null)
@@ -25,18 +25,18 @@ namespace NBitcoin.Indexer
             while (ms.Position != ms.Length)
             {
                 T outpoint = new T();
-                outpoint.ReadWrite(ms, false);
+                outpoint.ReadWrite(ms, false, consensusFactory);
                 outpoints.Add(outpoint);
             }
             return outpoints;
         }
 
-        public static byte[] SerializeList<T>(IEnumerable<T> items) where T : IBitcoinSerializable
+        public static byte[] SerializeList<T>(IEnumerable<T> items, ConsensusFactory consensusFactory) where T : IBitcoinSerializable
         {
             MemoryStream ms = new MemoryStream();
             foreach (var item in items)
             {
-                item.ReadWrite(ms, true);
+                item.ReadWrite(ms, true, consensusFactory);
             }
             return Helper.GetBytes(ms) ?? new byte[0];
         }

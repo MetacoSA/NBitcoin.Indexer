@@ -49,6 +49,8 @@ namespace NBitcoin.Indexer
                 return _Configuration;
             }
         }
+
+        public ConsensusFactory ConsensusFactory => Configuration.Network.Consensus.ConsensusFactory;
         public AzureIndexer(IndexerConfiguration configuration)
         {
             if(configuration == null)
@@ -133,11 +135,11 @@ namespace NBitcoin.Indexer
 
         public void Index(IEnumerable<OrderedBalanceChange> balances)
         {
-            Index(balances.Select(b => b.ToEntity()), Configuration.GetBalanceTable());
+            Index(balances.Select(b => b.ToEntity(ConsensusFactory)), Configuration.GetBalanceTable());
         }
         public Task IndexAsync(IEnumerable<OrderedBalanceChange> balances)
         {
-            return IndexAsync(balances.Select(b => b.ToEntity()), Configuration.GetBalanceTable());
+            return IndexAsync(balances.Select(b => b.ToEntity(ConsensusFactory)), Configuration.GetBalanceTable());
         }
         private void Index(IEnumerable<ITableEntity> entities, CloudTable table)
         {
@@ -260,7 +262,7 @@ namespace NBitcoin.Indexer
                     block
                         .Transactions
                         .SelectMany(t => OrderedBalanceChange.ExtractScriptBalances(t.GetHash(), t, blockId, header, height))
-                        .Select(_ => _.ToEntity())
+                        .Select(_ => _.ToEntity(ConsensusFactory))
                         .AsEnumerable();
 
             Index(entities, table);
@@ -299,7 +301,7 @@ namespace NBitcoin.Indexer
                     block
                     .Transactions
                     .SelectMany(t => OrderedBalanceChange.ExtractWalletBalances(null, t, blockId, block.Header, height, walletRules))
-                    .Select(t => t.ToEntity())
+                    .Select(t => t.ToEntity(ConsensusFactory))
                     .AsEnumerable();
 
             return IndexAsync(entities, table);
@@ -308,13 +310,13 @@ namespace NBitcoin.Indexer
         public void IndexOrderedBalance(Transaction tx)
         {
             var table = Configuration.GetBalanceTable();
-            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity()).AsEnumerable();
+            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity(ConsensusFactory)).AsEnumerable();
             Index(entities, table);
         }
         public Task IndexOrderedBalanceAsync(Transaction tx)
         {
             var table = Configuration.GetBalanceTable();
-            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity()).AsEnumerable();
+            var entities = OrderedBalanceChange.ExtractScriptBalances(tx).Select(t => t.ToEntity(ConsensusFactory)).AsEnumerable();
             return IndexAsync(entities, table);
         }
 

@@ -21,7 +21,7 @@ namespace NBitcoin.Indexer.IndexTasks
 
         protected override Microsoft.WindowsAzure.Storage.Table.ITableEntity ToTableEntity(OrderedBalanceChange item)
         {
-            return item.ToEntity();
+            return item.ToEntity(ConsensusFactory);
         }
 
         protected override bool SkipToEnd

@@ -33,7 +33,7 @@ namespace NBitcoin.Indexer
             {
                 try
                 {
-                    _BlockLocator.ReadWrite(data, false);
+                    _BlockLocator.ReadWrite(data, false, network);
                     return;
                 }
                 catch

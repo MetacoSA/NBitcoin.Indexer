@@ -91,7 +91,7 @@ namespace NBitcoin.Indexer.IndexTasks
                 client.DefaultRequestOptions.SingleBlobUploadThresholdInBytes = 32 * 1024 * 1024;
                 var blob = container.GetPageBlobReference(hash);
                 MemoryStream ms = new MemoryStream();
-                block.ReadWrite(ms, true);
+                block.ReadWrite(ms, true, Configuration.Network);
                 var blockBytes = ms.GetBuffer();
 
                 long length = 512 - (ms.Length % 512);
