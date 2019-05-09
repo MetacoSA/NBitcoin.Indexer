@@ -9,9 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.5.0-preview-20171012-09" />
-    <PackageReference Include="xunit" Version="2.3.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.3.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.5.0" />
+    <PackageReference Include="xunit" Version="2.3.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.3.1" />
+    <DotNetCliToolReference Include="dotnet-xunit" Version="2.3.1" />
 	<PackageReference Include="Microsoft.Extensions.Configuration" Version="2.1.1" />
 	<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="2.0.2"></PackageReference>
   </ItemGroup>
@@ -19,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NBitcoin.Indexer\NBitcoin.Indexer.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <None Update="LocalSettings.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

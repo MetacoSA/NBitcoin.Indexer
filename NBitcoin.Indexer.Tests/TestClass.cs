@@ -1,4 +1,6 @@
-﻿using Microsoft.WindowsAzure.Storage;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Primitives;
+using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
@@ -70,7 +72,7 @@ namespace NBitcoin.Indexer.Tests
             var tx = Transaction.Parse(File.ReadAllText("../../../Data/BigTransaction.txt"), Network.Main);
             var txId = tx.GetHash();
             var result = OrderedBalanceChange.ExtractScriptBalances(txId, tx, null, null, 0);
-            foreach(var e in result)
+            foreach (var e in result)
             {
                 var entity = e.ToEntity(ConsensusFactory);
             }
@@ -78,7 +80,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanIndexBlocks()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
                 node.ChainBuilder.Load("../../../Data/blocks");
@@ -132,7 +134,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanIndexTransactions()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 tester.CreateLocalNode().ChainBuilder.Load("../../../Data/blocks");
                 Assert.Equal(138, tester.Indexer.IndexTransactions());
@@ -143,7 +145,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanManageCheckpoints()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var repo = tester.Indexer.GetCheckpointRepository();
                 var checkpoint = repo.GetCheckpoint("toto");
@@ -209,7 +211,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetColoredBalance()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var chainBuilder = tester.CreateChainBuilder();
                 tester.Client.ColoredBalance = true;
@@ -318,7 +320,7 @@ namespace NBitcoin.Indexer.Tests
         private Block PushStore(BlockStore store, Transaction tx, Block prev = null)
 #pragma warning restore CS0612 // Type or member is obsolete
         {
-            if(prev == null)
+            if (prev == null)
                 prev = Network.Main.GetGenesis();
             var b = ConsensusFactory.CreateBlock();
             b.Header.Nonce = RandomUtils.GetUInt32();
@@ -330,7 +332,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanImportMainChain()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
                 var chain = new ConcurrentChain(tester.Client.Configuration.Network);
@@ -408,7 +410,7 @@ namespace NBitcoin.Indexer.Tests
         public void CanGeneratePartitionKey()
         {
             HashSet<string> results = new HashSet<string>();
-            while(results.Count != 4096)
+            while (results.Count != 4096)
             {
                 results.Add(Helper.GetPartitionKey(12, RandomUtils.GetBytes(3), 0, 3));
             }
@@ -429,7 +431,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanMergeBalance()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice1 = new Key();
@@ -570,7 +572,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetWalletOrderedBalances()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice1 = new Key();
@@ -748,7 +750,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanQueryBalanceRange()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 Key bob = new BitcoinSecret("L4JinGSmHxKJJrjbeFx3zxf9Vr3VD6jmq5wXpDm6ywUewcWoXEAy").PrivateKey;
                 var chainBuilder = tester.CreateChainBuilder();
@@ -797,7 +799,7 @@ namespace NBitcoin.Indexer.Tests
                 var all = tester.Client.GetOrderedBalance(bob).ToArray();
                 Assert.Equal(all.Length, txs.Count);
 
-                foreach(var test in tests)
+                foreach (var test in tests)
                 {
                     var data = test;
                     BalanceQuery query = new BalanceQuery();
@@ -821,7 +823,7 @@ namespace NBitcoin.Indexer.Tests
             var name = txs.Single(t => t.Value.GetHash() == change.TransactionId).Key;
             var unconf1 = name.StartsWith("u");
             var unconf2 = change.BlockId == null;
-            if(unconf1 != unconf2)
+            if (unconf1 != unconf2)
                 Assert.False(true, "A confirmed or unconfirmed transaction should not have been returned");
             return name;
         }
@@ -833,7 +835,7 @@ namespace NBitcoin.Indexer.Tests
 
         private BalanceLocator Parse(string loc, OrderedBalanceChange[] changes, Dictionary<string, Transaction> txs)
         {
-            if(loc.Contains("{"))
+            if (loc.Contains("{"))
             {
                 var res = Regex.Match(loc, "{(.*?)}");
                 var tx = txs[res.Groups[1].Value];
@@ -850,7 +852,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetBalanceSheet()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
@@ -949,7 +951,7 @@ namespace NBitcoin.Indexer.Tests
             var str = FastEncoder.Instance.EncodeData(bytes);
             byte[] actual = FastEncoder.Instance.DecodeData(str);
             Assert.True(bytes.SequenceEqual(actual));
-            for(int i = 0; i < 1000; i++)
+            for (int i = 0; i < 1000; i++)
             {
                 bytes = RandomUtils.GetBytes(100);
                 str = FastEncoder.Instance.EncodeData(bytes);
@@ -965,7 +967,7 @@ namespace NBitcoin.Indexer.Tests
         {
             TaskCompletionSource<int> completion = new TaskCompletionSource<int>();
             var scheduler = new CustomThreadPoolTaskScheduler(10, 20);
-            for(int i = 0; i < 30; i++)
+            for (int i = 0; i < 30; i++)
             {
                 new Task(() => Task.WaitAll(completion.Task)).Start(scheduler);
             }
@@ -988,11 +990,11 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanIndexHugeTransaction()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var builder = tester.CreateChainBuilder();
                 Transaction tx = Transaction.Create(tester.Network);
-                for(int i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                     tx.Outputs.Add(Money.Zero, new Script(new byte[500 * 1024]));
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
 
@@ -1002,7 +1004,7 @@ namespace NBitcoin.Indexer.Tests
 
                 Transaction tx2 = Transaction.Create(tester.Network);
                 var txhash = tx.GetHash();
-                for(int i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                     tx2.Inputs.Add(new TxIn(new OutPoint(txhash, i)));
                 tx2.Outputs.Add(Money.Zero, new Script(RandomUtils.GetBytes(500 * 1024)));
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx2, null));
@@ -1016,7 +1018,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanIndexLongScript()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var tx = Transaction.Parse("010000000127d57276f1026a95b4af3b03b6aba859a001861682342af19825e8a2408ae008010000008c493046022100cd92b992d4bde3b44471677081c5ece6735d6936480ff74659ac1824d8a1958e022100b08839f167532aea10acecc9d5f7044ddd9793ef2989d090127a6e626dc7c9ce014104cac6999d6c3feaba7cdd6c62bce174339190435cffd15af7cb70c33b82027deba06e6d5441eb401c0f8f92d4ffe6038d283d2b2dd59c4384b66b7b8f038a7cf5ffffffff0200093d0000000000434104636d69f81d685f6f58054e17ac34d16db869bba8b3562aabc38c35b065158d360f087ef7bd8b0bcbd1be9a846a8ed339bf0131cdb354074244b0a9736beeb2b9ac40420f0000000000fdba0f76a9144838a081d73cf134e8ff9cfd4015406c73beceb388acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac00000000", tester.Network);
                 tester.Indexer.IndexOrderedBalance(tx);
@@ -1029,7 +1031,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void NonStandardScriptPubKeyDoesNotReturnsWrongBalance()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
@@ -1081,7 +1083,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(bobBalance.Length == 3);
 
                 tx = Transaction.Create(tester.Network);
-                foreach(var coin in bobCoins)
+                foreach (var coin in bobCoins)
                 {
                     coin.ScriptPubKey = bob.ScriptPubKey;
                     tx.Inputs.Add(new TxIn()
@@ -1095,12 +1097,12 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.Emit(tx);
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
-                for(int i = 0; i < 2; i++)
+                for (int i = 0; i < 2; i++)
                 {
                     bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
                     Assert.True(bobBalance.Length == 4); //OP_NOP spending should not appear
                     Assert.True(bobBalance[0].SpentCoins.Count == 3);
-                    foreach(var coin in bobBalance[0].SpentCoins)
+                    foreach (var coin in bobBalance[0].SpentCoins)
                     {
                         Assert.Equal(bob.ScriptPubKey, coin.TxOut.ScriptPubKey);
                     }
@@ -1152,7 +1154,7 @@ namespace NBitcoin.Indexer.Tests
             chainBuilder.SubmitBlock();
             chainBuilder.SyncIndexer();
 
-            for(int i = 0; i < 2; i++)
+            for (int i = 0; i < 2; i++)
             {
                 bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
                 Assert.True(bobBalance.Length < 2); //OP_NOP spending should not appear
@@ -1162,7 +1164,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetOrderedBalancesP2WPKH()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
@@ -1202,7 +1204,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetOrderedBalancesP2WSH()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
@@ -1242,7 +1244,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetOrderedBalances()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
@@ -1291,7 +1293,7 @@ namespace NBitcoin.Indexer.Tests
                 bobBalance = tester.Client.GetOrderedBalance(bob).ToArray();
                 Assert.True(bobBalance[0].Amount == -Money.Parse("5.0"));
 
-                for(int i = 0; i < 2; i++)
+                for (int i = 0; i < 2; i++)
                 {
 
                     aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
@@ -1364,7 +1366,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetBlock()
         {
-            using(var tester = CreateTester("cached"))
+            using (var tester = CreateTester("cached"))
             {
                 tester.Cached = true;
                 tester.ImportCachedBlocks();
@@ -1378,7 +1380,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetTransaction()
         {
-            using(var tester = CreateTester("cached"))
+            using (var tester = CreateTester("cached"))
             {
                 tester.Cached = true;
                 tester.ImportCachedBlocks();
@@ -1398,7 +1400,7 @@ namespace NBitcoin.Indexer.Tests
         [Fact]
         public void CanGetColoredTransaction()
         {
-            using(var tester = CreateTester())
+            using (var tester = CreateTester())
             {
                 var node = tester.CreateLocalNode();
                 var ccTester = new ColoredCoinTester("CanColorizeTransferTransaction");
@@ -1437,7 +1439,7 @@ namespace NBitcoin.Indexer.Tests
             var testcase = JsonConvert.DeserializeObject<TestCase[]>(File.ReadAllText("../../../Data/openasset-known-tx.json"))
                 .First(t => t.test == test);
             NoSqlTransactionRepository repository = new NoSqlTransactionRepository();
-            foreach(var tx in testcase.txs)
+            foreach (var tx in testcase.txs)
             {
                 var txObj = Transaction.Parse(tx, Network);
                 Transactions.Add(txObj);
@@ -1465,14 +1467,14 @@ namespace NBitcoin.Indexer.Tests
         public string AutoDownloadMissingTransaction(Action act)
         {
             StringBuilder builder = new StringBuilder();
-            while(true)
+            while (true)
             {
                 try
                 {
                     act();
                     break;
                 }
-                catch(TransactionNotFoundException ex)
+                catch (TransactionNotFoundException ex)
                 {
                     WebClient client = new WebClient();
                     var result = client.DownloadString("http://btc.blockr.io/api/v1/tx/raw/" + ex.TxId);
