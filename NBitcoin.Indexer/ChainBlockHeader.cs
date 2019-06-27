@@ -1,19 +1,34 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using System;
+using System.Collections.Async;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
 	public static class ChainChangeEntryExtensions
 	{
-		public static void UpdateChain(this IEnumerable<ChainBlockHeader> entries, ChainBase chain)
+        public static void UpdateChain(this IEnumerable<ChainBlockHeader> entries, ChainBase chain)
+        {
+            var entriesAsync = new AsyncEnumerable<ChainBlockHeader>(async yield =>
+            {
+                foreach (var entry in entries)
+                {
+                    await yield.ReturnAsync(entry);
+                }
+            });
+            UpdateChain(entriesAsync, chain, default(CancellationToken)).GetAwaiter().GetResult();
+        }
+        public static async Task UpdateChain(this IAsyncEnumerable<ChainBlockHeader> entries, ChainBase chain, CancellationToken cancellation = default(CancellationToken))
 		{
+            var enumerator = await entries.GetAsyncEnumeratorAsync(cancellation).ConfigureAwait(false);
 			Stack<ChainBlockHeader> toApply = new Stack<ChainBlockHeader>();
-			foreach(var entry in entries)
+			while(await enumerator.MoveNextAsync(cancellation).ConfigureAwait(false))
 			{
+                var entry = enumerator.Current;
 				var prev = chain.GetBlock(entry.Header.HashPrevBlock);
 				if(prev == null)
 					toApply.Push(entry);

@@ -16,6 +16,7 @@ using System.Text;
 using System.Threading;
 using NBitcoin;
 using System.Threading.Tasks;
+using System.Collections.Async;
 
 namespace NBitcoin.Indexer
 {
@@ -267,44 +268,54 @@ namespace NBitcoin.Indexer
 
         ConsensusFactory ConsensuFactory => Configuration.Network.Consensus.ConsensusFactory;
 
-        public IEnumerable<ChainBlockHeader> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
+        public IAsyncEnumerable<ChainBlockHeader> GetChainChangesUntilFork(ChainedBlock currentTip, bool forkIncluded, CancellationToken cancellation = default(CancellationToken))
         {
-            var oldTip = currentTip;
-            var table = Configuration.GetChainTable();
-            List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
-            foreach(var chainPart in
-                ExecuteBalanceQuery(table, new TableQuery<DynamicTableEntity>(), new[] { 1, 2, 10 })
-            .Concat(
-                    table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>()).GetAwaiter().GetResult().Skip(2)
-                    )
-            .Select(e => new ChainPartEntry(e, ConsensuFactory)))
+            return new AsyncEnumerable<ChainBlockHeader>(async yield =>
             {
-                cancellation.ThrowIfCancellationRequested();
+                var oldTip = currentTip;
+                var table = Configuration.GetChainTable();
+                List<ChainBlockHeader> blocks = new List<ChainBlockHeader>();
 
-                int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
-                foreach(var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
+                async Task ProcessChainPart(ChainPartEntry chainPart)
                 {
-                    if(currentTip == null && oldTip != null)
-                        throw new InvalidOperationException("No fork found, the chain stored in azure is probably different from the one of the provided input");
-                    if(oldTip == null || height > currentTip.Height)
-                        yield return CreateChainChange(height, block);
-                    else
+                    int height = chainPart.ChainOffset + chainPart.BlockHeaders.Count - 1;
+                    foreach (var block in chainPart.BlockHeaders.Reverse<BlockHeader>())
                     {
-                        if(height < currentTip.Height)
-                            currentTip = currentTip.FindAncestorOrSelf(height);
-                        var chainChange = CreateChainChange(height, block);
-                        if(chainChange.BlockId == currentTip.HashBlock)
+                        if (currentTip == null && oldTip != null)
+                            throw new InvalidOperationException("No fork found, the chain stored in azure is probably different from the one of the provided input");
+                        if (oldTip == null || height > currentTip.Height)
+                            await yield.ReturnAsync(CreateChainChange(height, block));
+                        else
                         {
-                            if(forkIncluded)
-                                yield return chainChange;
-                            yield break;
+                            if (height < currentTip.Height)
+                                currentTip = currentTip.FindAncestorOrSelf(height);
+                            var chainChange = CreateChainChange(height, block);
+                            if (chainChange.BlockId == currentTip.HashBlock)
+                            {
+                                if (forkIncluded)
+                                    await yield.ReturnAsync(chainChange);
+                                yield.Break();
+                            }
+                            await yield.ReturnAsync(chainChange);
+                            currentTip = currentTip.Previous;
                         }
-                        yield return chainChange;
-                        currentTip = currentTip.Previous;
+                        height--;
                     }
-                    height--;
                 }
-            }
+
+
+                var enumerator = await ExecuteBalanceQuery(table, new TableQuery<DynamicTableEntity>(), new[] { 1, 2, 10 }).GetAsyncEnumeratorAsync(cancellation);
+                while (await enumerator.MoveNextAsync(cancellation))
+                {
+                    var chainPart = new ChainPartEntry(enumerator.Current, ConsensuFactory);
+                    await ProcessChainPart(chainPart);
+                }
+                foreach (var chainPart in (await table.ExecuteQueryAsync(new TableQuery<DynamicTableEntity>())).Skip(2)
+                            .Select(e => new ChainPartEntry(e, ConsensuFactory)))
+                {
+                    await ProcessChainPart(chainPart);
+                }
+            });
         }
 
         private ChainBlockHeader CreateChainChange(int height, BlockHeader block)
@@ -359,82 +370,58 @@ namespace NBitcoin.Indexer
         }
 
 
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(string walletId,
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalance(string walletId,
                                                                    BalanceQuery query = null,
                                                                    CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(new BalanceId(walletId), query, cancel);
+            return GetOrderedBalanceCoreAsync(new BalanceId(walletId), query, cancel);
         }
 
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(BalanceId balanceId,
-                                                                  BalanceQuery query = null,
-                                                                  CancellationToken cancel = default(CancellationToken))
-        {
-            return GetOrderedBalanceCore(balanceId, query, cancel);
-        }
-
-        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(BalanceId balanceId,
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalance(BalanceId balanceId,
                                                                   BalanceQuery query = null,
                                                                   CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalanceCoreAsync(balanceId, query, cancel);
         }
 
-        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(string walletId,
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalanceAsync(BalanceId balanceId,
+                                                                  BalanceQuery query = null,
+                                                                  CancellationToken cancel = default(CancellationToken))
+        {
+            return GetOrderedBalanceCoreAsync(balanceId, query, cancel);
+        }
+
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalanceAsync(string walletId,
                                                                   BalanceQuery query = null,
                                                                   CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalanceCoreAsync(new BalanceId(walletId), query, cancel);
         }
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalance(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalance(destination.ScriptPubKey, query, cancel);
         }
-        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalanceAsync(IDestination destination, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalanceAsync(destination.ScriptPubKey, query, cancel);
         }
 
 
-        public IEnumerable<OrderedBalanceChange> GetOrderedBalance(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalance(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
-            return GetOrderedBalanceCore(new BalanceId(scriptPubKey), query, cancel);
+            return GetOrderedBalanceCoreAsync(new BalanceId(scriptPubKey), query, cancel);
         }
-        public IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceAsync(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
+        public Task<ICollection<OrderedBalanceChange>> GetOrderedBalanceAsync(Script scriptPubKey, BalanceQuery query = null, CancellationToken cancel = default(CancellationToken))
         {
             return GetOrderedBalanceCoreAsync(new BalanceId(scriptPubKey), query, cancel);
         }
 
-        private IEnumerable<OrderedBalanceChange> GetOrderedBalanceCore(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
-        {
-            foreach(var partition in GetOrderedBalanceCoreAsync(balanceId, query, cancel))
-            {
-                foreach(var change in partition.Result)
-                {
-                    yield return change;
-                }
-            }
-        }
-
-        class LoadingTransactionTask
-        {
-            public Task<bool> Loaded
-            {
-                get;
-                set;
-            }
-            public OrderedBalanceChange Change
-            {
-                get;
-                set;
-            }
-        }
-
-        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsync(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
+        private async Task<ICollection<OrderedBalanceChange>> GetOrderedBalanceCoreAsync(BalanceId balanceId, BalanceQuery query, CancellationToken cancel)
         {
             if(query == null)
                 query = new BalanceQuery();
 
+            var result = new List<OrderedBalanceChange>();
 
             var table = Configuration.GetBalanceTable();
             var tableQuery = ExecuteBalanceQuery(table, query.CreateTableQuery(balanceId), query.PageSizes);
@@ -443,34 +430,24 @@ namespace NBitcoin.Indexer
             var partitions =
                   tableQuery
                  .Select(c => new OrderedBalanceChange(c, ConsensusFactory))
-                 .Select(c => new LoadingTransactionTask
-                 {
-                     Loaded = NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult(true),
-                     Change = c
-                 })
-                 .Partition(BalancePartitionSize);
+                 .Partition(BalancePartitionSize, cancel);
 
-            if(!query.RawOrdering)
+            var enumerator = await partitions.GetAsyncEnumeratorAsync(cancel);
+            while (await enumerator.MoveNextAsync(cancel))
             {
-                return GetOrderedBalanceCoreAsyncOrdered(partitions, cancel);
-            }
-            return GetOrderedBalanceCoreAsyncRaw(partitions, cancel);
-        }
-
-        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncRaw(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
-        {
-            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
-            foreach(var partition in partitions)
-            {
-                cancel.ThrowIfCancellationRequested();
-                var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
-                foreach(var change in partition.Select(p => p.Change))
+                var partition = enumerator.Current;
+                await Task.WhenAll(partition.Select(c => NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult<bool>(true)));
+                foreach (var entity in partition)
                 {
-                    result.Add(change);
+                    if (Prepare(entity))
+                        result.Add(entity);
                 }
-                yield return WaitAndReturn(partitionLoading, result);
-                result = new List<OrderedBalanceChange>();
             }
+            if (query.RawOrdering)
+                return result;
+            result = result.TopologicalSort();
+            result.Reverse();
+            return result;
         }
 
         private bool Prepare(OrderedBalanceChange change)
@@ -489,87 +466,25 @@ namespace NBitcoin.Indexer
             return true;
         }
 
-        private IEnumerable<Task<List<OrderedBalanceChange>>> GetOrderedBalanceCoreAsyncOrdered(IEnumerable<List<LoadingTransactionTask>> partitions, CancellationToken cancel)
+        private IAsyncEnumerable<DynamicTableEntity> ExecuteBalanceQuery(CloudTable table, TableQuery<DynamicTableEntity> tableQuery, IEnumerable<int> pages)
         {
-            Queue<OrderedBalanceChange> unconfirmed = new Queue<OrderedBalanceChange>();
-            List<OrderedBalanceChange> unconfirmedList = new List<OrderedBalanceChange>();
-
-            List<OrderedBalanceChange> result = new List<OrderedBalanceChange>();
-            foreach(var partition in partitions)
+            return new AsyncEnumerable<DynamicTableEntity>(async yield =>
             {
-                cancel.ThrowIfCancellationRequested();
-                var partitionLoading = Task.WhenAll(partition.Select(_ => _.Loaded));
-                foreach(var change in partition.Select(p => p.Change))
+                pages = pages ?? new int[0];
+                var pagesEnumerator = pages.GetEnumerator();
+                TableContinuationToken continuation = null;
+                do
                 {
-                    if(change.BlockId == null)
-                        unconfirmedList.Add(change);
-                    else
+                    tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
+
+                    var segment = await table.ExecuteQuerySegmentedAsync<DynamicTableEntity>(tableQuery, continuation);
+                    continuation = segment.ContinuationToken;
+                    foreach (var entity in segment)
                     {
-                        if(unconfirmedList != null)
-                        {
-                            unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
-                            unconfirmedList = null;
-                        }
-
-                        while(unconfirmed.Count != 0 && change.SeenUtc < unconfirmed.Peek().SeenUtc)
-                        {
-                            var unconfirmedChange = unconfirmed.Dequeue();
-                            result.Add(unconfirmedChange);
-                        }
-                        result.Add(change);
+                        await yield.ReturnAsync(entity);
                     }
-                }
-                yield return WaitAndReturn(partitionLoading, result);
-                result = new List<OrderedBalanceChange>();
-            }
-            if(unconfirmedList != null)
-            {
-                unconfirmed = new Queue<OrderedBalanceChange>(unconfirmedList.OrderByDescending(o => o.SeenUtc));
-                unconfirmedList = null;
-            }
-            while(unconfirmed.Count != 0)
-            {
-                var change = unconfirmed.Dequeue();
-                result.Add(change);
-            }
-            if(result.Count > 0)
-                yield return WaitAndReturn(null, result);
-        }
-
-        private IEnumerable<DynamicTableEntity> ExecuteBalanceQuery(CloudTable table, TableQuery<DynamicTableEntity> tableQuery, IEnumerable<int> pages)
-        {
-            pages = pages ?? new int[0];
-            var pagesEnumerator = pages.GetEnumerator();
-            TableContinuationToken continuation = null;
-            do
-            {
-                tableQuery.TakeCount = pagesEnumerator.MoveNext() ? (int?)pagesEnumerator.Current : null;
-
-                var segment = table.ExecuteQuerySegmentedAsync<DynamicTableEntity>(tableQuery, continuation).GetAwaiter().GetResult();
-                continuation = segment.ContinuationToken;
-                foreach(var entity in segment)
-                {
-                    yield return entity;
-                }
-            } while(continuation != null);
-        }
-
-        private async Task<List<OrderedBalanceChange>> WaitAndReturn(Task<bool[]> partitionLoading, List<OrderedBalanceChange> result)
-        {
-            if(partitionLoading != null)
-                await Task.WhenAll(partitionLoading).ConfigureAwait(false);
-
-            List<OrderedBalanceChange> toDelete = new List<OrderedBalanceChange>();
-            foreach(var entity in result)
-            {
-                if(!Prepare(entity))
-                    toDelete.Add(entity);
-            }
-            foreach(var deletion in toDelete)
-            {
-                result.Remove(deletion);
-            }
-            return result;
+                } while (continuation != null);
+            });
         }
 
         public void CleanUnconfirmedChanges(IDestination destination, TimeSpan olderThan)
@@ -669,24 +584,24 @@ namespace NBitcoin.Indexer
             });
         }
 
-        public ConcurrentChain GetMainChain()
+        public async Task<ConcurrentChain> GetMainChain(CancellationToken cancellationToken)
         {
             ConcurrentChain chain = new ConcurrentChain();
-            SynchronizeChain(chain);
+            await SynchronizeChain(chain, cancellationToken);
             return chain;
         }
 
-        public void SynchronizeChain(ChainBase chain)
+        public async Task SynchronizeChain(ChainBase chain, CancellationToken cancellationToken)
         {
             if(chain.Tip != null && chain.Genesis.HashBlock != Configuration.Network.GetGenesis().GetHash())
                 throw new ArgumentException("Incompatible Network between the indexer and the chain", "chain");
             if(chain.Tip == null)
                 chain.SetTip(new ChainedBlock(Configuration.Network.GetGenesis().Header, 0));
-            GetChainChangesUntilFork(chain.Tip, false)
-                .UpdateChain(chain);
+            await GetChainChangesUntilFork(chain.Tip, false, cancellationToken)
+                .UpdateChain(chain, cancellationToken);
         }
 
-        public bool MergeIntoWallet(string walletId,
+        public Task<bool> MergeIntoWallet(string walletId,
                                     IDestination destination,
                                     WalletRule rule = null,
                                     CancellationToken cancel = default(CancellationToken))
@@ -694,19 +609,19 @@ namespace NBitcoin.Indexer
             return MergeIntoWallet(walletId, destination.ScriptPubKey, rule, cancel);
         }
 
-        public bool MergeIntoWallet(string walletId, Script scriptPubKey, WalletRule rule = null, CancellationToken cancel = default(CancellationToken))
+        public Task<bool> MergeIntoWallet(string walletId, Script scriptPubKey, WalletRule rule = null, CancellationToken cancel = default(CancellationToken))
         {
             return MergeIntoWalletCore(walletId, new BalanceId(scriptPubKey), rule, cancel);
         }
 
-        public bool MergeIntoWallet(string walletId, string walletSource,
+        public Task<bool> MergeIntoWallet(string walletId, string walletSource,
             WalletRule rule = null,
             CancellationToken cancel = default(CancellationToken))
         {
             return MergeIntoWalletCore(walletId, new BalanceId(walletSource), rule, cancel);
         }
 
-        private bool MergeIntoWalletCore(string walletId, BalanceId balanceId, WalletRule rule, CancellationToken cancel)
+        private async Task<bool> MergeIntoWalletCore(string walletId, BalanceId balanceId, WalletRule rule, CancellationToken cancel)
         {
             var indexer = Configuration.CreateIndexer();
 
@@ -715,12 +630,12 @@ namespace NBitcoin.Indexer
                 From = new UnconfirmedBalanceLocator().Floor(),
                 RawOrdering = true
             };
-            var sourcesByKey = GetOrderedBalanceCore(balanceId, query, cancel)
+            var sourcesByKey = (await GetOrderedBalance(balanceId, query, cancel))
                 .ToDictionary(i => GetKey(i));
             if(sourcesByKey.Count == 0)
                 return false;
             var destByKey =
-                GetOrderedBalance(walletId, query, cancel)
+                (await GetOrderedBalance(walletId, query, cancel))
                 .ToDictionary(i => GetKey(i));
 
             List<OrderedBalanceChange> entities = new List<OrderedBalanceChange>();

@@ -11,6 +11,7 @@ using NBitcoin.Indexer.Internal;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Async;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -232,9 +233,9 @@ namespace NBitcoin.Indexer
             }
         }
 
-        internal ChainBase GetMainChain()
+        internal Task<ConcurrentChain> GetMainChain(CancellationToken cancellationToken)
         {
-            return Configuration.CreateIndexerClient().GetMainChain();
+            return Configuration.CreateIndexerClient().GetMainChain(cancellationToken);
         }
 
         public int IndexWalletBalances(ChainBase chain)
@@ -339,10 +340,10 @@ namespace NBitcoin.Indexer
             IndexerTrace.Information("Chain loaded with height " + chain.Height);
             return chain;
         }
-        public void IndexNodeMainChain()
+        public async Task IndexNodeMainChain(CancellationToken cancellationToken = default(CancellationToken))
         {
             var chain = GetNodeChain();
-            IndexChain(chain);
+            await IndexChain(chain, cancellationToken);
         }
 
 
@@ -413,7 +414,7 @@ namespace NBitcoin.Indexer
             set;
         }
 
-        public void IndexChain(ChainBase chain)
+        public async Task IndexChain(ChainBase chain, CancellationToken cancellationToken)
         {
             if(chain == null)
                 throw new ArgumentNullException("chain");
@@ -424,7 +425,7 @@ namespace NBitcoin.Indexer
                 Configuration.GetChainTable().CreateIfNotExistsAsync().GetAwaiter().GetResult();
                 IndexerTrace.InputChainTip(chain.Tip);
                 var client = Configuration.CreateIndexerClient();
-                var changes = client.GetChainChangesUntilFork(chain.Tip, true).ToList();
+                var changes = await client.GetChainChangesUntilFork(chain.Tip, true).ToListAsync();
 
                 var height = 0;
                 if(changes.Count != 0)

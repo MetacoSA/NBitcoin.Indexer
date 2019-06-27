@@ -6,17 +6,167 @@ using Microsoft.WindowsAzure.Storage.Table.Protocol;
 using NBitcoin.Crypto;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Async;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer
 {
     public static class Extensions
     {
+        class OrderBalanceChangeComparer : IComparer<OrderedBalanceChange>
+        {
+
+            private static readonly OrderBalanceChangeComparer _Instance = new OrderBalanceChangeComparer();
+            public static OrderBalanceChangeComparer Instance
+            {
+                get
+                {
+                    return _Instance;
+                }
+            }
+            public int Compare(OrderedBalanceChange a, OrderedBalanceChange b)
+            {
+                var txIdCompare = a.TransactionId < b.TransactionId ? -1 :
+                                  a.TransactionId > b.TransactionId ? 1 : 0;
+                var seenCompare = (a.SeenUtc < b.SeenUtc ? -1 :
+                                a.SeenUtc > b.SeenUtc ? 1 : txIdCompare);
+                if (a.BlockId != null && a.Height is int ah)
+                {
+                    // Both confirmed, tie on height then firstSeen
+                    if (b.BlockId != null && b.Height is int bh)
+                    {
+                        var heightCompare = (ah < bh ? -1 :
+                               ah > bh ? 1 : txIdCompare);
+                        return ah == bh ?
+                               // same height? use firstSeen on firstSeen
+                               seenCompare :
+                               // else tie on the height
+                               heightCompare;
+                    }
+                    else
+                    {
+                        return -1;
+                    }
+                }
+                else if (b.BlockId != null && b.Height is int bh)
+                {
+                    return 1;
+                }
+                // Both unconfirmed, tie on firstSeen
+                else
+                {
+                    return seenCompare;
+                }
+            }
+        }
+
+        public static async Task<T[]> ToArrayAsync<T>(this Task<ICollection<T>> transactions)
+        {
+            return (await transactions).ToArray();
+        }
+
+        public static List<OrderedBalanceChange> TopologicalSort(this ICollection<OrderedBalanceChange> transactions)
+        {
+            return transactions.TopologicalSort(
+                dependsOn: t => t.SpentCoins.Select(o => o.Outpoint.Hash),
+                getKey: t => t.TransactionId,
+                getValue: t => t,
+                solveTies: OrderBalanceChangeComparer.Instance);
+        }
+        public static List<T> TopologicalSort<T>(this ICollection<T> nodes, Func<T, IEnumerable<T>> dependsOn)
+        {
+            return nodes.TopologicalSort(dependsOn, k => k, k => k);
+        }
+
+        public static List<T> TopologicalSort<T, TDepend>(this ICollection<T> nodes, Func<T, IEnumerable<TDepend>> dependsOn, Func<T, TDepend> getKey)
+        {
+            return nodes.TopologicalSort(dependsOn, getKey, o => o);
+        }
+
+        public static List<TValue> TopologicalSort<T, TDepend, TValue>(this ICollection<T> nodes,
+                                                Func<T, IEnumerable<TDepend>> dependsOn,
+                                                Func<T, TDepend> getKey,
+                                                Func<T, TValue> getValue,
+                                                IComparer<T> solveTies = null)
+        {
+            if (nodes.Count == 0)
+                return new List<TValue>();
+            if (getKey == null)
+                throw new ArgumentNullException(nameof(getKey));
+            if (getValue == null)
+                throw new ArgumentNullException(nameof(getValue));
+            solveTies = solveTies ?? Comparer<T>.Default;
+            List<TValue> result = new List<TValue>(nodes.Count);
+            HashSet<TDepend> allKeys = new HashSet<TDepend>();
+            var noDependencies = new SortedDictionary<T, HashSet<TDepend>>(solveTies);
+
+            foreach (var node in nodes)
+                allKeys.Add(getKey(node));
+            var dependenciesByValues = nodes.ToDictionary(node => node,
+                                           node => new HashSet<TDepend>(dependsOn(node).Where(n => allKeys.Contains(n))));
+            foreach (var e in dependenciesByValues.Where(x => x.Value.Count == 0))
+            {
+                noDependencies.Add(e.Key, e.Value);
+            }
+            if (noDependencies.Count == 0)
+            {
+                throw new InvalidOperationException("Impossible to topologically sort a cyclic graph");
+            }
+            while (noDependencies.Count > 0)
+            {
+                var nodep = noDependencies.First();
+                noDependencies.Remove(nodep.Key);
+                dependenciesByValues.Remove(nodep.Key);
+
+                var elemKey = getKey(nodep.Key);
+                result.Add(getValue(nodep.Key));
+                foreach (var selem in dependenciesByValues)
+                {
+                    if (selem.Value.Remove(elemKey) && selem.Value.Count == 0)
+                        noDependencies.Add(selem.Key, selem.Value);
+                }
+            }
+            if (dependenciesByValues.Count != 0)
+            {
+                throw new InvalidOperationException("Impossible to topologically sort a cyclic graph");
+            }
+            return result;
+        }
+        public static IAsyncEnumerable<List<T>> Partition<T>(this IAsyncEnumerable<T> source, int max, CancellationToken cancellationToken)
+        {
+            return Partition(source, () => max, cancellationToken);
+        }
+        public static IAsyncEnumerable<List<T>> Partition<T>(this IAsyncEnumerable<T> source, Func<int> max, CancellationToken cancellationToken)
+        {
+            return new AsyncEnumerable<List<T>>(async yield =>
+            {
+                var partitionSize = max();
+                List<T> toReturn = new List<T>(partitionSize);
+                var enumerator = await source.GetAsyncEnumeratorAsync(cancellationToken);
+                while (await enumerator.MoveNextAsync(cancellationToken))
+                {
+                    var item = enumerator.Current;
+                    toReturn.Add(item);
+                    if (toReturn.Count == partitionSize)
+                    {
+                        await yield.ReturnAsync(toReturn);
+                        partitionSize = max();
+                        toReturn = new List<T>(partitionSize);
+                    }
+                }
+                if (toReturn.Any())
+                {
+                    await yield.ReturnAsync(toReturn);
+                }
+            });
+        }
+
         public static IEnumerable<T> Distinct<T, TComparer>(this IEnumerable<T> input, Func<T, TComparer> comparer)
         {
             return input.Distinct(new AnonymousEqualityComparer<T, TComparer>(comparer));
@@ -96,7 +246,11 @@ namespace NBitcoin.Indexer
                 .Where(e => IsMinConf(e, minConfirmation, chain));
         }
 
-        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain)
+        public static async Task<BalanceSheet> AsBalanceSheet(this Task<ICollection<OrderedBalanceChange>> entries, ChainBase chain)
+        {
+            return new BalanceSheet(await entries.ToArrayAsync(), chain);
+        }
+        public static BalanceSheet AsBalanceSheet(this IEnumerable<OrderedBalanceChange> entries, ChainBase chain, CancellationToken cancellationToken = default(CancellationToken))
         {
             return new BalanceSheet(entries, chain);
         }

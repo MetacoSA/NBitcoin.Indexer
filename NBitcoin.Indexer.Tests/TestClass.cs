@@ -11,6 +11,7 @@ using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Async;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
@@ -209,7 +210,7 @@ namespace NBitcoin.Indexer.Tests
         BitcoinSecret silverGuy = new BitcoinSecret("L4KvjpqDtdGEn7Lw6HdDQjbg74MwWRrFZMQTgJozeHAKJw5rQ2Kn");
 
         [Fact]
-        public void CanGetColoredBalance()
+        public async Task CanGetColoredBalance()
         {
             using (var tester = CreateTester())
             {
@@ -218,7 +219,7 @@ namespace NBitcoin.Indexer.Tests
 
                 //Colored coin Payment
                 //GoldGuy emits gold to Nico
-                var txBuilder = new TransactionBuilder();
+                var txBuilder = tester.Network.CreateTransactionBuilder();
 
                 var issuanceCoinsTransaction = Transaction.Create(tester.Network);
                 issuanceCoinsTransaction.Outputs.AddRange(new[]
@@ -246,12 +247,12 @@ namespace NBitcoin.Indexer.Tests
                 var b = chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                var balance = tester.Client.GetOrderedBalance(nico).ToArray();
+                var balance = await tester.Client.GetOrderedBalance(nico).ToArrayAsync();
                 var entry = balance[0];
                 Assert.NotNull(entry.ColoredTransaction);
                 Assert.Equal(Money.Parse("1.0"), entry.Amount);
 
-                txBuilder = new TransactionBuilder();
+                txBuilder = tester.Network.CreateTransactionBuilder();
                 txBuilder.StandardTransactionPolicy.MinRelayTxFee = new FeeRate(Money.Satoshis(1000));
                 var tx = txBuilder
                     .AddKeys(goldGuy)
@@ -266,7 +267,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var ctx = new IndexerColoredTransactionRepository(tester.Indexer.Configuration);
 
-                balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
                 var coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("0.0"), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(30L) == 0);
@@ -274,7 +275,7 @@ namespace NBitcoin.Indexer.Tests
                 var coloredCoins = ColoredCoin.Find(tx, ctx).ToArray();
                 var nicoGold = coloredCoins[0];
 
-                txBuilder = new TransactionBuilder(1);
+                txBuilder = tester.Network.CreateTransactionBuilder(1);
                 txBuilder.StandardTransactionPolicy.MinRelayTxFee = new FeeRate(Money.Satoshis(1000));
                 //GoldGuy sends 20 gold to alice against 0.6 BTC. Nico sends 10 gold to alice + 0.02 BTC.
                 tx = txBuilder
@@ -294,7 +295,6 @@ namespace NBitcoin.Indexer.Tests
                     .AddCoins(aliceCoin)
                     .Send(goldGuy.GetAddress(), Money.Parse("0.6"))
                     .SetChange(alice.GetAddress())
-                    .Shuffle()
                     .BuildTransaction(true);
 
                 chainBuilder.Emit(tx);
@@ -302,14 +302,14 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
                 //Nico, should have lost 0.02 BTC and 10 gold
-                balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
-                balance = tester.Client.GetOrderedBalance(nico.GetAddress()).ToArray();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
                 coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("-0.02") - Money.Satoshis(546), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(-10L) == 0);
 
                 //Alice, should have lost 0.58 BTC, but win 10 + 20 gold (one is a transfer, the other issuance)
-                balance = tester.Client.GetOrderedBalance(alice.GetAddress()).ToArray();
+                balance = await tester.Client.GetOrderedBalance(alice.GetAddress()).ToArrayAsync();
                 coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("-0.58"), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(30L) == 0);
@@ -330,7 +330,7 @@ namespace NBitcoin.Indexer.Tests
             return b;
         }
         [Fact]
-        public void CanImportMainChain()
+        public async Task CanImportMainChain()
         {
             using (var tester = CreateTester())
             {
@@ -340,15 +340,15 @@ namespace NBitcoin.Indexer.Tests
                 node.ChainBuilder.Generate();
                 var fork = node.ChainBuilder.Generate();
                 var firstTip = node.ChainBuilder.Generate();
-                tester.Indexer.IndexNodeMainChain();
+                await tester.Indexer.IndexNodeMainChain();
 
-                var result = tester.Client.GetChainChangesUntilFork(chain.Tip, true).ToList();
+                var result = await tester.Client.GetChainChangesUntilFork(chain.Tip, true).ToListAsync();
                 Assert.Equal(result[0].BlockId, firstTip.GetHash());
                 Assert.Equal(result.Last().BlockId, chain.Tip.HashBlock);
                 Assert.Equal(result.Last().Height, chain.Tip.Height);
                 Assert.Equal(4, result.Count);
 
-                result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
+                result = await tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToListAsync();
                 Assert.Equal(result[0].BlockId, firstTip.GetHash());
                 Assert.NotEqual(result.Last().BlockId, chain.Tip.HashBlock);
                 Assert.Equal(3, result.Count);
@@ -364,16 +364,16 @@ namespace NBitcoin.Indexer.Tests
                 node.ChainBuilder.Generate();
                 var secondTip = node.ChainBuilder.Generate();
 
-                tester.Indexer.IndexNodeMainChain();
+                await tester.Indexer.IndexNodeMainChain();
                 Assert.Equal(secondTip.GetHash(), tester.Client.GetBestBlock().BlockId);
 
-                result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
+                result = await tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToListAsync();
                 result.UpdateChain(chain);
                 Assert.Equal(secondTip.GetHash(), chain.Tip.HashBlock);
 
                 var ultimateTip = node.ChainBuilder.Generate(100);
-                tester.Indexer.IndexNodeMainChain();
-                result = tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToList();
+                await tester.Indexer.IndexNodeMainChain();
+                result = await tester.Client.GetChainChangesUntilFork(chain.Tip, false).ToListAsync();
 
                 Assert.Equal(ultimateTip.Header.GetHash(), result[0].BlockId);
                 Assert.Equal(tester.Client.GetBestBlock().BlockId, result[0].BlockId);
@@ -382,7 +382,7 @@ namespace NBitcoin.Indexer.Tests
 
                 ConcurrentChain chain2 = new ConcurrentChain();
                 var changes = tester.Client.GetChainChangesUntilFork(chain2.Tip, false);
-                changes.UpdateChain(chain2);
+                await changes.UpdateChain(chain2);
                 Assert.True(chain2.Tip.Height == chain.Tip.Height);
             }
         }
@@ -429,7 +429,7 @@ namespace NBitcoin.Indexer.Tests
 
 
         [Fact]
-        public void CanMergeBalance()
+        public async Task CanMergeBalance()
         {
             using (var tester = CreateTester())
             {
@@ -445,9 +445,9 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
                 //Can merge address balance into wallet
-                tester.Client.MergeIntoWallet("Alice", alice1);
+                await tester.Client.MergeIntoWallet("Alice", alice1);
 
-                var aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                var aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 1);
                 Assert.True(aliceBalance[0].Amount == Money.Parse("10.0"));
                 Assert.True(aliceBalance[0].IsCoinbase);
@@ -462,13 +462,13 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 2);
                 Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
-                tester.Client.MergeIntoWallet("Alice", alice1);
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                await tester.Client.MergeIntoWallet("Alice", alice1);
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 2);
                 Assert.True(aliceBalance[0].Amount == Money.Parse("9.0"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
@@ -477,8 +477,10 @@ namespace NBitcoin.Indexer.Tests
                 ////
 
                 //Merge alice2 into Alice with a tx involving alice1
+                var txBuilder = tester.Network.CreateTransactionBuilder();
+                txBuilder.MergeOutputs = false;
                 tx
-                   = new TransactionBuilder() { MergeOutputs = false }
+                   = txBuilder
                        .AddKeys(alice1)
                        .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey)) //Alice1 10
                        .Send(alice2, "2.0")
@@ -492,7 +494,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 3);
                 Assert.True(aliceBalance[0].Amount ==
                     -Money.Parse("10.0")
@@ -500,8 +502,8 @@ namespace NBitcoin.Indexer.Tests
                     + Money.Parse("0.1"));
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
-                tester.Client.MergeIntoWallet("Alice", alice2);
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                await tester.Client.MergeIntoWallet("Alice", alice2);
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 3);
                 Assert.True(aliceBalance[0].Amount ==
                     -Money.Parse("10.0")
@@ -519,7 +521,7 @@ namespace NBitcoin.Indexer.Tests
                     new TxIn(new OutPoint(tx,3)), //alice1 0.1
                 });
 
-                tx = new TransactionBuilder()
+                tx = tester.Network.CreateTransactionBuilder()
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
                         .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey))
@@ -539,7 +541,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 4);
                 Assert.True(aliceBalance[0].Amount ==
                     -Money.Parse("3.9")
@@ -548,12 +550,12 @@ namespace NBitcoin.Indexer.Tests
                     );
                 Assert.True(aliceBalance[0].ScriptPubKey == alice1.ScriptPubKey);
 
-                tester.Client.MergeIntoWallet("Alice", alice2, new ScriptRule()
+                await tester.Client.MergeIntoWallet("Alice", alice2, new ScriptRule()
                 {
                     ScriptPubKey = alice2.ScriptPubKey,
                     CustomData = "hello"
                 });
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 4);
                 Assert.True(aliceBalance[0].Amount ==
                     -Money.Parse("3.9")
@@ -570,7 +572,7 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [Fact]
-        public void CanGetWalletOrderedBalances()
+        public async Task CanGetWalletOrderedBalances()
         {
             using (var tester = CreateTester())
             {
@@ -596,7 +598,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                var aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                var aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance.Length == 1);
                 Assert.Equal("Alice", aliceBalance[0].BalanceId.GetWalletId());
                 Assert.True(aliceBalance[0].Amount == Money.Parse("10.0"));
@@ -616,9 +618,10 @@ namespace NBitcoin.Indexer.Tests
                 Assert.Equal(2, rules.Length);
                 /////////////////////////////////////////////
 
-
+                var txbuilder = tester.Network.CreateTransactionBuilder();
+                txbuilder.MergeOutputs = false;
                 tx
-                    = new TransactionBuilder() { MergeOutputs = false }
+                    = txbuilder
                         .AddKeys(alice1)
                         .AddCoins(new Coin(tx.GetHash(), 0, tx.Outputs[0].Value, tx.Outputs[0].ScriptPubKey))
                         .Send(alice2, "2.0")
@@ -633,7 +636,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance[0].Amount == Money.Parse("-4.0"));
 
                 Assert.Equal(
@@ -661,7 +664,9 @@ namespace NBitcoin.Indexer.Tests
                 newtx.Inputs.Add(new OutPoint(tx, 2)); //bob 2.1
                 newtx.Inputs.Add(new OutPoint(tx, 3)); //alice1 0.1
 
-                tx = new TransactionBuilder() { MergeOutputs = false }
+                txbuilder = tester.Network.CreateTransactionBuilder();
+                txbuilder.MergeOutputs = false;
+                tx = txbuilder
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
                         .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
@@ -682,7 +687,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 var entry = aliceBalance[0];
 
                 Assert.Equal(entry.GetMatchedRules(new OutPoint(prevTx, 0)).First().ToString(), aliceR2.ToString());
@@ -702,7 +707,7 @@ namespace NBitcoin.Indexer.Tests
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey.ScriptPubKey.Hash, alice1.PubKey.ScriptPubKey));
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, null));
 
-                tx = new TransactionBuilder() { MergeOutputs = false }
+                tx = txbuilder
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
                         .AddCoins(new Coin(prevTx.GetHash(), 0, prevTx.Outputs[0].Value, prevTx.Outputs[0].ScriptPubKey))
@@ -723,14 +728,14 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance("Alice").ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance[0].ReceivedCoins[0] is ScriptCoin);
                 Assert.True(aliceBalance[0].ReceivedCoins[0].TxOut.ScriptPubKey == alice1.PubKey.ScriptPubKey.Hash.ScriptPubKey);
                 Assert.True(((ScriptCoin)(aliceBalance[0].ReceivedCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 Assert.False(aliceBalance[0].ReceivedCoins[1] is ScriptCoin);
                 Assert.False(aliceBalance[0].ReceivedCoins[2] is ScriptCoin);
 
-                tx = new TransactionBuilder()
+                tx = tester.Network.CreateTransactionBuilder()
                         .AddKeys(alice1, alice2)
                         .AddCoins(aliceBalance[0].ReceivedCoins[0])
                         .Send(satoshi, "0.0001")
@@ -740,7 +745,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                var aliceBalance2 = tester.Client.GetOrderedBalance("Alice").ToArray();
+                var aliceBalance2 = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(((ScriptCoin)(aliceBalance2[0].SpentCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 /////
             }
@@ -748,7 +753,7 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [Fact]
-        public void CanQueryBalanceRange()
+        public async Task CanQueryBalanceRange()
         {
             using (var tester = CreateTester())
             {
@@ -785,18 +790,18 @@ namespace NBitcoin.Indexer.Tests
 
                 var tests = new String[][]
                 {
-                     new string[]{"2in", "4in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"},
-                     new string[]{"4in", "2in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"}, //Does not care about order
-                     new string[]{"2ex", "4in", "tx43,tx42,tx41,tx33,tx32,tx31"},
-                     new string[]{"2in", "4ex", "tx33,tx32,tx31,tx22,tx21"},
-                     new string[]{"2ex", "4ex", "tx33,tx32,tx31"},
+                     new string[]{"2in", "4in", "tx41,tx42,tx43,tx31,tx32,tx33,tx21,tx22"},
+                     new string[]{"4in", "2in", "tx41,tx42,tx43,tx31,tx32,tx33,tx21,tx22"}, //Does not care about order
+                     new string[]{"2ex", "4in", "tx41,tx42,tx43,tx31,tx32,tx33"},
+                     new string[]{"2in", "4ex", "tx31,tx32,tx33,tx21,tx22"},
+                     new string[]{"2ex", "4ex", "tx31,tx32,tx33"},
                      new string[]{"{utx51}in", "{utx52}in", "utx52,utx51"},
                      new string[]{"{utx51}in", "{utx53}ex", "utx52,utx51"},
                      new string[]{"{utx51}ex", "{utx53}in", "utx53,utx52"},
-                     new string[]{"{utx52}ex", "3in", "utx53,tx43,tx42,tx41,tx33,tx32,tx31"}
+                     new string[]{"{utx52}ex", "3in", "utx53,tx41,tx42,tx43,tx31,tx32,tx33"}
                 };
 
-                var all = tester.Client.GetOrderedBalance(bob).ToArray();
+                var all = await tester.Client.GetOrderedBalance(bob).ToArrayAsync();
                 Assert.Equal(all.Length, txs.Count);
 
                 foreach (var test in tests)
@@ -808,7 +813,7 @@ namespace NBitcoin.Indexer.Tests
                     query.To = Parse(data[1], all, txs);
                     query.ToIncluded = ParseIncl(data[1]);
 
-                    var result = tester.Client.GetOrderedBalance(bob, query).ToArray();
+                    var result = await tester.Client.GetOrderedBalance(bob, query).ToArrayAsync();
                     var expected = data[2].Split(',').ToArray();
 
                     var expectedResult = String.Join(",", expected);
@@ -850,7 +855,7 @@ namespace NBitcoin.Indexer.Tests
 
 
         [Fact]
-        public void CanGetBalanceSheet()
+        public async Task CanGetBalanceSheet()
         {
             using (var tester = CreateTester())
             {
@@ -868,7 +873,7 @@ namespace NBitcoin.Indexer.Tests
 
                 chainBuilder.SyncIndexer();
 
-                var sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                var sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.Confirmed.Count == 2);
                 Assert.True(sheet.Unconfirmed.Count == 0);
                 Assert.True(sheet.Prunable.Count == 0);
@@ -879,7 +884,7 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
                 tester.Indexer.IndexOrderedBalance(tx);
 
-                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.Confirmed.Count == 2);
                 Assert.True(sheet.Unconfirmed.Count == 1);
                 Assert.True(sheet.Prunable.Count == 0);
@@ -889,7 +894,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.Confirmed.Count == 3);
                 Assert.True(sheet.Unconfirmed.Count == 0);
                 Assert.True(sheet.Prunable.Count == 1);
@@ -898,7 +903,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.All[0].BlockId != null);
 
                 var latest = sheet.All[0];
-                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                sheet = await tester.Client.GetOrderedBalance(bob, new BalanceQuery()
                 {
                     From = sheet.All[0].CreateBalanceLocator(),
                     FromIncluded = false
@@ -906,7 +911,7 @@ namespace NBitcoin.Indexer.Tests
 
                 Assert.True(sheet.Confirmed.Count == 2);
 
-                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                sheet = await tester.Client.GetOrderedBalance(bob, new BalanceQuery()
                 {
                     From = latest.CreateBalanceLocator(),
                     FromIncluded = true,
@@ -917,7 +922,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.Confirmed.Count == 3);
                 Assert.True(sheet.Prunable.Count == 0); //No mempool balance
 
-                sheet = tester.Client.GetOrderedBalance(bob, new BalanceQuery()
+                sheet = await tester.Client.GetOrderedBalance(bob, new BalanceQuery()
                 {
                     To = sheet.All[2].CreateBalanceLocator(),
                     ToIncluded = true
@@ -928,7 +933,7 @@ namespace NBitcoin.Indexer.Tests
 
                 tester.Client.PruneBalances(sheet.Prunable);
 
-                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.Confirmed.Count == 3);
                 Assert.True(sheet.Unconfirmed.Count == 0);
                 Assert.True(sheet.Prunable.Count == 0);
@@ -939,7 +944,7 @@ namespace NBitcoin.Indexer.Tests
                 sheet.All[0].CustomData = "test";
                 tester.Indexer.Index(new OrderedBalanceChange[] { sheet.All[0] });
 
-                sheet = tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.All[0].CustomData == "test");
             }
         }
@@ -1016,27 +1021,27 @@ namespace NBitcoin.Indexer.Tests
         }
 
         [Fact]
-        public void CanIndexLongScript()
+        public async Task CanIndexLongScript()
         {
             using (var tester = CreateTester())
             {
                 var tx = Transaction.Parse("010000000127d57276f1026a95b4af3b03b6aba859a001861682342af19825e8a2408ae008010000008c493046022100cd92b992d4bde3b44471677081c5ece6735d6936480ff74659ac1824d8a1958e022100b08839f167532aea10acecc9d5f7044ddd9793ef2989d090127a6e626dc7c9ce014104cac6999d6c3feaba7cdd6c62bce174339190435cffd15af7cb70c33b82027deba06e6d5441eb401c0f8f92d4ffe6038d283d2b2dd59c4384b66b7b8f038a7cf5ffffffff0200093d0000000000434104636d69f81d685f6f58054e17ac34d16db869bba8b3562aabc38c35b065158d360f087ef7bd8b0bcbd1be9a846a8ed339bf0131cdb354074244b0a9736beeb2b9ac40420f0000000000fdba0f76a9144838a081d73cf134e8ff9cfd4015406c73beceb388acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac00000000", tester.Network);
                 tester.Indexer.IndexOrderedBalance(tx);
-                var result = tester.Client.GetOrderedBalance(tx.Outputs[1].ScriptPubKey).ToArray()[0];
+                var result = (await tester.Client.GetOrderedBalance(tx.Outputs[1].ScriptPubKey).ToArrayAsync())[0];
                 Assert.Equal(result.ScriptPubKey, tx.Outputs[1].ScriptPubKey);
             }
         }
 
 
         [Fact]
-        public void NonStandardScriptPubKeyDoesNotReturnsWrongBalance()
+        public async Task NonStandardScriptPubKeyDoesNotReturnsWrongBalance()
         {
             using (var tester = CreateTester())
             {
                 var bob = new Key();
                 var alice = new Key();
                 BalanceId bobId = new BalanceId(bob);
-                NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
+                await NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
 
                 bob = new Key();
                 alice = new Key();
@@ -1045,7 +1050,7 @@ namespace NBitcoin.Indexer.Tests
                 {
                     ScriptPubKey = bob.ScriptPubKey
                 });
-                NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
+                await NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(tester, bob, alice, bobId);
 
 
                 bob = new Key();
@@ -1079,7 +1084,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
 
-                var bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                var bobBalance = await tester.Client.GetOrderedBalance(bobId).ToArrayAsync();
                 Assert.True(bobBalance.Length == 3);
 
                 tx = Transaction.Create(tester.Network);
@@ -1099,7 +1104,7 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
                 for (int i = 0; i < 2; i++)
                 {
-                    bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                    bobBalance = await tester.Client.GetOrderedBalance(bobId).ToArrayAsync();
                     Assert.True(bobBalance.Length == 4); //OP_NOP spending should not appear
                     Assert.True(bobBalance[0].SpentCoins.Count == 3);
                     foreach (var coin in bobBalance[0].SpentCoins)
@@ -1125,7 +1130,7 @@ namespace NBitcoin.Indexer.Tests
             bobCoins.AddRange(result);
         }
 
-        private static void NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(IndexerTester tester, Key bob, Key alice, BalanceId bobId)
+        private static async Task NonStandardScriptPubKeyDoesNotReturnsWrongBalanceCore(IndexerTester tester, Key bob, Key alice, BalanceId bobId)
         {
             var chainBuilder = tester.CreateChainBuilder();
             chainBuilder.EmitMoney(bob, "50.0");
@@ -1137,7 +1142,7 @@ namespace NBitcoin.Indexer.Tests
             chainBuilder.SubmitBlock();
             chainBuilder.SyncIndexer();
 
-            var bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+            var bobBalance = await tester.Client.GetOrderedBalance(bobId).ToArrayAsync();
             Assert.True(bobBalance.Length == 1);
 
             tx = Transaction.Create(tester.Network);
@@ -1156,13 +1161,13 @@ namespace NBitcoin.Indexer.Tests
 
             for (int i = 0; i < 2; i++)
             {
-                bobBalance = tester.Client.GetOrderedBalance(bobId).ToArray();
+                bobBalance = await tester.Client.GetOrderedBalance(bobId).ToArrayAsync();
                 Assert.True(bobBalance.Length < 2); //OP_NOP spending should not appear
             }
         }
 
         [Fact]
-        public void CanGetOrderedBalancesP2WPKH()
+        public async Task CanGetOrderedBalancesP2WPKH()
         {
             using (var tester = CreateTester())
             {
@@ -1177,10 +1182,10 @@ namespace NBitcoin.Indexer.Tests
 
                 chainBuilder.SyncIndexer();
 
-                var aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArray();
+                var aliceBalance = await tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArrayAsync();
                 Assert.True(aliceBalance.Length == 1);
 
-                var tx = new TransactionBuilder()
+                var tx = tester.Network.CreateTransactionBuilder()
                     .AddCoins(aliceBalance[0].ReceivedCoins)
                     .AddKeys(alice)
                     .Send(bob.PubKey.WitHash, "5.0")
@@ -1191,18 +1196,18 @@ namespace NBitcoin.Indexer.Tests
                 var block = chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance(alice.PubKey.WitHash).ToArrayAsync();
                 Assert.True(aliceBalance.Length == 2);
                 Assert.True(aliceBalance[0].Amount == -Money.Coins(5.0m));
 
-                var bobBalance = tester.Client.GetOrderedBalance(bob.PubKey.WitHash).ToArray();
+                var bobBalance = await tester.Client.GetOrderedBalance(bob.PubKey.WitHash).ToArrayAsync();
                 Assert.True(bobBalance.Length == 2);
                 Assert.True(bobBalance[0].Amount == Money.Coins(5.0m));
             }
         }
 
         [Fact]
-        public void CanGetOrderedBalancesP2WSH()
+        public async Task CanGetOrderedBalancesP2WSH()
         {
             using (var tester = CreateTester())
             {
@@ -1217,10 +1222,10 @@ namespace NBitcoin.Indexer.Tests
 
                 chainBuilder.SyncIndexer();
 
-                var aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArray();
+                var aliceBalance = await tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArrayAsync();
                 Assert.True(aliceBalance.Length == 1);
 
-                var tx = new TransactionBuilder()
+                var tx = tester.Network.CreateTransactionBuilder()
                     .AddCoins(new ScriptCoin((Coin)aliceBalance[0].ReceivedCoins[0], alice.PubKey.ScriptPubKey))
                     .AddKeys(alice)
                     .Send(bob.PubKey.ScriptPubKey.WitHash, "5.0")
@@ -1231,18 +1236,18 @@ namespace NBitcoin.Indexer.Tests
                 var block = chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                aliceBalance = tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArray();
+                aliceBalance = await tester.Client.GetOrderedBalance(alice.PubKey.ScriptPubKey.WitHash).ToArrayAsync();
                 Assert.True(aliceBalance.Length == 2);
                 Assert.True(aliceBalance[0].Amount == -Money.Coins(5.0m));
 
-                var bobBalance = tester.Client.GetOrderedBalance(bob.PubKey.ScriptPubKey.WitHash).ToArray();
+                var bobBalance = await tester.Client.GetOrderedBalance(bob.PubKey.ScriptPubKey.WitHash).ToArrayAsync();
                 Assert.True(bobBalance.Length == 2);
                 Assert.True(bobBalance[0].Amount == Money.Coins(5.0m));
             }
         }
 
         [Fact]
-        public void CanGetOrderedBalances()
+        public async Task CanGetOrderedBalances()
         {
             using (var tester = CreateTester())
             {
@@ -1260,15 +1265,18 @@ namespace NBitcoin.Indexer.Tests
 
                 chainBuilder.SyncIndexer();
 
-                var bobBalance = tester.Client.GetOrderedBalance(bob).ToArray();
+                var bobBalance = await tester.Client.GetOrderedBalance(bob).ToArrayAsync();
                 Assert.True(bobBalance.Length == 2);
                 Assert.True(bobBalance[0].Amount == Money.Parse("20.0"));
                 Assert.True(bobBalance[0].IsCoinbase);
                 Assert.True(!bobBalance[0].HasOpReturn);
                 Assert.True(bobBalance[1].Amount == Money.Parse("50.0"));
 
-                var aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
-                var tx = new TransactionBuilder() { MergeOutputs = false }
+                var aliceBalance = await tester.Client.GetOrderedBalance(alice).ToArrayAsync();
+                var aliceSpent = aliceBalance[0].ReceivedCoins[0].Outpoint;
+                var txbuilder = tester.Network.CreateTransactionBuilder(1);
+                txbuilder.MergeOutputs = false;
+                var tx = txbuilder
                     .AddCoins(bobBalance[0].ReceivedCoins)
                     .AddKeys(bob)
                     .Send(alice, "5.0")
@@ -1290,32 +1298,29 @@ namespace NBitcoin.Indexer.Tests
                 var mempoolDate2 = tester.Client.GetTransaction(tx.GetHash()).MempoolDate.Value;
                 Assert.Equal(mempoolDate1, mempoolDate2);
 
-                bobBalance = tester.Client.GetOrderedBalance(bob).ToArray();
+                bobBalance = await tester.Client.GetOrderedBalance(bob).ToArrayAsync();
                 Assert.True(bobBalance[0].Amount == -Money.Parse("5.0"));
 
                 for (int i = 0; i < 2; i++)
                 {
 
-                    aliceBalance = tester.Client.GetOrderedBalance(alice).ToArray();
+                    aliceBalance = await tester.Client.GetOrderedBalance(alice).ToArrayAsync();
                     Assert.True(aliceBalance[0].Amount == -Money.Parse("1.0") - Money.Parse("0.05") + Money.Parse("5.0"));
-
-                    Assert.True(aliceBalance[0].SpentIndices.Count == 1);
-                    Assert.True(aliceBalance[0].SpentIndices[0] == 1);
-                    Assert.True(aliceBalance[0].SpentOutpoints[0] == tx.Inputs[1].PrevOut);
+                    Assert.True(aliceBalance[0].SpentOutpoints[0] == aliceSpent);
                     Assert.True(aliceBalance[0].SpentCoins[0].Outpoint == aliceBalance[1].ReceivedCoins[0].Outpoint);
                     Assert.True(aliceBalance[0].TransactionId == tx.GetHash());
                     Assert.True(aliceBalance[0].Height == 3);
                     Assert.True(aliceBalance[0].BlockId == block.GetHash());
                     Assert.True(!aliceBalance[0].IsCoinbase);
                     Assert.True(aliceBalance[0].HasOpReturn);
-                    Assert.True(aliceBalance[0].ReceivedCoins[0].Outpoint == new OutPoint(tx.GetHash(), 1)); //Bob coin
-                    Assert.True(aliceBalance[0].ReceivedCoins[1].Outpoint == new OutPoint(tx.GetHash(), 2)); //Change
+                    Assert.Contains(aliceBalance[0].ReceivedCoins, c => (Money)c.Amount == Money.Coins(5.0m));
+                    Assert.Equal(2, aliceBalance[0].ReceivedCoins.Count);
                 }
 
-                var satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                var satoshiBalance = await tester.Client.GetOrderedBalance(satoshi).ToArrayAsync();
                 Assert.True(satoshiBalance[0].Amount == Money.Parse("1.0"));
 
-                tx = new TransactionBuilder()
+                tx = tester.Network.CreateTransactionBuilder()
                         .AddCoins(satoshiBalance[0].ReceivedCoins)
                         .AddKeys(satoshi)
                         .Send(alice, "0.2")
@@ -1325,7 +1330,7 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
                 tester.Indexer.IndexOrderedBalance(tx);
 
-                tx = new TransactionBuilder()
+                tx = tester.Network.CreateTransactionBuilder()
                        .AddCoins(satoshiBalance[0].ReceivedCoins)
                        .AddKeys(satoshi)
                        .Send(alice, "0.3")
@@ -1335,11 +1340,11 @@ namespace NBitcoin.Indexer.Tests
                 tester.Indexer.Index(new TransactionEntry.Entity(null, tx, null));
                 tester.Indexer.IndexOrderedBalance(tx);
 
-                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                satoshiBalance = await tester.Client.GetOrderedBalance(satoshi).ToArrayAsync();
                 Assert.True(satoshiBalance[0].Amount == -Money.Parse("0.3"));
                 Assert.True(satoshiBalance[1].Amount == -Money.Parse("0.2"));
 
-                tx = new TransactionBuilder()
+                tx = tester.Network.CreateTransactionBuilder()
                        .AddCoins(satoshiBalance[0].ReceivedCoins)
                        .AddKeys(satoshi)
                        .Send(alice, "0.1")
@@ -1351,12 +1356,12 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
 
-                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                satoshiBalance = await tester.Client.GetOrderedBalance(satoshi).ToArrayAsync();
                 Assert.True(satoshiBalance[0].Amount == -Money.Parse("0.1"));
 
                 tester.Client.CleanUnconfirmedChanges(satoshi, TimeSpan.Zero);
 
-                satoshiBalance = tester.Client.GetOrderedBalance(satoshi).ToArray();
+                satoshiBalance = await tester.Client.GetOrderedBalance(satoshi).ToArrayAsync();
                 Assert.True(satoshiBalance.Length == 2);
             }
         }

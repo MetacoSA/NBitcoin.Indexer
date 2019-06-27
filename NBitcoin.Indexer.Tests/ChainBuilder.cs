@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NBitcoin.Indexer.Tests
@@ -91,7 +92,7 @@ namespace NBitcoin.Indexer.Tests
         List<Block> _UnsyncBlocks = new List<Block>();
         public void SyncIndexer()
         {
-            _Tester.Indexer.IndexChain(_Chain);
+            _Tester.Indexer.IndexChain(_Chain, default(CancellationToken)).GetAwaiter().GetResult();
             var walletRules = _Tester.Client.GetAllWalletRules();
             foreach (var b in _UnsyncBlocks)
             {
