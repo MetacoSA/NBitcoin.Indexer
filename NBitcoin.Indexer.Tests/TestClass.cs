@@ -226,8 +226,8 @@ namespace NBitcoin.Indexer.Tests
                 {
                     new TxOut("1.0", goldGuy.PrivateKey.PubKey),
                     new TxOut("1.0", silverGuy.PrivateKey.PubKey),
-                    new TxOut("1.0", nico.GetAddress()),
-                    new TxOut("1.0", alice.GetAddress()),
+                    new TxOut("1.0", nico.GetAddress(ScriptPubKeyType.Legacy)),
+                    new TxOut("1.0", alice.GetAddress(ScriptPubKeyType.Legacy)),
                 });
                 IssuanceCoin[] issuanceCoins = issuanceCoinsTransaction
                                         .Outputs
@@ -257,7 +257,7 @@ namespace NBitcoin.Indexer.Tests
                 var tx = txBuilder
                     .AddKeys(goldGuy)
                     .AddCoins(goldIssuanceCoin)
-                    .IssueAsset(nico.GetAddress(), new AssetMoney(goldId, 30))
+                    .IssueAsset(nico.GetAddress(ScriptPubKeyType.Legacy), new AssetMoney(goldId, 30))
                     .SetChange(goldGuy.PrivateKey.PubKey)
                     .BuildTransaction(true);
 
@@ -267,7 +267,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var ctx = new IndexerColoredTransactionRepository(tester.Indexer.Configuration);
 
-                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress(ScriptPubKeyType.Legacy)).ToArrayAsync();
                 var coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("0.0"), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(30L) == 0);
@@ -281,20 +281,20 @@ namespace NBitcoin.Indexer.Tests
                 tx = txBuilder
                     .AddKeys(goldGuy)
                     .AddCoins(goldIssuanceCoin)
-                    .IssueAsset(alice.GetAddress(), new AssetMoney(goldId, 20))
+                    .IssueAsset(alice.GetAddress(ScriptPubKeyType.Legacy), new AssetMoney(goldId, 20))
                     .SetChange(goldGuy.PrivateKey.PubKey)
                     .Then()
                     .AddKeys(nico.PrivateKey)
                     .AddCoins(nicoCoin)
                     .AddCoins(nicoGold)
-                    .SendAsset(alice.GetAddress(), new AssetMoney(goldId, 10))
-                    .Send(alice.GetAddress(), Money.Parse("0.02"))
-                    .SetChange(nico.GetAddress())
+                    .SendAsset(alice.GetAddress(ScriptPubKeyType.Legacy), new AssetMoney(goldId, 10))
+                    .Send(alice.GetAddress(ScriptPubKeyType.Legacy), Money.Parse("0.02"))
+                    .SetChange(nico.GetAddress(ScriptPubKeyType.Legacy))
                     .Then()
                     .AddKeys(alice)
                     .AddCoins(aliceCoin)
-                    .Send(goldGuy.GetAddress(), Money.Parse("0.6"))
-                    .SetChange(alice.GetAddress())
+                    .Send(goldGuy.GetAddress(ScriptPubKeyType.Legacy), Money.Parse("0.6"))
+                    .SetChange(alice.GetAddress(ScriptPubKeyType.Legacy))
                     .BuildTransaction(true);
 
                 chainBuilder.Emit(tx);
@@ -302,14 +302,14 @@ namespace NBitcoin.Indexer.Tests
                 chainBuilder.SyncIndexer();
 
                 //Nico, should have lost 0.02 BTC and 10 gold
-                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
-                balance = await tester.Client.GetOrderedBalance(nico.GetAddress()).ToArrayAsync();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress(ScriptPubKeyType.Legacy)).ToArrayAsync();
+                balance = await tester.Client.GetOrderedBalance(nico.GetAddress(ScriptPubKeyType.Legacy)).ToArrayAsync();
                 coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("-0.02") - Money.Satoshis(546), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(-10L) == 0);
 
                 //Alice, should have lost 0.58 BTC, but win 10 + 20 gold (one is a transfer, the other issuance)
-                balance = await tester.Client.GetOrderedBalance(alice.GetAddress()).ToArrayAsync();
+                balance = await tester.Client.GetOrderedBalance(alice.GetAddress(ScriptPubKeyType.Legacy)).ToArrayAsync();
                 coloredEntry = balance[0];
                 Assert.Equal(Money.Parse("-0.58"), coloredEntry.Amount);
                 Assert.True(coloredEntry.GetAssetAmount(goldId).CompareTo(30L) == 0);

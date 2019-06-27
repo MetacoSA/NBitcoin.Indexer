@@ -19,7 +19,7 @@
 		<PackageReference Include="AsyncEnumerator" Version="2.2.2" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="2.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="2.0.0" />
-		<PackageReference Include="NBitcoin" Version="4.1.2.15" />
+		<PackageReference Include="NBitcoin" Version="4.1.2.36" />
 		<PackageReference Include="NBitcoin.Altcoins" Version="1.0.2.6" />
 
 		<PackageReference Include="WindowsAzure.Storage" Version="8.5.0" />
