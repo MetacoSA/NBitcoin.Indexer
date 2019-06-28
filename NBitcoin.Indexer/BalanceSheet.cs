@@ -22,28 +22,133 @@ namespace NBitcoin.Indexer
                 throw new ArgumentNullException("chain");
             _Chain = chain;
 
-            var all = changes
-                        .Where(c => c.SpentCoins != null) //Remove line whose previous coins have not been loadedcould not be deduced
-                        .Where(c => c.MempoolEntry || chain.GetBlock(c.BlockId) != null) //Take only mempool entry, or confirmed one
-                        .Where(c => !(c.IsCoinbase && c.MempoolEntry)) //There is no such thing as a Coinbase unconfirmed, by definition a coinbase appear in a block
-                        .ToList(); 
-            var confirmed = all.Where(o => o.BlockId != null).ToDictionary(o => o.TransactionId);
-            Dictionary<uint256, OrderedBalanceChange> unconfirmed = new Dictionary<uint256, OrderedBalanceChange>();
+            var transactionsById = new Dictionary<uint256, OrderedBalanceChange>();
+            List<OrderedBalanceChange> ignoredTransactions = new List<OrderedBalanceChange>();
 
-            foreach(var item in all.Where(o => o.MempoolEntry && !confirmed.ContainsKey(o.TransactionId)))
+            foreach (var trackedTx in changes)
             {
-                unconfirmed.AddOrReplace(item.TransactionId, item);
+                int? txHeight = null;
+
+                if (trackedTx.BlockId != null && chain.TryGetHeight(trackedTx.BlockId, out var height))
+                {
+                    txHeight = height;
+                }
+                if (trackedTx.BlockId != null && txHeight is null)
+                {
+                    _Prunable.Add(trackedTx);
+                    continue;
+                }
+
+                if (transactionsById.TryGetValue(trackedTx.TransactionId, out var conflicted))
+                {
+                    if (ShouldReplace(trackedTx, conflicted))
+                    {
+                        ignoredTransactions.Add(conflicted);
+                        transactionsById.Remove(trackedTx.TransactionId);
+                        transactionsById.Add(trackedTx.TransactionId, trackedTx);
+                    }
+                    else
+                    {
+                        ignoredTransactions.Add(trackedTx);
+                    }
+                }
+                else
+                {
+                    transactionsById.Add(trackedTx.TransactionId, trackedTx);
+                }
             }
 
-            _Prunable = all.Where(o => o.BlockId == null && confirmed.ContainsKey(o.TransactionId)).ToList();
-            _All = all.Where(o => 
-                (unconfirmed.ContainsKey(o.TransactionId) || confirmed.ContainsKey(o.TransactionId)) 
-                    &&
-                    !(o.BlockId == null && confirmed.ContainsKey(o.TransactionId))
-                ).ToList();
-            _Confirmed = _All.Where(o => o.BlockId != null && confirmed.ContainsKey(o.TransactionId)).ToList();
-            _Unconfirmed = _All.Where(o => o.BlockId == null && unconfirmed.ContainsKey(o.TransactionId)).ToList();
+            // Let's resolve the double spents
+            Dictionary<OutPoint, uint256> spentBy = new Dictionary<OutPoint, uint256>();
+            foreach (var annotatedTransaction in transactionsById.Values.Where(r => r.BlockId != null))
+            {
+                foreach (var spent in annotatedTransaction.SpentOutpoints)
+                {
+                    // No way to have double spent in confirmed transactions
+                    spentBy.Add(spent, annotatedTransaction.TransactionId);
+                }
+            }
+
+            List<OrderedBalanceChange> replacedTransactions = new List<OrderedBalanceChange>();
+        removeConflicts:
+            HashSet<uint256> conflicts = new HashSet<uint256>();
+            foreach (var annotatedTransaction in transactionsById.Values.Where(r => r.BlockId == null))
+            {
+                foreach (var spent in annotatedTransaction.SpentOutpoints)
+                {
+                    if (spentBy.TryGetValue(spent, out var conflictHash) &&
+                        transactionsById.TryGetValue(conflictHash, out var conflicted))
+                    {
+                        if (conflicted == annotatedTransaction)
+                            goto nextTransaction;
+                        if (conflicts.Contains(conflictHash))
+                        {
+                            spentBy.Remove(spent);
+                            spentBy.Add(spent, annotatedTransaction.TransactionId);
+                        }
+                        else if (ShouldReplace(annotatedTransaction, conflicted))
+                        {
+                            conflicts.Add(conflictHash);
+                            spentBy.Remove(spent);
+                            spentBy.Add(spent, annotatedTransaction.TransactionId);
+
+                            if (conflicted.BlockId == null && annotatedTransaction.BlockId == null)
+                            {
+                                replacedTransactions.Add(conflicted);
+                            }
+                            else
+                            {
+                                ignoredTransactions.Add(conflicted);
+                            }
+                        }
+                        else
+                        {
+                            conflicts.Add(annotatedTransaction.TransactionId);
+                            if (conflicted.BlockId == null && annotatedTransaction.BlockId == null)
+                            {
+                                replacedTransactions.Add(annotatedTransaction);
+                            }
+                            else
+                            {
+                                ignoredTransactions.Add(annotatedTransaction);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        spentBy.Add(spent, annotatedTransaction.TransactionId);
+                    }
+                }
+            nextTransaction:;
+            }
+
+            foreach (var e in conflicts)
+            {
+                _Prunable.Add(transactionsById[e]);
+                transactionsById.Remove(e);
+            }
+            if (conflicts.Count != 0)
+                goto removeConflicts;
+
+            // Topological sort
+            var sortedTrackedTransactions = transactionsById.Values.TopologicalSort();
+            // Remove all ignored transaction from the database
+            foreach (var ignored in ignoredTransactions)
+            {
+                _Prunable.Add(ignored);
+            }
+
+            _All = sortedTrackedTransactions;
+            _All.Reverse();
+            _Confirmed = sortedTrackedTransactions.Where(s => s.BlockId != null).ToList();
+            _Unconfirmed = sortedTrackedTransactions.Where(s => s.BlockId == null).ToList();
         }
+
+        private bool ShouldReplace(OrderedBalanceChange annotatedTransaction, OrderedBalanceChange conflicted)
+        {
+            return OrderBalanceChangeComparer.Instance.Compare(annotatedTransaction, conflicted) == -1;
+        }
+
 
         private readonly List<OrderedBalanceChange> _Unconfirmed;
         public List<OrderedBalanceChange> Unconfirmed
@@ -70,7 +175,7 @@ namespace NBitcoin.Indexer
                 return _All;
             }
         }
-        private readonly List<OrderedBalanceChange> _Prunable;
+        private readonly List<OrderedBalanceChange> _Prunable = new List<OrderedBalanceChange>();
         public List<OrderedBalanceChange> Prunable
         {
             get

@@ -19,6 +19,15 @@ namespace NBitcoin.Indexer
 {
     public static class Extensions
     {
+        public static bool TryGetHeight(this ChainBase chain, uint256 blockId, out int height)
+        {
+            height = 0;
+            var block = chain.GetBlock(blockId);
+            if (block == null)
+                return false;
+            height = block.Height;
+            return true;
+        }
         public static async Task<T[]> ToArrayAsync<T>(this Task<ICollection<T>> transactions)
         {
             return (await transactions).ToArray();

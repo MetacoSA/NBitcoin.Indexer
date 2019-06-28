@@ -620,6 +620,7 @@ namespace NBitcoin.Indexer.Tests
 
                 var txbuilder = tester.Network.CreateTransactionBuilder();
                 txbuilder.MergeOutputs = false;
+                txbuilder.ShuffleRandom = null;
                 tx
                     = txbuilder
                         .AddKeys(alice1)
@@ -639,6 +640,8 @@ namespace NBitcoin.Indexer.Tests
                 aliceBalance = await tester.Client.GetOrderedBalance("Alice").ToArrayAsync();
                 Assert.True(aliceBalance[0].Amount == Money.Parse("-4.0"));
 
+                var aliceR1OutputRules = aliceBalance[0].MatchedRules.Where(r => r.MatchType == MatchLocation.Output && r.Rule.ToString() == aliceR1.ToString()).ToArray();
+                var aliceR2OutputRules = aliceBalance[0].MatchedRules.Where(r => r.MatchType == MatchLocation.Output && r.Rule.ToString() == aliceR2.ToString()).ToArray();
                 Assert.Equal(
                    aliceR1.ToString()
                   , aliceBalance[0].GetMatchedRules(aliceBalance[0].SpentCoins[0]).First().ToString());
@@ -666,6 +669,7 @@ namespace NBitcoin.Indexer.Tests
 
                 txbuilder = tester.Network.CreateTransactionBuilder();
                 txbuilder.MergeOutputs = false;
+                txbuilder.ShuffleRandom = null;
                 tx = txbuilder
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
@@ -707,6 +711,9 @@ namespace NBitcoin.Indexer.Tests
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice1.PubKey.ScriptPubKey.Hash, alice1.PubKey.ScriptPubKey));
                 tester.Client.AddWalletRule("Alice", new ScriptRule(alice2.PubKey.ScriptPubKey.Hash, null));
 
+                txbuilder = tester.Network.CreateTransactionBuilder();
+                txbuilder.MergeOutputs = false;
+                txbuilder.ShuffleRandom = null;
                 tx = txbuilder
                         .ContinueToBuild(newtx)
                         .AddKeys(alice1, alice2)
@@ -749,7 +756,6 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(((ScriptCoin)(aliceBalance2[0].SpentCoins[0])).Redeem == alice1.PubKey.ScriptPubKey);
                 /////
             }
-
         }
 
         [Fact]
