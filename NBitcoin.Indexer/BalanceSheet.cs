@@ -60,13 +60,25 @@ namespace NBitcoin.Indexer
 
             // Let's resolve the double spents
             Dictionary<OutPoint, uint256> spentBy = new Dictionary<OutPoint, uint256>();
+            HashSet<uint256> incoherent = new HashSet<uint256>();
             foreach (var annotatedTransaction in transactionsById.Values.Where(r => r.BlockId != null))
             {
                 foreach (var spent in annotatedTransaction.SpentOutpoints)
                 {
                     // No way to have double spent in confirmed transactions
                     spentBy.Add(spent, annotatedTransaction.TransactionId);
+                    if (transactionsById.TryGetValue(spent.Hash, out var spentTx) && spentTx.BlockId == null)
+                    {
+                        // It happens that we can get a conf depending on an unconf tx (because of queries on Azure not returning it)
+                        // in such case, if we see that the unconf has a conf'd parent transaction, just do like if it did not exist
+                        incoherent.Add(spent.Hash);
+                    }
                 }
+            }
+
+            foreach (var incoherentHash in incoherent)
+            {
+                transactionsById.Remove(incoherentHash);
             }
 
         removeConflicts:
