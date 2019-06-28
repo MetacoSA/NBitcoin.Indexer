@@ -69,7 +69,6 @@ namespace NBitcoin.Indexer
                 }
             }
 
-            List<OrderedBalanceChange> replacedTransactions = new List<OrderedBalanceChange>();
         removeConflicts:
             HashSet<uint256> conflicts = new HashSet<uint256>();
             foreach (var annotatedTransaction in transactionsById.Values.Where(r => r.BlockId == null))
@@ -92,9 +91,9 @@ namespace NBitcoin.Indexer
                             spentBy.Remove(spent);
                             spentBy.Add(spent, annotatedTransaction.TransactionId);
 
-                            if (conflicted.BlockId == null && annotatedTransaction.BlockId == null)
+                            if (conflicted.BlockId == null)
                             {
-                                replacedTransactions.Add(conflicted);
+                                ReplacedTransactions.Add(conflicted);
                             }
                             else
                             {
@@ -104,9 +103,9 @@ namespace NBitcoin.Indexer
                         else
                         {
                             conflicts.Add(annotatedTransaction.TransactionId);
-                            if (conflicted.BlockId == null && annotatedTransaction.BlockId == null)
+                            if (conflicted.BlockId == null)
                             {
-                                replacedTransactions.Add(annotatedTransaction);
+                                ReplacedTransactions.Add(annotatedTransaction);
                             }
                             else
                             {
@@ -124,7 +123,6 @@ namespace NBitcoin.Indexer
 
             foreach (var e in conflicts)
             {
-                _Prunable.Add(transactionsById[e]);
                 transactionsById.Remove(e);
             }
             if (conflicts.Count != 0)
@@ -146,7 +144,28 @@ namespace NBitcoin.Indexer
 
         private bool ShouldReplace(OrderedBalanceChange annotatedTransaction, OrderedBalanceChange conflicted)
         {
-            return OrderBalanceChangeComparer.Instance.Compare(annotatedTransaction, conflicted) == -1;
+            if (annotatedTransaction.BlockId == null)
+            {
+                if (conflicted.BlockId == null)
+                {
+                    return annotatedTransaction.SeenUtc > conflicted.SeenUtc; // The is a replaced tx, we want the youngest
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (conflicted.BlockId == null)
+                {
+                    return true;
+                }
+                else
+                {
+                    return annotatedTransaction.Height < conflicted.Height; // The most buried block win (should never happen though)
+                }
+            }
         }
 
 
@@ -184,5 +203,6 @@ namespace NBitcoin.Indexer
             }
         }
 
+        public List<OrderedBalanceChange> ReplacedTransactions { get; set; } = new List<OrderedBalanceChange>();
     }
 }

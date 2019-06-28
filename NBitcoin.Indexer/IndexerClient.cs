@@ -575,13 +575,15 @@ namespace NBitcoin.Indexer
             return true;
         }
 
-        public void PruneBalances(IEnumerable<OrderedBalanceChange> balances)
+        public Task PruneBalances(IEnumerable<OrderedBalanceChange> balances)
         {
-            Parallel.ForEach(balances, b =>
+            List<Task> pruning = new List<Task>();
+            foreach(var balance in balances)
             {
                 var table = Configuration.GetBalanceTable();
-                table.ExecuteAsync(TableOperation.Delete(b.ToEntity(ConsensusFactory))).GetAwaiter().GetResult();
-            });
+                pruning.Add(table.ExecuteAsync(TableOperation.Delete(balance.ToEntity(ConsensusFactory))));
+            }
+            return Task.WhenAll(pruning.ToArray());
         }
 
         public async Task<ConcurrentChain> GetMainChain(CancellationToken cancellationToken)
@@ -659,7 +661,7 @@ namespace NBitcoin.Indexer
 
         private string GetKey(OrderedBalanceChange change)
         {
-            return change.Height + "-" + (change.BlockId == null ? new uint256(0) : change.BlockId) + "-" + change.TransactionId + "-" + change.SeenUtc.Ticks;
+            return $"{change.Height}-{(change.BlockId == null ? new uint256(0) : change.BlockId)}-{change.TransactionId}-{change.SeenUtc.Ticks}";
         }
     }
 

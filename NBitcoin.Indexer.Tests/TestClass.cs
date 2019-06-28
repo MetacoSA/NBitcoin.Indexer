@@ -796,15 +796,15 @@ namespace NBitcoin.Indexer.Tests
 
                 var tests = new String[][]
                 {
-                     new string[]{"2in", "4in", "tx41,tx42,tx43,tx31,tx32,tx33,tx21,tx22"},
-                     new string[]{"4in", "2in", "tx41,tx42,tx43,tx31,tx32,tx33,tx21,tx22"}, //Does not care about order
-                     new string[]{"2ex", "4in", "tx41,tx42,tx43,tx31,tx32,tx33"},
-                     new string[]{"2in", "4ex", "tx31,tx32,tx33,tx21,tx22"},
-                     new string[]{"2ex", "4ex", "tx31,tx32,tx33"},
+                     new string[]{"2in", "4in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"},
+                     new string[]{"4in", "2in", "tx43,tx42,tx41,tx33,tx32,tx31,tx22,tx21"}, //Does not care about order
+                     new string[]{"2ex", "4in", "tx43,tx42,tx41,tx33,tx32,tx31"},
+                     new string[]{"2in", "4ex", "tx33,tx32,tx31,tx22,tx21"},
+                     new string[]{"2ex", "4ex", "tx33,tx32,tx31"},
                      new string[]{"{utx51}in", "{utx52}in", "utx52,utx51"},
                      new string[]{"{utx51}in", "{utx53}ex", "utx52,utx51"},
                      new string[]{"{utx51}ex", "{utx53}in", "utx53,utx52"},
-                     new string[]{"{utx52}ex", "3in", "utx53,tx41,tx42,tx43,tx31,tx32,tx33"}
+                     new string[]{"{utx52}ex", "3in", "utx53,tx43,tx42,tx41,tx33,tx32,tx31"}
                 };
 
                 var all = await tester.Client.GetOrderedBalance(bob).ToArrayAsync();
@@ -937,7 +937,7 @@ namespace NBitcoin.Indexer.Tests
                 Assert.True(sheet.Confirmed.Count == 3);
                 Assert.True(sheet.Prunable.Count == 1);
 
-                tester.Client.PruneBalances(sheet.Prunable);
+                await tester.Client.PruneBalances(sheet.Prunable);
 
                 sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.Confirmed.Count == 3);
@@ -952,6 +952,41 @@ namespace NBitcoin.Indexer.Tests
 
                 sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
                 Assert.True(sheet.All[0].CustomData == "test");
+
+                var coin = sheet.All[0].ReceivedCoins.First();
+                var txBuilder = tester.Network.CreateTransactionBuilder();
+                txBuilder.AddCoins(coin);
+                txBuilder.AddKeys(bob);
+                txBuilder.SendAll(bob);
+                txBuilder.SubtractFees();
+                txBuilder.SendEstimatedFees(new FeeRate(5.0m));
+                var tx1 = txBuilder.BuildTransaction(true);
+                txBuilder.SendEstimatedFees(new FeeRate(15.0m));
+                var tx2 = txBuilder.BuildTransaction(true);
+
+                tester.Indexer.IndexOrderedBalance(tx1);
+                await Task.Delay(1000);
+                tester.Indexer.IndexOrderedBalance(tx2);
+
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.Contains(tx2.GetHash(), sheet.Unconfirmed.Select(o => o.TransactionId));
+                Assert.Single(sheet.ReplacedTransactions);
+                Assert.Empty(sheet.Prunable);
+                Assert.Equal(tx1.GetHash(), sheet.ReplacedTransactions[0].TransactionId);
+                chainBuilder.Emit(tx2);
+                chainBuilder.SubmitBlock();
+                chainBuilder.SyncIndexer();
+
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.Contains(tx2.GetHash(), sheet.Confirmed.Select(o => o.TransactionId));
+                Assert.DoesNotContain(tx1.GetHash(), sheet.Unconfirmed.Select(o => o.TransactionId));
+                Assert.DoesNotContain(tx1.GetHash(), sheet.Confirmed.Select(o => o.TransactionId));
+                Assert.Contains(tx1.GetHash(), sheet.Prunable.Select(o => o.TransactionId));
+                Assert.Contains(tx2.GetHash(), sheet.Prunable.Where(p => p.BlockId == null).Select(o => o.TransactionId));
+
+                await tester.Client.PruneBalances(sheet.Prunable);
+                sheet = await tester.Client.GetOrderedBalance(bob).AsBalanceSheet(chainBuilder.Chain);
+                Assert.Empty(sheet.Prunable);
             }
         }
 

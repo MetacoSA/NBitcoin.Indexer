@@ -39,7 +39,7 @@ namespace NBitcoin.Indexer
                 dependsOn: t => t.SpentCoins.Select(o => o.Outpoint.Hash),
                 getKey: t => t.TransactionId,
                 getValue: t => t,
-                solveTies: OrderBalanceChangeComparer.Instance);
+                solveTies: OrderBalanceChangeComparer.OldToYoung);
         }
         public static List<T> TopologicalSort<T>(this ICollection<T> nodes, Func<T, IEnumerable<T>> dependsOn)
         {
