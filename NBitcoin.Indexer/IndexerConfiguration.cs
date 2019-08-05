@@ -137,8 +137,8 @@ namespace NBitcoin.Indexer
 
         public Node ConnectToNode(bool isRelay)
         {
-            if (String.IsNullOrEmpty(Node))
-                throw new IndexerConfigurationErrorsException("Node setting is not configured");
+			if (String.IsNullOrEmpty(Node))
+				return NBitcoin.Protocol.Node.ConnectToLocal(Network, isRelay: isRelay);
             return NBitcoin.Protocol.Node.Connect(Network, Node, isRelay: isRelay);
         }
 
