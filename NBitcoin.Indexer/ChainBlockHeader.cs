@@ -1,6 +1,6 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
 using System;
-using System.Collections.Async;
+using Dasync.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,9 +24,9 @@ namespace NBitcoin.Indexer
         }
         public static async Task UpdateChain(this IAsyncEnumerable<ChainBlockHeader> entries, ChainBase chain, CancellationToken cancellation = default(CancellationToken))
 		{
-            var enumerator = await entries.GetAsyncEnumeratorAsync(cancellation).ConfigureAwait(false);
+            var enumerator = entries.GetAsyncEnumerator(cancellation);
 			Stack<ChainBlockHeader> toApply = new Stack<ChainBlockHeader>();
-			while(await enumerator.MoveNextAsync(cancellation).ConfigureAwait(false))
+			while(await enumerator.MoveNextAsync().ConfigureAwait(false))
 			{
                 var entry = enumerator.Current;
 				var prev = chain.GetBlock(entry.Header.HashPrevBlock);

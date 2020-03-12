@@ -16,7 +16,7 @@ using System.Text;
 using System.Threading;
 using NBitcoin;
 using System.Threading.Tasks;
-using System.Collections.Async;
+using Dasync.Collections;
 
 namespace NBitcoin.Indexer
 {
@@ -304,8 +304,8 @@ namespace NBitcoin.Indexer
                 }
 
 
-                var enumerator = await ExecuteBalanceQuery(table, new TableQuery<DynamicTableEntity>(), new[] { 1, 2, 10 }).GetAsyncEnumeratorAsync(cancellation);
-                while (await enumerator.MoveNextAsync(cancellation))
+                var enumerator = ExecuteBalanceQuery(table, new TableQuery<DynamicTableEntity>(), new[] { 1, 2, 10 }).GetAsyncEnumerator(cancellation);
+                while (await enumerator.MoveNextAsync())
                 {
                     var chainPart = new ChainPartEntry(enumerator.Current, ConsensuFactory);
                     await ProcessChainPart(chainPart);
@@ -432,8 +432,8 @@ namespace NBitcoin.Indexer
                  .Select(c => new OrderedBalanceChange(c, ConsensusFactory))
                  .Partition(BalancePartitionSize, cancel);
 
-            var enumerator = await partitions.GetAsyncEnumeratorAsync(cancel);
-            while (await enumerator.MoveNextAsync(cancel))
+            var enumerator = partitions.GetAsyncEnumerator(cancel);
+            while (await enumerator.MoveNextAsync())
             {
                 var partition = enumerator.Current;
                 await Task.WhenAll(partition.Select(c => NeedLoading(c) ? EnsurePreviousLoadedAsync(c) : Task.FromResult<bool>(true)));

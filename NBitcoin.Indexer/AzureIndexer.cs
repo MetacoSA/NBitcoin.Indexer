@@ -11,7 +11,7 @@ using NBitcoin.Indexer.Internal;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Async;
+using Dasync.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;

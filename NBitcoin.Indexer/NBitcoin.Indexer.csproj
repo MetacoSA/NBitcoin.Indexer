@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFrameworks>net472;netstandard2.0</TargetFrameworks>
-		<Version>3.0.0.18</Version>
+		<TargetFrameworks>net472;netstandard2.0;netstandard2.1;netcoreapp3.1</TargetFrameworks>
+		<Version>3.0.0.19</Version>
 		<Copyright>Copyright © Metaco SA 2017</Copyright>
 		<Description>Library for querying data indexed by NBitcoin.Indexer on Azure Storage</Description>
 		<PackageId>NBitcoin.Indexer</PackageId>
@@ -16,11 +16,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AsyncEnumerator" Version="2.2.2" />
+		<PackageReference Include="AsyncEnumerator" Version="4.0.2" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="2.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="2.0.0" />
-		<PackageReference Include="NBitcoin" Version="4.1.2.36" />
-		<PackageReference Include="NBitcoin.Altcoins" Version="1.0.2.6" />
+		<PackageReference Include="NBitcoin" Version="5.0.20" />
+		<PackageReference Include="NBitcoin.Altcoins" Version="2.0.7" />
 
 		<PackageReference Include="WindowsAzure.Storage" Version="8.5.0" />
 

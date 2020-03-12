@@ -4,14 +4,13 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
-using NBitcoin.BitcoinCore;
 using NBitcoin.DataEncoders;
 using NBitcoin.OpenAsset;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Async;
+using Dasync.Collections;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
@@ -24,6 +23,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using NBitcoin.BitcoinCore;
 
 namespace NBitcoin.Indexer.Tests
 {
@@ -1139,7 +1139,7 @@ namespace NBitcoin.Indexer.Tests
                     });
                 }
                 tx.Outputs.Add(new TxOut(Money.Coins(0.1m), alice));
-                tx.Sign(bob, bobCoins.ToArray());
+                tx.Sign(bob.GetBitcoinSecret(tester.Network), bobCoins.OfType<ICoin>().ToArray());
                 chainBuilder.Emit(tx);
                 chainBuilder.SubmitBlock();
                 chainBuilder.SyncIndexer();
@@ -1195,7 +1195,7 @@ namespace NBitcoin.Indexer.Tests
                 ScriptSig = bobCoin.ScriptPubKey
             });
             tx.Outputs.Add(new TxOut(Money.Coins(0.1m), alice));
-            tx.Sign(bob, prev.Outputs.AsCoins().ToArray());
+            tx.Sign(bob.GetBitcoinSecret(tester.Network), prev.Outputs.AsCoins().OfType<ICoin>().ToArray());
             chainBuilder.Emit(tx);
             chainBuilder.SubmitBlock();
             chainBuilder.SyncIndexer();

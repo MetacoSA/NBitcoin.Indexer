@@ -6,7 +6,7 @@ using Microsoft.WindowsAzure.Storage.Table.Protocol;
 using NBitcoin.Crypto;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Async;
+using Dasync.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -110,8 +110,8 @@ namespace NBitcoin.Indexer
             {
                 var partitionSize = max();
                 List<T> toReturn = new List<T>(partitionSize);
-                var enumerator = await source.GetAsyncEnumeratorAsync(cancellationToken);
-                while (await enumerator.MoveNextAsync(cancellationToken))
+                var enumerator = source.GetAsyncEnumerator(cancellationToken);
+                while (await enumerator.MoveNextAsync())
                 {
                     var item = enumerator.Current;
                     toReturn.Add(item);
